@@ -197,9 +197,7 @@
   .dash-loading { padding: 60px 0; text-align: center; color: var(--ink-3); font-size: 14px; }
 
   /* ---------- kpis ---------- */
-  .kpi-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-top: 18px; }
-  @media (max-width: 1100px) { .kpi-grid { grid-template-columns: repeat(3, 1fr); } }
-  @media (max-width: 640px) { .kpi-grid { grid-template-columns: repeat(2, 1fr); } }
+  .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-top: 18px; }
   .kpi {
     background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px;
     padding: 16px 16px 14px;
@@ -1046,9 +1044,12 @@
     var prevFiltered = prevCur ? prevCur.stores.filter(matchesFilter) : null;
 
     function sumStores(list) {
-      var fat = 0, liq = 0, desp = 0;
-      list.forEach(function (s) { fat += s.faturamento; liq += s.resultadoLiquido; desp += s.despesaTotal; });
-      return { fat: fat, liq: liq, desp: desp, pct: fat > 0 ? (liq / fat) * 100 : 0 };
+      var fat = 0, liq = 0, desp = 0, margW = 0;
+      list.forEach(function (s) {
+        fat += s.faturamento; liq += s.resultadoLiquido; desp += s.despesaTotal;
+        margW += s.margemManipulado * s.faturamento;
+      });
+      return { fat: fat, liq: liq, desp: desp, pct: fat > 0 ? (liq / fat) * 100 : 0, margem: fat > 0 ? margW / fat : 0 };
     }
     var curSum = sumStores(filtered);
     var prevSum = prevFiltered ? sumStores(prevFiltered) : null;
@@ -1074,6 +1075,10 @@
     kpiGrid.appendChild(kpiTile("% líquido", fmtPct(curSum.pct, 2),
       prevSum ? (Math.abs(curSum.pct - prevSum.pct)).toFixed(1) + " p.p." : null,
       pctUp, pctUp, periodSub));
+    var margUp = prevSum ? curSum.margem >= prevSum.margem : true;
+    kpiGrid.appendChild(kpiTile("Margem c/ Manipulados", fmtPct(curSum.margem, 1),
+      prevSum ? (Math.abs(curSum.margem - prevSum.margem)).toFixed(1) + " p.p." : null,
+      margUp, margUp, periodSub));
     var negCount = filtered.filter(function (s) { return s.resultadoLiquido < 0; }).length;
     kpiGrid.appendChild(kpiTile("Lojas no prejuízo", String(negCount) + " de " + filtered.length, null, null, null, isAnnual ? "No acumulado do período" : (negCount === 0 ? "Nenhuma loja no negativo" : "Precisam de atenção")));
 
