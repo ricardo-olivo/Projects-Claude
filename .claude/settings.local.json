@@ -33,7 +33,11 @@
       "PowerShell(Stop-Process -Id 8800 -Force -ErrorAction SilentlyContinue)",
       "PowerShell(Get-Process -Id 8800 -ErrorAction SilentlyContinue)",
       "Bash(git status *)",
-      "Bash(git add *)"
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(gh --version)",
+      "Bash(gh auth *)",
+      "PowerShell(gh --version 2>&1)"
     ]
   }
 }
