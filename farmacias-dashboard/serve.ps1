@@ -1,4 +1,4 @@
-﻿$port = 9231
+﻿$port = 51873
 $dir  = $PSScriptRoot
 $sheetId = "1C6xsW-0ipDh9nv9eAW_y9DZGOEEY5j9g"
 $csvUrl = "https://docs.google.com/spreadsheets/d/$sheetId/gviz/tq?tqx=out:csv"

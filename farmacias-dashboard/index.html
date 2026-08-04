@@ -544,6 +544,14 @@
     return fmtBRLSigned(v, 0);
   }
 
+  // porte da loja é recalculado a partir do faturamento, não vem mais fixo da planilha:
+  // até R$100.000 = C · de R$100.000 até R$250.000 = B · acima de R$250.000 = A
+  function classifyPorte(faturamento) {
+    if (faturamento > 250000) return "A";
+    if (faturamento >= 100000) return "B";
+    return "C";
+  }
+
   // ---- the formula: keep it live, mirrors the spreadsheet exactly ----
   function computeMonth(monthData, despesaCentral, vencimento) {
     var dcv = despesaCentral + vencimento;
@@ -555,7 +563,7 @@
       var resultadoLiquido = s.resultadoBruto - despesaTotal;
       var pctLiquido = s.faturamento > 0 ? (resultadoLiquido / s.faturamento) * 100 : 0;
       return {
-        porte: s.porte, filial: s.filial, faturamento: s.faturamento, despesa: s.despesa,
+        porte: classifyPorte(s.faturamento), filial: s.filial, faturamento: s.faturamento, despesa: s.despesa,
         margemTrier: s.margemTrier, margemManipulado: s.margemManipulado, manipulados: s.manipulados,
         resultadoBruto: s.resultadoBruto, rateio: rateio, despesaTotal: despesaTotal,
         resultadoLiquido: resultadoLiquido, pctLiquido: pctLiquido
@@ -580,7 +588,7 @@
         var agg = byStore[s.filial];
         if (!agg) {
           agg = {
-            porte: s.porte, filial: s.filial, faturamento: 0, despesa: 0, manipulados: 0,
+            filial: s.filial, faturamento: 0, despesa: 0, manipulados: 0,
             margemTrierW: 0, margemManipuladoW: 0, resultadoBruto: 0, rateio: 0, despesaTotal: 0, resultadoLiquido: 0
           };
           byStore[s.filial] = agg;
@@ -600,7 +608,7 @@
     var stores = order.map(function (filial) {
       var a = byStore[filial];
       return {
-        porte: a.porte, filial: a.filial, faturamento: a.faturamento, despesa: a.despesa,
+        porte: classifyPorte(a.faturamento / DATA.length), filial: a.filial, faturamento: a.faturamento, despesa: a.despesa,
         margemTrier: a.faturamento > 0 ? a.margemTrierW / a.faturamento : 0,
         margemManipulado: a.faturamento > 0 ? a.margemManipuladoW / a.faturamento : 0,
         manipulados: a.manipulados, resultadoBruto: a.resultadoBruto, rateio: a.rateio,
