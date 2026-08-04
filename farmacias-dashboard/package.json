@@ -1,0 +1,13 @@
+{
+  "name": "farmacias-dashboard",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Dashboard de resultado por loja com atualizacao ao vivo da planilha",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

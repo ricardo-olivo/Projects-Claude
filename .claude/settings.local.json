@@ -37,7 +37,15 @@
       "Bash(git commit -m ' *)",
       "Bash(gh --version)",
       "Bash(gh auth *)",
-      "PowerShell(gh --version 2>&1)"
+      "PowerShell(gh --version 2>&1)",
+      "Bash(git remote *)",
+      "Bash(git branch *)",
+      "Bash(git push *)",
+      "PowerShell(winget --version 2>&1)",
+      "PowerShell(Get-Command node -ErrorAction SilentlyContinue)",
+      "PowerShell(Get-Command npx -ErrorAction SilentlyContinue)",
+      "PowerShell(winget install OpenJS.NodeJS.LTS --silent --accept-package-agreements --accept-source-agreements)",
+      "PowerShell(Get-CimInstance Win32_Process -Filter \"Name='node.exe'\")"
     ]
   }
 }
