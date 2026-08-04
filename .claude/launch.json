@@ -1,0 +1,23 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "vacation-dashboard",
+      "runtimeExecutable": "powershell",
+      "runtimeArgs": ["-ExecutionPolicy", "Bypass", "-File", "vacation-dashboard/serve.ps1"],
+      "port": 8765
+    },
+    {
+      "name": "sales-dashboard",
+      "runtimeExecutable": "powershell",
+      "runtimeArgs": ["-ExecutionPolicy", "Bypass", "-File", "sales-dashboard/serve.ps1"],
+      "port": 8766
+    },
+    {
+      "name": "farmacias-dashboard",
+      "runtimeExecutable": "powershell",
+      "runtimeArgs": ["-ExecutionPolicy", "Bypass", "-File", "farmacias-dashboard/serve.ps1"],
+      "port": 9231
+    }
+  ]
+}

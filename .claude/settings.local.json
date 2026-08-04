@@ -1,0 +1,39 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:docs.google.com)",
+      "WebFetch(domain:doc-0o-5c-sheets.googleusercontent.com)",
+      "WebFetch(domain:doc-0s-5c-sheets.googleusercontent.com)",
+      "PowerShell(node --version)",
+      "PowerShell(python --version)",
+      "mcp__Claude_Preview__preview_start",
+      "WebFetch(domain:doc-0k-5c-sheets.googleusercontent.com)",
+      "Read(//c/Users/ricar/AppData/Roaming/Claude/local-agent-mode-sessions/skills-plugin/67146d64-473c-41af-b7f3-8e4eae0cee6e/3f483888-31fe-4fb7-8a13-bec1103569e9/skills/xlsx/**)",
+      "Bash(python -)",
+      "Bash(powershell -ExecutionPolicy Bypass -Command ' *)",
+      "Bash(git --version)",
+      "Bash(git config *)",
+      "Bash(echo \"exit: $?\")",
+      "Bash(git init *)",
+      "Bash(python parse.py)",
+      "Bash(python -c ' *)",
+      "Bash(node scripts/validate_palette.js \"#2a78d6,#1baf7a,#eda100\" --mode light --pairs all)",
+      "Bash(node scripts/validate_palette.js \"#3987e5,#199e70,#c98500\" --mode dark --pairs all --surface \"#1a1a19\")",
+      "Bash(kill %1)",
+      "Bash(pkill -f \"http.server 8791\")",
+      "mcp__mcp-registry__search_mcp_registry",
+      "mcp__mcp-registry__list_connectors",
+      "Bash(grep -n \"^  render\\(\\);$\\\\|^}\\)\\(\\);$\\\\|state = {\" \"C:\\\\Users\\\\ricar\\\\Desktop\\\\Projects-Claude\\\\farmacias-dashboard\\\\index.html\")",
+      "Bash(grep -n \"var DATA = null\\\\|DATA.forEach\\\\|^  render\\(\\);$\" \"C:\\\\Users\\\\ricar\\\\Desktop\\\\Projects-Claude\\\\farmacias-dashboard\\\\index.html\")",
+      "Bash(grep -n \"^  render\\(\\);$\" \"C:\\\\Users\\\\ricar\\\\Desktop\\\\Projects-Claude\\\\farmacias-dashboard\\\\index.html\")",
+      "PowerShell(netsh interface ipv4 show excludedportrange protocol=tcp)",
+      "Bash(grep -n '^\\\\$port = 8767' 'C:\\\\Users\\\\ricar\\\\Desktop\\\\Projects-Claude\\\\farmacias-dashboard\\\\serve.ps1')",
+      "Bash(grep -n \"function computeMonth\\\\|porte: s.porte, filial: s.filial, faturamento: s.faturamento, despesa: s.despesa,\\\\|var COLS = \\\\[\\\\|tr.appendChild\\(el\\(\\\\\"td\\\\\", {}, fmtBRL\\(s.faturamento\" \"C:\\\\Users\\\\ricar\\\\Desktop\\\\Projects-Claude\\\\farmacias-dashboard\\\\index.html\")",
+      "Bash(grep -n 'porte = $porte\\\\|faturamento = ConvertFrom-BRLNumber' 'C:\\\\Users\\\\ricar\\\\Desktop\\\\Projects-Claude\\\\farmacias-dashboard\\\\serve.ps1')",
+      "PowerShell(Stop-Process -Id 8800 -Force -ErrorAction SilentlyContinue)",
+      "PowerShell(Get-Process -Id 8800 -ErrorAction SilentlyContinue)",
+      "Bash(git status *)",
+      "Bash(git add *)"
+    ]
+  }
+}

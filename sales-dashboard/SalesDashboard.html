@@ -1,0 +1,749 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Drogaria Somensi — Plano de Vendas 2026</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+<style>
+:root{
+  --primary:#1a56db;--primary-light:#e8f0fe;
+  --success:#0e9f6e;--success-light:#def7ec;
+  --warning:#c27803;--warning-light:#fdf6b2;
+  --danger:#e02424;--danger-light:#fde8e8;
+  --purple:#7e3af2;--purple-light:#edebfe;
+  --g50:#f9fafb;--g100:#f3f4f6;--g200:#e5e7eb;--g500:#6b7280;--g700:#374151;--g900:#111827;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--g50);color:var(--g900)}
+.header{background:linear-gradient(135deg,#1a56db 0%,#1648c0 100%);color:white;padding:16px 28px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 2px 10px rgba(0,0,0,.18)}
+.header-left h1{font-size:19px;font-weight:700;letter-spacing:-.3px}
+.header-left p{font-size:12px;opacity:.8;margin-top:2px}
+.header-right{font-size:12px;opacity:.75;text-align:right}
+.filter-bar{background:white;border-bottom:1px solid var(--g200);padding:10px 28px;display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+.filter-bar label{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--g500);margin-right:4px}
+.filter-bar select{padding:6px 10px;border:1px solid var(--g200);border-radius:6px;font-size:13px;outline:none;background:white}
+.filter-bar select:focus{border-color:var(--primary)}
+.filter-sep{flex:1}
+.badge-total{background:var(--primary-light);color:var(--primary);border-radius:999px;padding:4px 12px;font-size:12px;font-weight:600}
+.badge-notice{background:#fdf6b2;color:#c27803;border-radius:999px;padding:4px 10px;font-size:11px;font-weight:500}
+.container{max-width:1440px;margin:0 auto;padding:22px 28px;display:flex;flex-direction:column;gap:20px}
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px}
+.kpi{background:white;border-radius:10px;padding:18px 20px;box-shadow:0 1px 4px rgba(0,0,0,.07);border-left:4px solid var(--primary);position:relative;overflow:hidden}
+.kpi.green{border-color:var(--success)}.kpi.yellow{border-color:var(--warning)}.kpi.purple{border-color:var(--purple)}
+.kpi-label{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--g500);margin-bottom:6px}
+.kpi-value{font-size:26px;font-weight:800;color:var(--g900)}
+.kpi-value.blue{color:var(--primary)}.kpi-value.green{color:var(--success)}.kpi-value.yellow{color:var(--warning)}.kpi-value.purple{color:var(--purple)}
+.kpi-sub{font-size:11px;color:var(--g500);margin-top:4px}
+.kpi-delta{font-size:11px;font-weight:600;margin-top:3px}
+.kpi-delta.up{color:var(--success)}.kpi-delta.down{color:var(--danger)}
+.kpi-icon{position:absolute;right:14px;top:50%;transform:translateY(-50%);font-size:28px;opacity:.12}
+.row-2{display:grid;grid-template-columns:2fr 1fr;gap:18px}
+.row-half{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.card{background:white;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,.07);overflow:hidden}
+.card-header{padding:14px 20px;border-bottom:1px solid var(--g100);display:flex;align-items:center;justify-content:space-between}
+.card-header h3{font-size:14px;font-weight:600}
+.card-header span{font-size:11px;color:var(--g500)}
+.card-body{padding:16px 20px}
+.chart-wrap{padding:12px 16px;height:300px;position:relative}
+.chart-wrap-lg{padding:12px 16px;height:400px;position:relative}
+.tbl-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse}
+thead th{background:var(--g50);padding:8px 12px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--g500);border-bottom:1px solid var(--g200);white-space:nowrap}
+tbody td{padding:9px 12px;font-size:13px;border-bottom:1px solid var(--g100);color:var(--g700)}
+tbody tr:hover td{background:var(--primary-light)}
+tbody tr:last-child td{border:none;font-weight:700;background:var(--g50)}
+.num{text-align:right}
+.bar-cell{min-width:100px}
+.bar-bg{background:var(--g100);border-radius:3px;height:6px;width:100%}
+.bar-fill{background:var(--primary);border-radius:3px;height:6px}
+.bar-fill.green{background:var(--success)}
+.delta-up{color:var(--success);font-weight:600}.delta-down{color:var(--danger);font-weight:600}
+.rank-list{display:flex;flex-direction:column;gap:8px}
+.rank-item{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--g100)}
+.rank-item:last-child{border:none}
+.rank-num{width:22px;height:22px;border-radius:50%;background:var(--primary-light);color:var(--primary);font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.rank-num.gold{background:#fef3c7;color:#d97706}.rank-num.silver{background:#f3f4f6;color:#6b7280}.rank-num.bronze{background:#fef3c7;color:#92400e}
+.rank-name{flex:1;font-size:13px;font-weight:500}
+.rank-val{font-size:13px;font-weight:700;color:var(--primary)}
+.rank-bar{width:80px}
+.rank-bar-bg{background:var(--g100);border-radius:3px;height:5px}
+.rank-bar-fill{background:var(--primary);border-radius:3px;height:5px}
+.tag-a{background:#dcfce7;color:#16a34a;display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600}
+.tag-b{background:#dbeafe;color:#1d4ed8;display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600}
+.tag-c{background:#fef9c3;color:#ca8a04;display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600}
+@media(max-width:900px){.row-2,.row-half{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <h1>Drogaria Somensi</h1>
+    <p>Plano de Vendas 2026 — Painel Gerencial</p>
+  </div>
+  <div class="header-right">
+    <div id="header-total">Carregando...</div>
+    <div id="header-sub">Dados: 2025 Realizado</div>
+  </div>
+</div>
+
+<div class="filter-bar">
+  <label>Ano:</label>
+  <select id="filter-year" onchange="updateView()">
+    <option value="2025">2025 Realizado</option>
+    <option value="2026">2026 Meta</option>
+    <option value="compare">2025 vs 2026</option>
+  </select>
+  <label>Período:</label>
+  <select id="filter-view" onchange="updateView()">
+    <option value="all">Todos os meses</option>
+    <option value="q1">Q1 (Jan-Mar)</option>
+    <option value="q2">Q2 (Abr-Jun)</option>
+    <option value="q3">Q3 (Jul-Set)</option>
+    <option value="q4">Q4 (Out-Dez)</option>
+    <option value="0">Janeiro</option><option value="1">Fevereiro</option>
+    <option value="2">Março</option><option value="3">Abril</option>
+    <option value="4">Maio</option><option value="5">Junho</option>
+    <option value="6">Julho</option><option value="7">Agosto</option>
+    <option value="8">Setembro</option><option value="9">Outubro</option>
+    <option value="10">Novembro</option><option value="11">Dezembro</option>
+  </select>
+  <label>Filial:</label>
+  <select id="filter-store" onchange="updateView()">
+    <option value="">Todas</option>
+  </select>
+  <div class="filter-sep"></div>
+  <span class="badge-notice" id="badge-notice" style="display:none">📌 Meta disponível Jan-Mai</span>
+  <span class="badge-total" id="badge-total">—</span>
+  <button id="refresh-btn" onclick="loadLiveData()" style="padding:6px 14px;border:1px solid var(--primary);border-radius:6px;background:var(--primary-light);color:var(--primary);font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:5px">↻ Atualizar</button>
+  <span id="last-updated" style="font-size:11px;color:var(--g500)"></span>
+</div>
+
+<div class="container">
+
+  <div class="kpi-grid">
+    <div class="kpi">
+      <div class="kpi-label" id="kpi-label-total">Venda Total 2025</div>
+      <div class="kpi-value blue" id="kpi-total">—</div>
+      <div class="kpi-sub" id="kpi-sub-total">todas as filiais</div>
+      <div class="kpi-delta" id="kpi-delta-total" style="display:none"></div>
+      <div class="kpi-icon">💊</div>
+    </div>
+    <div class="kpi green">
+      <div class="kpi-label">Melhor Filial</div>
+      <div class="kpi-value green" id="kpi-top-store">—</div>
+      <div class="kpi-sub" id="kpi-top-store-val">—</div>
+      <div class="kpi-icon">🏆</div>
+    </div>
+    <div class="kpi yellow">
+      <div class="kpi-label">Top Categoria</div>
+      <div class="kpi-value yellow" id="kpi-top-cat">—</div>
+      <div class="kpi-sub" id="kpi-top-cat-val">—</div>
+      <div class="kpi-icon">📦</div>
+    </div>
+    <div class="kpi purple">
+      <div class="kpi-label">Estoque Total (PV)</div>
+      <div class="kpi-value purple" id="kpi-stock">—</div>
+      <div class="kpi-sub">valor de prateleira</div>
+      <div class="kpi-icon">🗃️</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Total Filiais</div>
+      <div class="kpi-value blue">29</div>
+      <div class="kpi-sub">unidades ativas</div>
+      <div class="kpi-icon">🏪</div>
+    </div>
+    <div class="kpi green">
+      <div class="kpi-label">Categorias</div>
+      <div class="kpi-value green">10</div>
+      <div class="kpi-sub">linhas de produto</div>
+      <div class="kpi-icon">🗂️</div>
+    </div>
+  </div>
+
+  <div class="row-2">
+    <div class="card">
+      <div class="card-header"><h3 id="trend-title">Evolução Mensal de Vendas</h3><span id="trend-label">Total empresa</span></div>
+      <div class="chart-wrap-lg"><canvas id="chart-trend"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-header"><h3>Vendas por Categoria</h3><span id="cat-total-label">—</span></div>
+      <div class="chart-wrap"><canvas id="chart-cat-donut"></canvas></div>
+    </div>
+  </div>
+
+  <div class="row-half">
+    <div class="card">
+      <div class="card-header"><h3 id="rank-title">Ranking Filiais</h3><span id="store-rank-label">Top 10</span></div>
+      <div class="card-body"><div class="rank-list" id="store-rank-list"></div></div>
+    </div>
+    <div class="card">
+      <div class="card-header"><h3>Venda por Categoria</h3><span id="cat-bar-sub">R$ Acumulado</span></div>
+      <div class="chart-wrap-lg"><canvas id="chart-cat-bar"></canvas></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><h3>Desempenho por Filial — Mês a Mês</h3><span>Selecione a filial no filtro acima</span></div>
+    <div class="chart-wrap-lg"><canvas id="chart-store-monthly"></canvas></div>
+  </div>
+
+  <!-- Seção comparação 2025 vs 2026 (só no modo compare) -->
+  <div id="compare-section" style="display:none">
+    <div class="card">
+      <div class="card-header"><h3>Meta 2026 vs Realizado 2025 — Filial por Filial</h3><span id="compare-period-label">Jan a Mai</span></div>
+      <div class="tbl-wrap card-body" style="padding:0">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th><th>Filial</th>
+              <th class="num">2025</th>
+              <th class="num">Meta 2026</th>
+              <th class="num">Δ Valor</th>
+              <th class="num">Δ %</th>
+              <th>Progresso meta</th>
+            </tr>
+          </thead>
+          <tbody id="compare-table-body"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header"><h3>Meta 2026 vs Realizado 2025 — Categoria</h3><span id="compare-cat-period">Jan a Mai</span></div>
+      <div class="chart-wrap-lg"><canvas id="chart-compare-cat"></canvas></div>
+    </div>
+  </div>
+
+  <div class="row-half">
+    <div class="card">
+      <div class="card-header"><h3>Estoque — Análise por Curva ABC</h3><span>Valor R$</span></div>
+      <div class="chart-wrap-lg"><canvas id="chart-stock-curve"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-header"><h3>Estoque vs. Vendas por Categoria</h3><span>R$ Comparativo</span></div>
+      <div class="chart-wrap-lg"><canvas id="chart-stock-vs-sales"></canvas></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><h3 id="store-table-title">Tabela Completa — Vendas por Filial 2025</h3><span id="store-table-sub">Todos os meses</span></div>
+    <div class="tbl-wrap card-body" style="padding:0">
+      <table id="store-table">
+        <thead id="store-table-head"></thead>
+        <tbody id="store-table-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><h3>Estoque por Categoria — Curvas ABC</h3><span>Análise completa</span></div>
+    <div class="tbl-wrap card-body" style="padding:0">
+      <table>
+        <thead>
+          <tr>
+            <th>Categoria</th>
+            <th class="num">Venda Mensal Média</th>
+            <th class="num">Estoque Total (PV)</th>
+            <th class="num">Estoque (CMV)</th>
+            <th class="num">SKUs</th>
+            <th class="num">Curva A (PV)</th>
+            <th class="num">Curva B (PV)</th>
+            <th class="num">Curva C (PV)</th>
+            <th class="num">DDE A</th>
+          </tr>
+        </thead>
+        <tbody id="stock-table-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ── DATA ──────────────────────────────────────────────────────
+const MONTHS = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+const MAX_2026_IDX = 4; // Maio é o último mês com meta 2026
+
+let STORES = {
+  'MATRIZ':          [281609,293326,294037,302346,331003,306337,305081,301145,303838,287128,322692,311353],
+  'FORMULAS':        [276342,296665,287890,344445,274263,320757,296858,296858,306514,304625,287859,327497],
+  'PRAÇA':           [369581,291100,360959,322243,293418,316212,316212,287452,346879,388790,318617,342170],
+  'UNIVERSIDADE':    [92327,92634,98480,96266,111074,108873,126761,123207,113156,125885,95082,104017],
+  'SANTA LUCIA':     [116150,115450,128410,132759,143560,139067,143355,135989,140905,152788,140333,135671],
+  'LAURO MULLER':    [150603,145060,169000,170429,197739,168717,170942,169693,169551,176386,167332,159285],
+  'AMARANTE':        [42200,44070,48377,51410,55316,49154,52550,50314,53592,48925,45409,47929],
+  'RIO DAS PEDRAS':  [81628,80240,87530,88796,93835,88515,98175,92298,97748,97161,82776,96859],
+  'JOAO ZARDO':      [76337,68065,78500,84054,94856,89987,88885,87694,83153,96662,80505,90943],
+  'SHOPPING':        [141309,125700,160650,119747,155526,134814,127348,151724,130011,148702,139009,179876],
+  'FLORESTA':        [63427,54800,60083,61200,67600,63711,70031,64144,62350,69411,63318,62917],
+  'JEAN':            [65851,49996,72424,62580,75510,68083,61256,76158,56376,80211,52799,67824],
+  'DOIS TREVOS':     [56288,42902,25700,21416,30211,31326,36000,36052,33123,36909,35154,32736],
+  'CAÇADOR SPERANÇA':[259390,274280,297136,285915,326664,323253,325667,300262,311286,320140,294081,311675],
+  'IPIRANJA':        [81049,77430,93777,100113,110892,99388,93498,97251,84573,94192,90779,90366],
+  'MARTELLO':        [103256,99050,103640,109155,118840,116244,107555,102374,89577,94366,101787,100344],
+  'SANTA MARIA':     [28943,26631,30150,26327,30983,31517,28229,26987,26521,26119,21030,33043],
+  'SAO CRISTOVAO':   [66829,61677,61390,61259,65949,68615,69731,68272,70664,76545,67741,70798],
+  'SUPERPAO':        [60493,53930,46277,56236,67106,47989,51665,43811,62434,64285,42530,54426],
+  'FRAI AVENIDA':    [135397,172740,135790,130462,224457,150832,156041,207486,132709,169274,192285,138590],
+  'FRAI CENTRO':     [140943,97270,91724,126007,113170,75151,119532,80216,73080,135476,68729,69145],
+  'FRAI VIZA':       [89759,89058,102700,100516,112955,104772,109511,96802,109029,111176,107799,107342],
+  'PINHEIRO PRETO':  [125104,128786,126237,127508,137812,126696,135443,123602,125769,135476,127071,123061],
+  'LEBONM REGIS':    [94001,102611,99397,105050,120160,115811,108000,102943,103077,117745,108554,116374],
+  'TREZE TILIAS':    [163860,142380,143374,127675,178442,192133,186943,177584,176277,181675,190453,184691],
+  'FARMATILIAS':     [72438,61273,66481,61578,70081,59268,59766,59835,63589,59859,56280,65689],
+  'CENTRAL RIO':     [33110,30581,37172,34285,32154,34920,36447,28073,29299,29678,30134,34521],
+  'RIO DAS ANTAS':   [98649,92928,106211,102321,106110,98354,103790,98245,94716,97390,90572,96093],
+  'IOMERE':          [92724,92450,98285,93040,106953,100884,114312,96171,103909,107250,97072,109336],
+};
+
+let CATS = {
+  'Prescrição':       [1049051,1067947,1068840,1133514,941587,1097263,1101173,1116755,1037595,1143372,1064589,1078190],
+  'Similar':          [836837,768334,899085,904283,1105378,960629,1013864,935792,930390,962696,863254,859506],
+  'Perfumaria':       [754378,755737,765991,704420,760646,686354,742137,697182,688168,733926,714929,870678],
+  'Genéricos':        [243915,295500,315515,319364,360128,326541,352509,321304,332277,361265,319497,334204],
+  'Serviços':         [212421,205730,203599,207643,258993,207050,286105,285536,270462,331808,276080,254691],
+  'Anticoncepcional': [123986,136662,122750,131732,136180,125925,106424,178108,85523,156468,137607,137929],
+  'Fralda':           [184450,173329,175202,178021,196714,195637,184079,180019,178828,175011,166153,157181],
+  'Leite':            [89168,83286,84595,92649,100366,101032,106059,94578,90830,99822,93439,91029],
+  'Conveniência':     [73355,73129,79413,71079,78132,74225,82460,78044,76272,82120,74548,81714],
+  'Ortopédicos':      [12859,14543,16444,16087,22181,13729,15921,18284,16759,17865,17551,17082],
+};
+
+let STOCK = {
+  'Leite':           [325607,334127,265340,86,248630,54907,786,0],
+  'Fralda':          [555290,672830,431444,223,437082,88594,26892,0],
+  'Serviços':        [848703,0,0,18,1,1,1,0],
+  'Prescrição':      [2905623,3493778,2175663,3164,1450958,1318918,335790,1384],
+  'Genéricos':       [1081930,706336,468898,1053,355603,450018,169551,475],
+  'Similar':         [2797601,1706545,853935,1058,1779950,1625678,741309,839],
+  'Conveniência':    [227655,244776,120604,690,155803,42673,27042,0],
+  'Ortopédico':      [72424,203852,34671,267,51485,12961,6782,0],
+  'Perfumaria':      [2222337,4041861,1133503,8781,1030355,1563394,1716834,652],
+  'Anticoncepcional':[422232,546402,406958,183,320831,73455,27124,0],
+};
+
+// ── DATA 2026 META (Jan-Mai) ──────────────────────────────────
+let STORES_2026 = {
+  'MATRIZ':          [314000,280146,350497,320312,271503,0,0,0,0,0,0,0],
+  'FORMULAS':        [294245,298547,305400,352376,251521,0,0,0,0,0,0,0],
+  'PRAÇA':           [310282,313662,338280,335591,311307,0,0,0,0,0,0,0],
+  'UNIVERSIDADE':    [97038,99101,111515,112641,94079,0,0,0,0,0,0,0],
+  'SANTA LUCIA':     [123450,133084,143102,151935,124372,0,0,0,0,0,0,0],
+  'LAURO MULLER':    [146251,141576,170652,164034,138963,0,0,0,0,0,0,0],
+  'AMARANTE':        [43646,40824,45620,46673,34152,0,0,0,0,0,0,0],
+  'RIO DAS PEDRAS':  [101375,87112,101195,95851,70194,0,0,0,0,0,0,0],
+  'JOAO ZARDO':      [79484,80995,92136,96148,64229,0,0,0,0,0,0,0],
+  'SHOPPING':        [129905,128179,153564,137216,124274,0,0,0,0,0,0,0],
+  'FLORESTA':        [56647,54661,61194,60591,46381,0,0,0,0,0,0,0],
+  'JEAN':            [65943,43352,53304,35371,46169,0,0,0,0,0,0,0],
+  'DOIS TREVOS':     [35886,30409,43475,42452,32822,0,0,0,0,0,0,0],
+  'CAÇADOR SPERANÇA':[294762,285840,301806,295970,239608,0,0,0,0,0,0,0],
+  'IPIRANJA':        [78119,72477,66882,65231,56069,0,0,0,0,0,0,0],
+  'MARTELLO':        [96784,77740,90236,100007,79795,0,0,0,0,0,0,0],
+  'SANTA MARIA':     [29501,28884,31213,27577,25806,0,0,0,0,0,0,0],
+  'SAO CRISTOVAO':   [58379,53922,55158,54167,28885,0,0,0,0,0,0,0],
+  'SUPERPAO':        [50479,100323,108947,107356,103499,0,0,0,0,0,0,0],
+  'FRAI AVENIDA':    [140750,158491,130815,131422,141789,0,0,0,0,0,0,0],
+  'FRAI CENTRO':     [99605,68018,68367,104312,68976,0,0,0,0,0,0,0],
+  'FRAI VIZA':       [102532,104272,123793,124713,94046,0,0,0,0,0,0,0],
+  'PINHEIRO PRETO':  [129110,111386,135960,127927,102165,0,0,0,0,0,0,0],
+  'LEBONM REGIS':    [113910,102660,104529,123456,96998,0,0,0,0,0,0,0],
+  'TREZE TILIAS':    [178228,162583,167778,193822,138883,0,0,0,0,0,0,0],
+  'FARMATILIAS':     [59623,47782,55979,55176,41087,0,0,0,0,0,0,0],
+  'CENTRAL RIO':     [28170,30596,34202,25660,33405,0,0,0,0,0,0,0],
+  'RIO DAS ANTAS':   [90446,83683,109806,104836,83122,0,0,0,0,0,0,0],
+  'IOMERE':          [99312,92274,116649,118596,86962,0,0,0,0,0,0,0],
+};
+
+let CATS_2026 = {
+  'Prescrição':       [914950,849554,1001272,972885,729919,0,0,0,0,0,0,0],
+  'Similar':          [794667,763524,908804,932582,726146,0,0,0,0,0,0,0],
+  'Perfumaria':       [676711,654541,668708,674977,523162,0,0,0,0,0,0,0],
+  'Genéricos':        [310358,297863,334086,352694,271915,0,0,0,0,0,0,0],
+  'Serviços':         [272592,275603,290254,296952,186084,0,0,0,0,0,0,0],
+  'Anticoncepcional': [140703,131661,119603,112770,86334,0,0,0,0,0,0,0],
+  'Fralda':           [171252,173448,174940,189384,142464,0,0,0,0,0,0,0],
+  'Leite':            [95889,94703,90190,101209,71882,0,0,0,0,0,0,0],
+  'Conveniência':     [71240,72383,79194,71110,47979,0,0,0,0,0,0,0],
+  'Ortopédicos':      [18308,17614,23667,25103,16093,0,0,0,0,0,0,0],
+};
+
+// ── HELPERS ──────────────────────────────────────────────────
+const fmt  = v => 'R$ ' + Math.round(v).toLocaleString('pt-BR');
+const fmtK = v => v>=1e6?'R$ '+(v/1e6).toFixed(1)+'M':v>=1e3?'R$ '+(v/1e3).toFixed(0)+'K':'R$ '+Math.round(v);
+const sum  = arr => arr.reduce((a,b)=>a+b,0);
+
+function getMonthIdxs(view, year) {
+  let idxs;
+  if (view==='all') idxs=[0,1,2,3,4,5,6,7,8,9,10,11];
+  else if(view==='q1') idxs=[0,1,2];
+  else if(view==='q2') idxs=[3,4,5];
+  else if(view==='q3') idxs=[6,7,8];
+  else if(view==='q4') idxs=[9,10,11];
+  else idxs=[parseInt(view)];
+  if (year !== '2025') idxs = idxs.filter(i => i <= MAX_2026_IDX);
+  return idxs;
+}
+
+let charts = {};
+function destroyChart(id) { if(charts[id]){charts[id].destroy();delete charts[id];} }
+
+const CAT_COLORS = {
+  'Prescrição':'#1a56db','Similar':'#7e3af2','Perfumaria':'#e02424',
+  'Genéricos':'#0e9f6e','Serviços':'#c27803','Anticoncepcional':'#db2777',
+  'Fralda':'#0694a2','Leite':'#3f83f8','Conveniência':'#ff5a1f','Ortopédicos':'#8d5524'
+};
+
+// ── MAIN UPDATE ──────────────────────────────────────────────
+function updateView() {
+  const year     = document.getElementById('filter-year').value;
+  const viewVal  = document.getElementById('filter-view').value;
+  const storeSel = document.getElementById('filter-store').value;
+  const idxs     = getMonthIdxs(viewVal, year);
+  const viewLabel = document.getElementById('filter-view').selectedOptions[0].text;
+
+  document.getElementById('badge-notice').style.display = year !== '2025' ? '' : 'none';
+  const subMap = {'2025':'2025 Realizado','2026':'2026 Meta','compare':'2025 vs 2026'};
+  document.getElementById('header-sub').textContent = 'Dados: ' + subMap[year];
+
+  const CUR_STORES = year === '2026' ? STORES_2026 : STORES;
+  const CUR_CATS   = year === '2026' ? CATS_2026 : CATS;
+
+  const totalOf = (src, ixs) => Object.values(src).reduce((a,arr) => a + sum(arr.filter((_,i)=>ixs.includes(i))), 0);
+  const grandTotal   = idxs.length === 0 ? 0 : (year === 'compare' ? totalOf(STORES_2026, idxs) : totalOf(CUR_STORES, idxs));
+  const grandTotal25 = year === 'compare' && idxs.length > 0 ? totalOf(STORES, idxs) : 0;
+
+  document.getElementById('header-total').textContent = idxs.length===0 ? 'Sem dados 2026' : fmtK(grandTotal) + (year==='2025' ? ' em vendas' : ' meta 2026');
+  document.getElementById('badge-total').textContent  = viewLabel + ': ' + (idxs.length===0 ? '—' : fmtK(grandTotal));
+
+  // KPIs
+  document.getElementById('kpi-label-total').textContent = year==='2026'?'Meta Total 2026':year==='compare'?'Meta 2026':'Venda Total 2025';
+  document.getElementById('kpi-total').textContent = idxs.length===0 ? '—' : fmtK(grandTotal);
+  const deltaEl = document.getElementById('kpi-delta-total');
+  if (year === 'compare' && idxs.length > 0 && grandTotal25 > 0) {
+    const d = (grandTotal - grandTotal25) / grandTotal25 * 100;
+    deltaEl.style.display = '';
+    deltaEl.className = 'kpi-delta ' + (d>=0?'up':'down');
+    deltaEl.textContent = (d>=0?'▲':'▼')+' '+Math.abs(d).toFixed(1)+'% vs 2025';
+    document.getElementById('kpi-sub-total').textContent = fmtK(grandTotal25)+' realizado 2025';
+  } else {
+    deltaEl.style.display = 'none';
+    document.getElementById('kpi-sub-total').textContent = 'todas as filiais';
+  }
+
+  const storeTotals = Object.entries(CUR_STORES)
+    .map(([n,v]) => [n, sum(v.filter((_,i)=>idxs.includes(i)))])
+    .sort((a,b)=>b[1]-a[1]);
+  const top = storeTotals.find(s=>s[1]>0);
+  if (top) { document.getElementById('kpi-top-store').textContent=top[0]; document.getElementById('kpi-top-store-val').textContent=fmtK(top[1]); }
+  const catTotals = Object.entries(CUR_CATS)
+    .map(([n,v]) => [n, sum(v.filter((_,i)=>idxs.includes(i)))])
+    .sort((a,b)=>b[1]-a[1]);
+  const topCat = catTotals.find(c=>c[1]>0);
+  if (topCat) { document.getElementById('kpi-top-cat').textContent=topCat[0]; document.getElementById('kpi-top-cat-val').textContent=fmtK(topCat[1]); }
+  document.getElementById('kpi-stock').textContent = fmtK(Object.values(STOCK).reduce((a,s)=>a+(s[1]||0),0));
+
+  document.getElementById('trend-title').textContent = year==='compare'?'Evolução Mensal — 2025 vs 2026':'Evolução Mensal de Vendas';
+  document.getElementById('rank-title').textContent  = year==='2026'?'Ranking — Meta 2026':'Ranking Filiais';
+  document.getElementById('compare-section').style.display = year==='compare' ? '' : 'none';
+
+  renderTrend(storeSel, idxs, year);
+  renderCatDonut(idxs, year);
+  renderCatBar(idxs, year);
+  renderStoreRank(storeTotals);
+  renderStoreMonthly(storeSel, idxs, year);
+  renderStoreTable(idxs, grandTotal, year);
+  renderStockCharts();
+  renderStockTable();
+  if (year === 'compare') renderCompare(idxs);
+}
+
+// ── TREND ────────────────────────────────────────────────────
+function renderTrend(storeSel, idxs, year) {
+  destroyChart('trend');
+  if (!idxs.length) return;
+  const labels = idxs.map(i => MONTHS[i]);
+  document.getElementById('trend-label').textContent = storeSel || 'Total empresa';
+
+  if (year === 'compare') {
+    const d25 = storeSel
+      ? STORES[storeSel].filter((_,i)=>idxs.includes(i))
+      : idxs.map(mi=>Object.values(STORES).reduce((a,s)=>a+s[mi],0));
+    const d26 = storeSel
+      ? STORES_2026[storeSel].filter((_,i)=>idxs.includes(i))
+      : idxs.map(mi=>Object.values(STORES_2026).reduce((a,s)=>a+s[mi],0));
+    charts['trend'] = new Chart(document.getElementById('chart-trend'), {
+      type:'bar', data:{ labels,
+        datasets:[
+          {label:'2025 Realizado',data:d25,backgroundColor:'#3b82f6a0',borderRadius:4},
+          {label:'2026 Meta',     data:d26,backgroundColor:'#0e9f6ea0',borderRadius:4},
+        ]},
+      options:{responsive:true,maintainAspectRatio:false,
+        plugins:{legend:{display:true,position:'top'},tooltip:{callbacks:{label:ctx=>` ${ctx.dataset.label}: ${fmt(ctx.raw)}`}}},
+        scales:{y:{ticks:{callback:v=>fmtK(v)},grid:{color:'#f3f4f6'}},x:{grid:{display:false}}}}
+    });
+  } else {
+    const CUR = year==='2026' ? STORES_2026 : STORES;
+    const data = storeSel ? CUR[storeSel].filter((_,i)=>idxs.includes(i)) : idxs.map(mi=>Object.values(CUR).reduce((a,s)=>a+s[mi],0));
+    const mainColor = year==='2026'?'#0e9f6e':'#3b82f6';
+    const topIdx = data.indexOf(Math.max(...data));
+    charts['trend'] = new Chart(document.getElementById('chart-trend'), {
+      type:'bar', data:{labels, datasets:[
+        {label:year==='2026'?'Meta 2026':'Vendas', data, backgroundColor:data.map((_,i)=>i===topIdx?(year==='2026'?'#047857':'#0e9f6e'):mainColor), borderRadius:5},
+        {label:'Média', data:Array(data.length).fill(sum(data)/data.length), type:'line', borderColor:year==='2026'?'#7e3af2':'#f97316', borderWidth:2, borderDash:[5,4], pointRadius:0, fill:false},
+      ]},
+      options:{responsive:true,maintainAspectRatio:false,
+        plugins:{legend:{display:true,position:'top'},tooltip:{callbacks:{label:ctx=>' '+fmt(ctx.raw)}}},
+        scales:{y:{ticks:{callback:v=>fmtK(v)},grid:{color:'#f3f4f6'}},x:{grid:{display:false}}}}
+    });
+  }
+}
+
+// ── CAT DONUT ────────────────────────────────────────────────
+function renderCatDonut(idxs, year) {
+  destroyChart('catDonut');
+  if (!idxs.length) return;
+  const CUR = year==='2026' ? CATS_2026 : CATS;
+  const entries = Object.entries(CUR).map(([n,v])=>[n,sum(v.filter((_,i)=>idxs.includes(i)))]).sort((a,b)=>b[1]-a[1]);
+  const total = sum(entries.map(e=>e[1]));
+  document.getElementById('cat-total-label').textContent = fmtK(total);
+  charts['catDonut'] = new Chart(document.getElementById('chart-cat-donut'), {
+    type:'doughnut', data:{labels:entries.map(e=>e[0]),datasets:[{data:entries.map(e=>e[1]),backgroundColor:entries.map(e=>CAT_COLORS[e[0]]||'#6b7280'),borderWidth:2,borderColor:'white',hoverOffset:6}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'right',labels:{font:{size:11},boxWidth:12,padding:8}},tooltip:{callbacks:{label:ctx=>` ${ctx.label}: ${fmtK(ctx.raw)} (${(ctx.raw/total*100).toFixed(1)}%)`}}}}
+  });
+}
+
+// ── CAT BAR ──────────────────────────────────────────────────
+function renderCatBar(idxs, year) {
+  destroyChart('catBar');
+  if (!idxs.length) return;
+  document.getElementById('cat-bar-sub').textContent = year==='compare'?'2025 vs 2026':'R$ Acumulado';
+  if (year === 'compare') {
+    const e25 = Object.entries(CATS).map(([n,v])=>[n,sum(v.filter((_,i)=>idxs.includes(i)))]).sort((a,b)=>b[1]-a[1]);
+    const m26 = Object.fromEntries(Object.entries(CATS_2026).map(([n,v])=>[n,sum(v.filter((_,i)=>idxs.includes(i)))]));
+    charts['catBar'] = new Chart(document.getElementById('chart-cat-bar'), {
+      type:'bar', data:{labels:e25.map(e=>e[0]),datasets:[
+        {label:'2025 Realizado',data:e25.map(e=>e[1]),backgroundColor:'#3b82f6a0',borderRadius:4},
+        {label:'2026 Meta',     data:e25.map(e=>m26[e[0]]||0),backgroundColor:'#0e9f6ea0',borderRadius:4},
+      ]},
+      options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,position:'top'},tooltip:{callbacks:{label:ctx=>` ${ctx.dataset.label}: ${fmt(ctx.raw)}`}}},scales:{x:{ticks:{callback:v=>fmtK(v)},grid:{color:'#f3f4f6'}},y:{grid:{display:false}}}}
+    });
+  } else {
+    const CUR = year==='2026' ? CATS_2026 : CATS;
+    const entries = Object.entries(CUR).map(([n,v])=>[n,sum(v.filter((_,i)=>idxs.includes(i)))]).sort((a,b)=>b[1]-a[1]);
+    charts['catBar'] = new Chart(document.getElementById('chart-cat-bar'), {
+      type:'bar', data:{labels:entries.map(e=>e[0]),datasets:[{label:year==='2026'?'Meta 2026':'Venda',data:entries.map(e=>e[1]),backgroundColor:entries.map(e=>CAT_COLORS[e[0]]||'#6b7280'),borderRadius:5}]},
+      options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>' '+fmt(ctx.raw)}}},scales:{x:{ticks:{callback:v=>fmtK(v)},grid:{color:'#f3f4f6'}},y:{grid:{display:false}}}}
+    });
+  }
+}
+
+// ── STORE RANK ───────────────────────────────────────────────
+function renderStoreRank(sorted) {
+  const top10 = sorted.filter(s=>s[1]>0).slice(0,10);
+  if (!top10.length) { document.getElementById('store-rank-list').innerHTML='<p style="color:var(--g500);padding:16px;font-size:13px">Sem dados para este período.</p>'; return; }
+  const max = top10[0][1];
+  const medals = ['gold','silver','bronze'];
+  document.getElementById('store-rank-list').innerHTML = top10.map(([name,val],i)=>`
+    <div class="rank-item">
+      <div class="rank-num ${medals[i]||''}">${i+1}</div>
+      <div class="rank-name">${name}</div>
+      <div class="rank-bar"><div class="rank-bar-bg"><div class="rank-bar-fill" style="width:${(val/max*100).toFixed(1)}%"></div></div></div>
+      <div class="rank-val">${fmtK(val)}</div>
+    </div>`).join('');
+  document.getElementById('store-rank-label').textContent = 'Top 10 de '+sorted.filter(s=>s[1]>0).length;
+}
+
+// ── STORE MONTHLY ────────────────────────────────────────────
+function renderStoreMonthly(storeSel, idxs, year) {
+  destroyChart('storeMonthly');
+  if (!idxs.length) return;
+  const labels = idxs.map(i=>MONTHS[i]);
+  const palette = ['#1a56db','#0e9f6e','#e02424','#c27803','#7e3af2','#0694a2'];
+  if (year === 'compare' && storeSel) {
+    charts['storeMonthly'] = new Chart(document.getElementById('chart-store-monthly'), {
+      type:'line', data:{labels, datasets:[
+        {label:storeSel+' — 2025',data:STORES[storeSel].filter((_,j)=>idxs.includes(j)),borderColor:'#3b82f6',backgroundColor:'#3b82f618',fill:true,tension:0.35,pointRadius:3},
+        {label:storeSel+' — 2026 Meta',data:STORES_2026[storeSel].filter((_,j)=>idxs.includes(j)),borderColor:'#0e9f6e',backgroundColor:'#0e9f6e18',fill:true,tension:0.35,pointRadius:3},
+      ]},
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top',labels:{font:{size:11},boxWidth:12,padding:8}},tooltip:{callbacks:{label:ctx=>` ${ctx.dataset.label}: ${fmt(ctx.raw)}`}}},scales:{y:{ticks:{callback:v=>fmtK(v)},grid:{color:'#f3f4f6'}},x:{grid:{display:false}}}}
+    });
+  } else {
+    const CUR = year==='2026' ? STORES_2026 : STORES;
+    const stores = storeSel ? [storeSel] : Object.keys(CUR).slice(0,6);
+    charts['storeMonthly'] = new Chart(document.getElementById('chart-store-monthly'), {
+      type:'line', data:{labels, datasets:stores.map((name,i)=>({label:name,data:CUR[name].filter((_,j)=>idxs.includes(j)),borderColor:palette[i%palette.length],backgroundColor:palette[i%palette.length]+'18',fill:!!storeSel,tension:0.35,pointRadius:3}))},
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top',labels:{font:{size:11},boxWidth:12,padding:8}},tooltip:{callbacks:{label:ctx=>` ${ctx.dataset.label}: ${fmt(ctx.raw)}`}}},scales:{y:{ticks:{callback:v=>fmtK(v)},grid:{color:'#f3f4f6'}},x:{grid:{display:false}}}}
+    });
+  }
+}
+
+// ── STORE TABLE ──────────────────────────────────────────────
+function renderStoreTable(idxs, grandTotal, year) {
+  const CUR = year==='2026' ? STORES_2026 : STORES;
+  document.getElementById('store-table-title').textContent = year==='2026'?'Tabela Completa — Meta por Filial 2026':year==='compare'?'Tabela Completa — Vendas 2025':'Tabela Completa — Vendas por Filial 2025';
+  const mLabels = idxs.length===12?['JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT','NOV','DEZ']:idxs.map(i=>MONTHS[i].toUpperCase());
+  document.getElementById('store-table-head').innerHTML = `<tr><th>#</th><th>Filial</th>${mLabels.map(m=>`<th class="num">${m}</th>`).join('')}<th class="num">TOTAL</th><th>Participação</th></tr>`;
+  if (!idxs.length) { document.getElementById('store-table-body').innerHTML='<tr><td colspan="20" style="text-align:center;color:var(--g500);padding:24px">Sem dados disponíveis para 2026 neste período</td></tr>'; return; }
+  const rows = Object.entries(CUR).map(([name,vals])=>{const m=vals.filter((_,i)=>idxs.includes(i));return[name,m,sum(m)];}).sort((a,b)=>b[2]-a[2]);
+  const maxV = rows[0][2]||1;
+  let html = rows.map(([name,monthly,total],i)=>{
+    const p=(total/grandTotal*100).toFixed(1), bw=(total/maxV*100).toFixed(1);
+    return `<tr><td>${i+1}</td><td><strong>${name}</strong></td>${monthly.map(v=>`<td class="num">${v>0?v.toLocaleString('pt-BR'):'<span style="color:var(--g200)">—</span>'}</td>`).join('')}<td class="num"><strong>${total.toLocaleString('pt-BR')}</strong></td><td class="bar-cell"><div class="bar-bg"><div class="bar-fill ${year==='2026'?'green':''}" style="width:${bw}%"></div></div><span style="font-size:11px;color:var(--g500)">${p}%</span></td></tr>`;
+  }).join('');
+  const tots = idxs.map(mi=>Object.values(CUR).reduce((a,s)=>a+s[mi],0));
+  html+=`<tr><td></td><td><strong>TOTAL</strong></td>${tots.map(v=>`<td class="num"><strong>${v.toLocaleString('pt-BR')}</strong></td>`).join('')}<td class="num"><strong>${grandTotal.toLocaleString('pt-BR')}</strong></td><td class="bar-cell"><div class="bar-bg"><div class="bar-fill green" style="width:100%"></div></div><span style="font-size:11px;color:var(--g500)">100%</span></td></tr>`;
+  document.getElementById('store-table-body').innerHTML = html;
+}
+
+// ── COMPARISON SECTION ───────────────────────────────────────
+function renderCompare(idxs) {
+  const periodLabel = idxs.length ? MONTHS[idxs[0]]+(idxs.length>1?' a '+MONTHS[idxs[idxs.length-1]]:'') : 'Jan a Mai';
+  document.getElementById('compare-period-label').textContent = periodLabel;
+  document.getElementById('compare-cat-period').textContent   = periodLabel;
+
+  // Store comparison table
+  const rows = Object.keys(STORES).map(name=>{
+    const v25 = sum(STORES[name].filter((_,i)=>idxs.includes(i)));
+    const v26 = sum(STORES_2026[name].filter((_,i)=>idxs.includes(i)));
+    return [name, v25, v26, v26-v25];
+  }).sort((a,b)=>b[2]-a[2]);
+  const max26 = Math.max(...rows.map(r=>r[2]));
+  const totR25 = sum(rows.map(r=>r[1])), totR26 = sum(rows.map(r=>r[2]));
+  const totDelta = totR26 - totR25;
+
+  document.getElementById('compare-table-body').innerHTML = [...rows.map(([name,v25,v26,delta],i)=>{
+    const pn = v25>0?(delta/v25*100):0, cls=delta>=0?'delta-up':'delta-down', bw=(v26/max26*100).toFixed(1);
+    return `<tr><td>${i+1}</td><td><strong>${name}</strong></td><td class="num">${v25.toLocaleString('pt-BR')}</td><td class="num" style="color:var(--success);font-weight:600">${v26.toLocaleString('pt-BR')}</td><td class="num"><span class="${cls}">${delta>=0?'+':''}${delta.toLocaleString('pt-BR')}</span></td><td class="num"><span class="${cls}">${delta>=0?'▲':'▼'} ${Math.abs(pn).toFixed(1)}%</span></td><td class="bar-cell"><div class="bar-bg"><div class="bar-fill green" style="width:${bw}%"></div></div></td></tr>`;
+  }),
+  [`<tr><td></td><td><strong>TOTAL</strong></td><td class="num"><strong>${totR25.toLocaleString('pt-BR')}</strong></td><td class="num" style="color:var(--success);font-weight:700">${totR26.toLocaleString('pt-BR')}</td><td class="num"><span class="${totDelta>=0?'delta-up':'delta-down'}">${totDelta>=0?'+':''}${totDelta.toLocaleString('pt-BR')}</span></td><td class="num"><span class="${totDelta>=0?'delta-up':'delta-down'}">${totDelta>=0?'▲':'▼'} ${totR25>0?Math.abs(totDelta/totR25*100).toFixed(1):'—'}%</span></td><td></td></tr>`]
+  ].join('');
+
+  // Category comparison chart
+  destroyChart('compareCat');
+  const catRows = Object.keys(CATS).map(n=>[n, sum(CATS[n].filter((_,i)=>idxs.includes(i))), sum(CATS_2026[n].filter((_,i)=>idxs.includes(i)))]).sort((a,b)=>b[1]-a[1]);
+  charts['compareCat'] = new Chart(document.getElementById('chart-compare-cat'), {
+    type:'bar', data:{labels:catRows.map(r=>r[0]),datasets:[
+      {label:'2025 Realizado',data:catRows.map(r=>r[1]),backgroundColor:'#3b82f6a0',borderRadius:4},
+      {label:'2026 Meta',     data:catRows.map(r=>r[2]),backgroundColor:'#0e9f6ea0',borderRadius:4},
+    ]},
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,position:'top'},tooltip:{callbacks:{label:ctx=>` ${ctx.dataset.label}: ${fmt(ctx.raw)}`}}},scales:{x:{ticks:{callback:v=>fmtK(v)},grid:{color:'#f3f4f6'}},y:{grid:{display:false}}}}
+  });
+}
+
+// ── STOCK CHARTS ─────────────────────────────────────────────
+function renderStockCharts() {
+  destroyChart('stockCurve');
+  const cats = Object.keys(STOCK).filter(c=>STOCK[c][1]>0);
+  charts['stockCurve'] = new Chart(document.getElementById('chart-stock-curve'), {
+    type:'bar', data:{labels:cats, datasets:[
+      {label:'Curva A (80%)',data:cats.map(c=>STOCK[c][4]||0),backgroundColor:'#0e9f6e',borderRadius:4},
+      {label:'Curva B (15%)',data:cats.map(c=>STOCK[c][5]||0),backgroundColor:'#3b82f6',borderRadius:4},
+      {label:'Curva C (5%)', data:cats.map(c=>STOCK[c][6]||0),backgroundColor:'#fbbf24',borderRadius:4},
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'},tooltip:{callbacks:{label:ctx=>` ${ctx.dataset.label}: ${fmt(ctx.raw)}`}}},scales:{x:{stacked:true,grid:{display:false},ticks:{font:{size:10}}},y:{stacked:true,ticks:{callback:v=>fmtK(v)},grid:{color:'#f3f4f6'}}}}
+  });
+  destroyChart('stockVsSales');
+  const cfc = Object.keys(CATS);
+  charts['stockVsSales'] = new Chart(document.getElementById('chart-stock-vs-sales'), {
+    type:'bar', data:{labels:cfc, datasets:[
+      {label:'Venda Anual 2025',data:cfc.map(c=>sum(CATS[c])),backgroundColor:'#3b82f680',borderRadius:4},
+      {label:'Estoque (PV)',    data:cfc.map(c=>{const s=STOCK[c]||STOCK[c+'s']||STOCK[c.slice(0,-1)];return s?s[1]:0;}),backgroundColor:'#e0242480',borderRadius:4},
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'},tooltip:{callbacks:{label:ctx=>` ${ctx.dataset.label}: ${fmt(ctx.raw)}`}}},scales:{x:{grid:{display:false},ticks:{font:{size:10}}},y:{ticks:{callback:v=>fmtK(v)},grid:{color:'#f3f4f6'}}}}
+  });
+}
+
+// ── STOCK TABLE ──────────────────────────────────────────────
+function renderStockTable() {
+  document.getElementById('stock-table-body').innerHTML = Object.entries(STOCK).map(([name,s])=>{
+    const vm = Object.entries(CATS).find(([c])=>c.startsWith(name.split(' ')[0]));
+    const ma = vm ? Math.round(sum(vm[1])/12).toLocaleString('pt-BR') : '—';
+    return `<tr><td><strong>${name}</strong></td><td class="num">${ma}</td><td class="num">${(s[1]||0).toLocaleString('pt-BR')}</td><td class="num">${(s[2]||0).toLocaleString('pt-BR')}</td><td class="num">${(s[3]||0).toLocaleString('pt-BR')}</td><td class="num">${(s[4]||0).toLocaleString('pt-BR')}</td><td class="num">${(s[5]||0).toLocaleString('pt-BR')}</td><td class="num">${(s[6]||0).toLocaleString('pt-BR')}</td><td class="num">${s[7]?s[7].toLocaleString('pt-BR'):'—'}</td></tr>`;
+  }).join('');
+}
+
+// ── DADOS AO VIVO (Google Apps Script) ───────────────────────
+let _refreshTimer = null;
+
+function loadLiveData() {
+  // Só executa dentro do Google Apps Script
+  if (typeof google === 'undefined' || !google.script) {
+    updateView();
+    return;
+  }
+
+  const btn = document.getElementById('refresh-btn');
+  const lbl = document.getElementById('last-updated');
+  if (btn) { btn.disabled = true; btn.textContent = '⟳ Buscando...'; }
+
+  google.script.run
+    .withSuccessHandler(function(json) {
+      try {
+        const d = JSON.parse(json);
+        if (d.error) throw new Error(d.error);
+
+        // Substitui dados com versão ao vivo da planilha
+        if (d.cats2025   && Object.keys(d.cats2025).length)   CATS       = d.cats2025;
+        if (d.stores2025 && Object.keys(d.stores2025).length) STORES     = d.stores2025;
+        if (d.cats2026   && Object.keys(d.cats2026).length)   CATS_2026  = d.cats2026;
+        if (d.stores2026 && Object.keys(d.stores2026).length) STORES_2026= d.stores2026;
+        if (d.stock      && Object.keys(d.stock).length)      STOCK      = d.stock;
+
+        // Atualiza lista de filiais no filtro
+        rebuildStoreFilter();
+
+        if (btn) { btn.disabled = false; btn.textContent = '↻ Atualizar'; }
+        if (lbl) lbl.textContent = '● Atualizado: ' + (d.updatedAt || new Date().toLocaleTimeString('pt-BR'));
+
+        updateView();
+      } catch(e) {
+        console.warn('Erro ao processar dados ao vivo:', e);
+        if (btn) { btn.disabled = false; btn.textContent = '↻ Atualizar'; }
+        updateView();
+      }
+    })
+    .withFailureHandler(function(err) {
+      console.warn('Falha ao buscar dados:', err);
+      if (btn) { btn.disabled = false; btn.textContent = '↻ Atualizar'; }
+      updateView();
+    })
+    .getSalesData();
+}
+
+function rebuildStoreFilter() {
+  const sel = document.getElementById('filter-store');
+  const current = sel.value;
+  // Remove opções antigas (mantém "Todas")
+  while (sel.options.length > 1) sel.remove(1);
+  Object.keys(STORES).forEach(name => {
+    const o = document.createElement('option');
+    o.value = name; o.textContent = name;
+    sel.appendChild(o);
+  });
+  // Restaura seleção se ainda existe
+  if ([...sel.options].some(o => o.value === current)) sel.value = current;
+}
+
+// ── INIT ────────────────────────────────────────────────────
+function init() {
+  // Popula o filtro de filiais (dados estáticos iniciais)
+  rebuildStoreFilter();
+
+  if (typeof google !== 'undefined' && google.script) {
+    // Modo ao vivo — carrega da planilha
+    loadLiveData();
+    // Auto-refresh a cada 5 minutos
+    _refreshTimer = setInterval(loadLiveData, 5 * 60 * 1000);
+  } else {
+    // Modo local — usa dados estáticos embutidos
+    const lbl = document.getElementById('last-updated');
+    if (lbl) lbl.textContent = '● Dados estáticos (modo local)';
+    updateView();
+  }
+}
+init();
+</script>
+</body>
+</html>

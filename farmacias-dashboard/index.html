@@ -1,0 +1,1123 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Resultado por Loja — Rede de Farmácias</title>
+<style>
+  .dash {
+    color-scheme: light;
+    --page:      #f9f9f7;
+    --surface-1: #fcfcfb;
+    --surface-2: #f2f1ec;
+    --ink-1:     #0b0b0b;
+    --ink-2:     #52514e;
+    --ink-3:     #898781;
+    --grid:      #e1e0d9;
+    --baseline:  #c3c2b7;
+    --border:    rgba(11,11,11,0.10);
+
+    --accent:    #2a78d6;
+    --accent-ink:#ffffff;
+    --porte-a:   #2a78d6;
+    --porte-b:   #1baf7a;
+    --porte-c:   #eda100;
+
+    --pos:       #2a78d6;
+    --neg:       #e34948;
+    --mid:       #f0efec;
+
+    --good:      #0ca30c;
+    --good-text: #006300;
+    --critical:  #d03b3b;
+    --critical-text: #b3261e;
+    --warning:   #b3790a;
+
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: var(--page);
+    color: var(--ink-1);
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 28px 24px 64px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) .dash {
+      color-scheme: dark;
+      --page:      #0d0d0d;
+      --surface-1: #1a1a19;
+      --surface-2: #222220;
+      --ink-1:     #ffffff;
+      --ink-2:     #c3c2b7;
+      --ink-3:     #898781;
+      --grid:      #2c2c2a;
+      --baseline:  #383835;
+      --border:    rgba(255,255,255,0.10);
+
+      --accent:    #3987e5;
+      --accent-ink:#0d0d0d;
+      --porte-a:   #3987e5;
+      --porte-b:   #199e70;
+      --porte-c:   #c98500;
+
+      --pos:       #3987e5;
+      --neg:       #e66767;
+      --mid:       #383835;
+
+      --good:      #0ca30c;
+      --good-text: #35c235;
+      --critical:  #e66767;
+      --critical-text: #ff8f8f;
+      --warning:   #fab219;
+    }
+  }
+  :root[data-theme="dark"] .dash {
+    color-scheme: dark;
+    --page:      #0d0d0d;
+    --surface-1: #1a1a19;
+    --surface-2: #222220;
+    --ink-1:     #ffffff;
+    --ink-2:     #c3c2b7;
+    --ink-3:     #898781;
+    --grid:      #2c2c2a;
+    --baseline:  #383835;
+    --border:    rgba(255,255,255,0.10);
+    --accent:    #3987e5;
+    --accent-ink:#0d0d0d;
+    --porte-a:   #3987e5;
+    --porte-b:   #199e70;
+    --porte-c:   #c98500;
+    --pos:       #3987e5;
+    --neg:       #e66767;
+    --mid:       #383835;
+    --good:      #0ca30c;
+    --good-text: #35c235;
+    --critical:  #e66767;
+    --critical-text: #ff8f8f;
+    --warning:   #fab219;
+  }
+  :root[data-theme="light"] .dash {
+    color-scheme: light;
+    --page:      #f9f9f7;
+    --surface-1: #fcfcfb;
+    --surface-2: #f2f1ec;
+    --ink-1:     #0b0b0b;
+    --ink-2:     #52514e;
+    --ink-3:     #898781;
+    --grid:      #e1e0d9;
+    --baseline:  #c3c2b7;
+    --border:    rgba(11,11,11,0.10);
+    --accent:    #2a78d6;
+    --accent-ink:#ffffff;
+    --porte-a:   #2a78d6;
+    --porte-b:   #1baf7a;
+    --porte-c:   #eda100;
+    --pos:       #2a78d6;
+    --neg:       #e34948;
+    --mid:       #f0efec;
+    --good:      #0ca30c;
+    --good-text: #006300;
+    --critical:  #d03b3b;
+    --critical-text: #b3261e;
+    --warning:   #b3790a;
+  }
+
+  .dash * { box-sizing: border-box; }
+  .dash h1, .dash h2, .dash h3, .dash p { margin: 0; }
+  .dash button, .dash input { font-family: inherit; }
+
+  /* ---------- header ---------- */
+  .dash .eyebrow {
+    font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+    color: var(--ink-3); margin-bottom: 6px;
+  }
+  .dash h1 { font-size: 26px; font-weight: 650; letter-spacing: -0.01em; text-wrap: balance; }
+  .dash .subtitle { color: var(--ink-2); font-size: 14px; margin-top: 6px; max-width: 62ch; }
+
+  /* ---------- toolbar ---------- */
+  .toolbar {
+    position: sticky; top: 0; z-index: 20;
+    display: flex; align-items: center; flex-wrap: wrap; gap: 10px;
+    margin-top: 22px; padding: 10px 12px;
+    background: color-mix(in srgb, var(--page) 88%, transparent);
+    backdrop-filter: blur(6px);
+    border: 1px solid var(--border); border-radius: 12px;
+  }
+  .seg { display: flex; gap: 2px; background: var(--surface-2); border-radius: 9px; padding: 3px; }
+  .seg button {
+    border: none; background: transparent; color: var(--ink-2);
+    font-size: 13px; font-weight: 560; padding: 6px 12px; border-radius: 7px; cursor: pointer;
+  }
+  .seg button:hover { color: var(--ink-1); }
+  .seg button.active { background: var(--surface-1); color: var(--ink-1); box-shadow: 0 1px 2px var(--border); }
+  .seg button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+  .chip-row { display: flex; gap: 6px; }
+  .chip {
+    border: 1px solid var(--border); background: var(--surface-1); color: var(--ink-2);
+    font-size: 12.5px; font-weight: 600; padding: 5px 11px; border-radius: 999px; cursor: pointer;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .chip .dot { width: 8px; height: 8px; border-radius: 50%; }
+  .chip.active { border-color: transparent; color: var(--accent-ink); }
+  .chip[data-p="ALL"].active { background: var(--ink-1); color: var(--page); }
+  .chip[data-p="A"].active   { background: var(--porte-a); }
+  .chip[data-p="B"].active   { background: var(--porte-b); }
+  .chip[data-p="C"].active   { background: var(--porte-c); }
+  .chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+  .search-wrap { margin-left: auto; position: relative; }
+  .search-wrap input {
+    border: 1px solid var(--border); background: var(--surface-1); color: var(--ink-1);
+    font-size: 13px; padding: 7px 12px 7px 30px; border-radius: 8px; width: 190px;
+  }
+  .search-wrap input:focus-visible { outline: 2px solid var(--accent); }
+  .search-wrap svg { position: absolute; left: 9px; top: 50%; transform: translateY(-50%); opacity: .5; }
+
+  .refresh-btn {
+    display: flex; align-items: center; gap: 7px;
+    border: 1px solid var(--border); background: var(--surface-1); color: var(--ink-1);
+    font-size: 12.5px; font-weight: 650; padding: 7px 13px; border-radius: 8px; cursor: pointer;
+  }
+  .refresh-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .refresh-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .refresh-btn:disabled { cursor: default; opacity: .6; }
+  .refresh-btn.spinning #refreshIcon { animation: spin .8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .refresh-btn.spinning #refreshIcon { animation: none; } }
+  .updated-label { font-size: 11.5px; color: var(--ink-3); white-space: nowrap; }
+
+  .toast {
+    position: fixed; left: 50%; bottom: 26px; z-index: 200;
+    transform: translate(-50%, 12px); opacity: 0; pointer-events: none;
+    background: var(--ink-1); color: var(--page); font-size: 13px; font-weight: 600;
+    padding: 10px 16px; border-radius: 9px; box-shadow: 0 8px 24px rgba(0,0,0,.28);
+    transition: opacity .18s, transform .18s; display: flex; align-items: center; gap: 8px;
+  }
+  .toast.show { opacity: 1; transform: translate(-50%, 0); }
+  .toast.error { background: var(--critical); }
+  .dash-loading { padding: 60px 0; text-align: center; color: var(--ink-3); font-size: 14px; }
+
+  /* ---------- kpis ---------- */
+  .kpi-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-top: 18px; }
+  @media (max-width: 1100px) { .kpi-grid { grid-template-columns: repeat(3, 1fr); } }
+  @media (max-width: 640px) { .kpi-grid { grid-template-columns: repeat(2, 1fr); } }
+  .kpi {
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px;
+    padding: 16px 16px 14px;
+  }
+  .kpi .label { font-size: 11.5px; font-weight: 650; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-3); }
+  .kpi .value { font-size: 25px; font-weight: 650; margin-top: 8px; letter-spacing: -0.01em; }
+  .kpi .delta { font-size: 12.5px; font-weight: 600; margin-top: 6px; display: flex; align-items: center; gap: 4px; }
+  .kpi .delta.up { color: var(--good-text); }
+  .kpi .delta.down { color: var(--critical-text); }
+  .kpi .delta .vs { color: var(--ink-3); font-weight: 500; }
+  .kpi .sub { font-size: 12.5px; color: var(--ink-3); margin-top: 6px; }
+
+  /* ---------- simulator ---------- */
+  .sim {
+    margin-top: 12px; background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px;
+    padding: 16px 18px;
+  }
+  .sim-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .sim-head h2 { font-size: 14.5px; font-weight: 650; }
+  .sim-head .formula {
+    font-size: 12px; color: var(--ink-3); font-variant-numeric: tabular-nums;
+  }
+  .sim-body { display: flex; align-items: end; gap: 22px; margin-top: 14px; flex-wrap: wrap; }
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field label { font-size: 11.5px; font-weight: 650; color: var(--ink-3); text-transform: uppercase; letter-spacing: .04em; }
+  .field .prefixed {
+    display: flex; align-items: center; border: 1px solid var(--border); border-radius: 8px;
+    background: var(--page); overflow: hidden;
+  }
+  .field .prefixed span { padding: 0 0 0 10px; color: var(--ink-3); font-size: 13.5px; }
+  .field .prefixed input {
+    border: none; background: transparent; color: var(--ink-1); font-size: 14.5px; font-weight: 600;
+    padding: 8px 10px; width: 130px; font-variant-numeric: tabular-nums;
+  }
+  .field .prefixed input:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+  .field .prefixed input:disabled { color: var(--ink-3); cursor: not-allowed; }
+  .field .prefixed:has(input:disabled) { background: var(--surface-2); }
+  .sim-sum { display: flex; flex-direction: column; gap: 2px; }
+  .sim-sum .k { font-size: 11.5px; color: var(--ink-3); text-transform: uppercase; letter-spacing: .04em; font-weight: 650; }
+  .sim-sum .v { font-size: 19px; font-weight: 650; font-variant-numeric: tabular-nums; }
+  .sim-reset {
+    border: 1px solid var(--border); background: transparent; color: var(--ink-2);
+    font-size: 12.5px; font-weight: 600; padding: 7px 12px; border-radius: 8px; cursor: pointer; margin-left: auto;
+  }
+  .sim-reset:hover { color: var(--ink-1); border-color: var(--ink-3); }
+  .sim-note {
+    margin-top: 10px; font-size: 12px; color: var(--warning); display: none; align-items: center; gap: 6px; font-weight: 600;
+  }
+  .sim-note.show { display: flex; }
+
+  /* ---------- chart cards ---------- */
+  .chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
+  @media (max-width: 900px) { .chart-grid { grid-template-columns: 1fr; } }
+  .card {
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px 12px;
+    position: relative;
+  }
+  .card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+  .card-head h3 { font-size: 14px; font-weight: 650; }
+  .card-head .hint { font-size: 11.5px; color: var(--ink-3); }
+  .legend { display: flex; gap: 12px; margin-top: 10px; flex-wrap: wrap; }
+  .legend .item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-2); }
+  .legend .swatch { width: 10px; height: 10px; border-radius: 2px; }
+  .chart-empty { padding: 30px 0; text-align: center; color: var(--ink-3); font-size: 13px; }
+
+  svg text { font-family: inherit; fill: var(--ink-2); }
+  .bar-label { font-size: 10.5px; fill: var(--ink-2); }
+  .bar-value { font-size: 10.5px; font-weight: 650; font-variant-numeric: tabular-nums; }
+  .axis-label { font-size: 10px; fill: var(--ink-3); }
+  .gridline { stroke: var(--grid); stroke-width: 1; }
+  .baseline { stroke: var(--baseline); stroke-width: 1; }
+  .bar-rect { cursor: pointer; }
+  .bar-rect:hover, .bar-rect.hover { filter: brightness(1.08); }
+  .dot { cursor: pointer; }
+
+  .tooltip {
+    position: fixed; z-index: 100; pointer-events: none;
+    background: var(--ink-1); color: var(--page); border-radius: 8px;
+    padding: 8px 10px; font-size: 12px; line-height: 1.5;
+    box-shadow: 0 6px 20px rgba(0,0,0,.25);
+    opacity: 0; transform: translate(-50%, calc(-100% - 10px)); transition: opacity .08s;
+    max-width: 220px;
+  }
+  .tooltip.show { opacity: 1; }
+  .tooltip .t-title { font-weight: 650; margin-bottom: 2px; }
+  .tooltip .t-row { display: flex; justify-content: space-between; gap: 10px; }
+  .tooltip .t-row .t-val { font-weight: 700; font-variant-numeric: tabular-nums; }
+
+  .link-to-table {
+    font-size: 12px; color: var(--accent); background: none; border: none; cursor: pointer;
+    padding: 0; margin-top: 8px; text-decoration: none; font-weight: 600;
+  }
+  .link-to-table:hover { text-decoration: underline; }
+
+  /* ---------- table ---------- */
+  .table-card { margin-top: 12px; }
+  .table-wrap { overflow-x: auto; margin-top: 10px; border: 1px solid var(--border); border-radius: 10px; }
+  table.data { border-collapse: collapse; width: 100%; min-width: 880px; font-size: 13px; }
+  table.data thead th {
+    position: sticky; top: 0; background: var(--surface-2);
+    text-align: right; font-size: 11px; font-weight: 650; text-transform: uppercase; letter-spacing: .03em;
+    color: var(--ink-3); padding: 9px 12px; white-space: nowrap; cursor: pointer; user-select: none;
+    border-bottom: 1px solid var(--border);
+  }
+  table.data thead th:first-child, table.data thead th:nth-child(2) { text-align: left; }
+  table.data thead th .arrow { opacity: .35; margin-left: 3px; }
+  table.data thead th.sorted .arrow { opacity: 1; color: var(--accent); }
+  table.data thead th:hover { color: var(--ink-1); }
+  table.data tbody td {
+    text-align: right; padding: 8px 12px; font-variant-numeric: tabular-nums; white-space: nowrap;
+    border-bottom: 1px solid var(--border);
+  }
+  table.data tbody td:first-child, table.data tbody td:nth-child(2) { text-align: left; font-variant-numeric: normal; }
+  table.data tbody tr:last-child td { border-bottom: none; }
+  table.data tbody tr { position: relative; }
+  table.data tbody tr:hover td { background: var(--surface-2); }
+  table.data tbody tr.neg td:first-child { box-shadow: inset 3px 0 0 var(--critical); }
+  table.data tbody tr.pos td:first-child { box-shadow: inset 3px 0 0 transparent; }
+  .porte-pill {
+    display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px;
+    border-radius: 6px; font-size: 11px; font-weight: 700; color: #fff;
+  }
+  .result-pill {
+    display: inline-flex; align-items: center; gap: 4px; font-weight: 700;
+  }
+  .result-pill.pos { color: var(--good-text); }
+  .result-pill.neg { color: var(--critical-text); }
+  .table-foot { font-size: 11.5px; color: var(--ink-3); padding: 10px 4px 0; }
+
+  .footer-note {
+    margin-top: 22px; font-size: 12px; color: var(--ink-3); line-height: 1.6; border-top: 1px solid var(--border); padding-top: 14px;
+  }
+  .footer-note code { background: var(--surface-2); padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }
+</style>
+</head>
+<body>
+
+<div class="dash">
+  <div class="eyebrow">Rede de Farmácias</div>
+  <h1>Resultado por loja</h1>
+  <p class="subtitle">Faturamento, despesas e resultado líquido mês a mês, com o rateio da despesa central recalculado ao vivo pela mesma fórmula da planilha.</p>
+
+  <div class="toolbar">
+    <div class="seg" id="monthTabs"></div>
+    <div class="chip-row" id="porteChips"></div>
+    <div class="search-wrap">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input type="text" id="searchBox" placeholder="Buscar loja...">
+    </div>
+    <button class="refresh-btn" id="refreshBtn" title="Buscar dados atualizados da planilha">
+      <svg id="refreshIcon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 4v6h-6"/></svg>
+      <span id="refreshBtnLabel">Atualizar dados</span>
+    </button>
+    <span class="updated-label" id="updatedLabel"></span>
+  </div>
+
+  <div class="kpi-grid" id="kpiGrid"></div>
+
+  <div class="sim">
+    <div class="sim-head">
+      <h2 id="simTitle">Simulador de rateio — Março</h2>
+      <div class="formula">Rateio da loja = (Faturamento da loja ÷ Faturamento total) × (Despesa Central + Vencimento)</div>
+    </div>
+    <div class="sim-body">
+      <div class="field">
+        <label for="inpDespesaCentral">Despesa Central</label>
+        <div class="prefixed"><span>R$</span><input type="text" inputmode="numeric" id="inpDespesaCentral"></div>
+      </div>
+      <div class="field">
+        <label for="inpVencimento">Vencimento</label>
+        <div class="prefixed"><span>R$</span><input type="text" inputmode="numeric" id="inpVencimento"></div>
+      </div>
+      <div class="sim-sum">
+        <span class="k">Total a ratear</span>
+        <span class="v" id="simTotal">R$ 0</span>
+      </div>
+      <button class="sim-reset" id="simReset">Restaurar valores da planilha</button>
+    </div>
+    <div class="sim-note" id="simNote">⚠ Este mês ainda não teve a despesa central lançada na planilha — os valores abaixo são uma simulação.</div>
+  </div>
+
+  <div class="chart-grid">
+    <div class="card">
+      <div class="card-head">
+        <h3>Resultado líquido por loja</h3>
+        <span class="hint" id="chart1Hint"></span>
+      </div>
+      <div class="legend">
+        <span class="item"><span class="swatch" style="background:var(--pos)"></span>Lucro</span>
+        <span class="item"><span class="swatch" style="background:var(--neg)"></span>Prejuízo</span>
+      </div>
+      <div id="chart1"></div>
+      <button class="link-to-table" data-scroll="table">Ver todos os valores na tabela ↓</button>
+    </div>
+    <div class="card">
+      <div class="card-head">
+        <h3>Faturamento por loja</h3>
+        <span class="hint" id="chart2Hint"></span>
+      </div>
+      <div class="legend" id="chart2Legend"></div>
+      <div id="chart2"></div>
+      <button class="link-to-table" data-scroll="table">Ver todos os valores na tabela ↓</button>
+    </div>
+  </div>
+
+  <div class="chart-grid">
+    <div class="card">
+      <div class="card-head">
+        <h3>Resultado líquido — evolução mensal</h3>
+        <span class="hint">Rede toda</span>
+      </div>
+      <div id="trend1"></div>
+    </div>
+    <div class="card">
+      <div class="card-head">
+        <h3>% líquido — evolução mensal</h3>
+        <span class="hint">Rede toda</span>
+      </div>
+      <div id="trend2"></div>
+    </div>
+  </div>
+
+  <div class="card table-card" id="table">
+    <div class="card-head">
+      <h3>Detalhamento por loja</h3>
+      <span class="hint" id="tableHint"></span>
+    </div>
+    <div class="table-wrap">
+      <table class="data">
+        <thead><tr id="tableHead"></tr></thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+    <div class="table-foot" id="tableFoot"></div>
+  </div>
+
+  <div class="footer-note">
+    Fonte: planilha Google Sheets "Analise por loja" (acesso somente leitura). O rateio da despesa central, a despesa total e o resultado líquido são recalculados neste dashboard pela mesma fórmula da planilha — <code>rateio = faturamento da loja ÷ faturamento total × (despesa central + vencimento)</code> — e não valores fixos copiados, então ajustar os campos do simulador acima recalcula tudo ao vivo.
+  </div>
+</div>
+
+<div class="tooltip" id="tooltip"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+(function () {
+  "use strict";
+  var DATA = null;
+
+  var tooltip = document.getElementById("tooltip");
+  var toastEl = document.getElementById("toast");
+  var refreshBtn = document.getElementById("refreshBtn");
+  var refreshBtnLabel = document.getElementById("refreshBtnLabel");
+  var updatedLabel = document.getElementById("updatedLabel");
+
+  var MONTH_SHORT = { "Março": "Mar", "Abril": "Abr", "Maio": "Mai", "Junho": "Jun", "Julho": "Jul" };
+
+  var state = {
+    monthIdx: 0,
+    porte: "ALL",
+    search: "",
+    sortKey: "resultadoLiquido",
+    sortDir: "desc",
+    edits: {}
+  };
+
+  function resetEditsFromData() {
+    state.edits = {};
+    DATA.forEach(function (m) {
+      state.edits[m.mes] = { despesaCentral: m.despesaCentral, vencimento: m.vencimento };
+    });
+  }
+
+  var toastTimer = null;
+  function showToast(msg, isError) {
+    toastEl.textContent = msg;
+    toastEl.classList.toggle("error", !!isError);
+    toastEl.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { toastEl.classList.remove("show"); }, 3200);
+  }
+
+  function formatUpdatedAt(iso) {
+    if (!iso) return "";
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return "";
+    var today = new Date();
+    var sameDay = d.toDateString() === today.toDateString();
+    var time = d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+    return "Atualizado " + (sameDay ? "hoje" : d.toLocaleDateString("pt-BR")) + " às " + time;
+  }
+
+  function loadData() {
+    return fetch("data.json", { cache: "no-store" })
+      .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+      .then(function (payload) {
+        DATA = payload.months;
+        state.monthIdx = DATA.length - 1;
+        resetEditsFromData();
+        updatedLabel.textContent = formatUpdatedAt(payload.updatedAt);
+        buildToolbar();
+        render();
+      });
+  }
+
+  function doRefresh() {
+    refreshBtn.disabled = true;
+    refreshBtn.classList.add("spinning");
+    refreshBtnLabel.textContent = "Buscando planilha...";
+    fetch("/refresh", { method: "POST" })
+      .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, body: j }; }); })
+      .then(function (res) {
+        if (!res.ok || !res.body || res.body.ok !== true) {
+          throw new Error((res.body && res.body.error) || "Falha ao buscar a planilha");
+        }
+        return loadData();
+      })
+      .then(function () { showToast("Dashboard atualizado com os dados mais recentes da planilha."); })
+      .catch(function (err) { showToast("Não consegui atualizar: " + err.message, true); })
+      .finally(function () {
+        refreshBtn.disabled = false;
+        refreshBtn.classList.remove("spinning");
+        refreshBtnLabel.textContent = "Atualizar dados";
+      });
+  }
+  refreshBtn.addEventListener("click", doRefresh);
+
+  function fmtBRL(v, decimals) {
+    return "R$ " + Number(v).toLocaleString("pt-BR", { minimumFractionDigits: decimals || 0, maximumFractionDigits: decimals || 0 });
+  }
+  function fmtBRLSigned(v, decimals) {
+    var s = fmtBRL(Math.abs(v), decimals);
+    return (v < 0 ? "-" : "") + s;
+  }
+  function fmtPct(v, decimals) {
+    return Number(v).toLocaleString("pt-BR", { minimumFractionDigits: decimals != null ? decimals : 1, maximumFractionDigits: decimals != null ? decimals : 1 }) + "%";
+  }
+  function fmtCompactBRL(v) {
+    var abs = Math.abs(v);
+    if (abs >= 1000000) return (v < 0 ? "-" : "") + "R$ " + (abs / 1000000).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " mi";
+    if (abs >= 1000) return (v < 0 ? "-" : "") + "R$ " + (abs / 1000).toLocaleString("pt-BR", { minimumFractionDigits: 0, maximumFractionDigits: 0 }) + " mil";
+    return fmtBRLSigned(v, 0);
+  }
+
+  // ---- the formula: keep it live, mirrors the spreadsheet exactly ----
+  function computeMonth(monthData, despesaCentral, vencimento) {
+    var dcv = despesaCentral + vencimento;
+    var fatTotal = 0;
+    monthData.stores.forEach(function (s) { fatTotal += s.faturamento; });
+    var stores = monthData.stores.map(function (s) {
+      var rateio = fatTotal > 0 ? (s.faturamento / fatTotal) * dcv : 0;
+      var despesaTotal = s.despesa + rateio;
+      var resultadoLiquido = s.resultadoBruto - despesaTotal;
+      var pctLiquido = s.faturamento > 0 ? (resultadoLiquido / s.faturamento) * 100 : 0;
+      return {
+        porte: s.porte, filial: s.filial, faturamento: s.faturamento, despesa: s.despesa,
+        margemTrier: s.margemTrier, margemManipulado: s.margemManipulado, manipulados: s.manipulados,
+        resultadoBruto: s.resultadoBruto, rateio: rateio, despesaTotal: despesaTotal,
+        resultadoLiquido: resultadoLiquido, pctLiquido: pctLiquido
+      };
+    });
+    var resultadoLiquidoTotal = 0, despesaTotalSum = 0;
+    stores.forEach(function (s) { resultadoLiquidoTotal += s.resultadoLiquido; despesaTotalSum += s.despesaTotal; });
+    var pctLiquidoTotal = fatTotal > 0 ? (resultadoLiquidoTotal / fatTotal) * 100 : 0;
+    return {
+      stores: stores, fatTotal: fatTotal, dcv: dcv,
+      despesaTotalSum: despesaTotalSum, resultadoLiquidoTotal: resultadoLiquidoTotal, pctLiquidoTotal: pctLiquidoTotal
+    };
+  }
+
+  function computeAnnual() {
+    var byStore = {};
+    var order = [];
+    DATA.forEach(function (mm) {
+      var e = state.edits[mm.mes];
+      var c = computeMonth(mm, e.despesaCentral, e.vencimento);
+      c.stores.forEach(function (s) {
+        var agg = byStore[s.filial];
+        if (!agg) {
+          agg = {
+            porte: s.porte, filial: s.filial, faturamento: 0, despesa: 0, manipulados: 0,
+            margemTrierW: 0, margemManipuladoW: 0, resultadoBruto: 0, rateio: 0, despesaTotal: 0, resultadoLiquido: 0
+          };
+          byStore[s.filial] = agg;
+          order.push(s.filial);
+        }
+        agg.faturamento += s.faturamento;
+        agg.despesa += s.despesa;
+        agg.manipulados += s.manipulados;
+        agg.margemTrierW += s.margemTrier * s.faturamento;
+        agg.margemManipuladoW += s.margemManipulado * s.faturamento;
+        agg.resultadoBruto += s.resultadoBruto;
+        agg.rateio += s.rateio;
+        agg.despesaTotal += s.despesaTotal;
+        agg.resultadoLiquido += s.resultadoLiquido;
+      });
+    });
+    var stores = order.map(function (filial) {
+      var a = byStore[filial];
+      return {
+        porte: a.porte, filial: a.filial, faturamento: a.faturamento, despesa: a.despesa,
+        margemTrier: a.faturamento > 0 ? a.margemTrierW / a.faturamento : 0,
+        margemManipulado: a.faturamento > 0 ? a.margemManipuladoW / a.faturamento : 0,
+        manipulados: a.manipulados, resultadoBruto: a.resultadoBruto, rateio: a.rateio,
+        despesaTotal: a.despesaTotal, resultadoLiquido: a.resultadoLiquido,
+        pctLiquido: a.faturamento > 0 ? (a.resultadoLiquido / a.faturamento) * 100 : 0
+      };
+    });
+    var fatTotal = 0, resultadoLiquidoTotal = 0, dcv = 0;
+    stores.forEach(function (s) { fatTotal += s.faturamento; resultadoLiquidoTotal += s.resultadoLiquido; });
+    DATA.forEach(function (mm) { var e = state.edits[mm.mes]; dcv += e.despesaCentral + e.vencimento; });
+    var pctLiquidoTotal = fatTotal > 0 ? (resultadoLiquidoTotal / fatTotal) * 100 : 0;
+    return { stores: stores, fatTotal: fatTotal, dcv: dcv, resultadoLiquidoTotal: resultadoLiquidoTotal, pctLiquidoTotal: pctLiquidoTotal };
+  }
+
+  function periodLabel() {
+    return "Ano (" + (MONTH_SHORT[DATA[0].mes] || DATA[0].mes) + "–" + (MONTH_SHORT[DATA[DATA.length - 1].mes] || DATA[DATA.length - 1].mes) + ")";
+  }
+
+  function porteColor(p) { return p === "A" ? "var(--porte-a)" : p === "B" ? "var(--porte-b)" : "var(--porte-c)"; }
+
+  function showTooltip(x, y, html) {
+    tooltip.innerHTML = "";
+    var frag = document.createElement("div");
+    frag.innerHTML = html; // built from our own trusted templates only, values inserted via textContent below
+    tooltip.appendChild(frag);
+    tooltip.style.left = x + "px";
+    tooltip.style.top = y + "px";
+    tooltip.classList.add("show");
+  }
+  function hideTooltip() { tooltip.classList.remove("show"); }
+
+  function el(tag, attrs, text) {
+    var e = document.createElement(tag);
+    if (attrs) for (var k in attrs) e.setAttribute(k, attrs[k]);
+    if (text != null) e.textContent = text;
+    return e;
+  }
+  function svgEl(tag, attrs) {
+    var e = document.createElementNS("http://www.w3.org/2000/svg", tag);
+    if (attrs) for (var k in attrs) e.setAttribute(k, attrs[k]);
+    return e;
+  }
+
+  // ---------------- toolbar ----------------
+  var monthTabsEl = document.getElementById("monthTabs");
+  var porteChipsEl = document.getElementById("porteChips");
+
+  function buildToolbar() {
+    monthTabsEl.innerHTML = "";
+    DATA.forEach(function (m, i) {
+      var b = el("button", {}, MONTH_SHORT[m.mes] || m.mes);
+      b.title = m.mes;
+      b.addEventListener("click", function () { state.monthIdx = i; render(); });
+      monthTabsEl.appendChild(b);
+    });
+    var yearLabel = "Ano (" + (MONTH_SHORT[DATA[0].mes] || DATA[0].mes) + "–" + (MONTH_SHORT[DATA[DATA.length - 1].mes] || DATA[DATA.length - 1].mes) + ")";
+    var yb = el("button", {}, "Ano");
+    yb.title = yearLabel;
+    yb.addEventListener("click", function () { state.monthIdx = "ANO"; render(); });
+    monthTabsEl.appendChild(yb);
+
+    porteChipsEl.innerHTML = "";
+    [["ALL", "Todas"], ["A", "Porte A"], ["B", "Porte B"], ["C", "Porte C"]].forEach(function (p) {
+      var c = el("button", { "data-p": p[0], "class": "chip" });
+      if (p[0] !== "ALL") { var dot = el("span", { "class": "dot" }); dot.style.background = porteColor(p[0]); c.appendChild(dot); }
+      c.appendChild(document.createTextNode(p[1]));
+      c.addEventListener("click", function () { state.porte = p[0]; render(); });
+      porteChipsEl.appendChild(c);
+    });
+  }
+
+  var searchBox = document.getElementById("searchBox");
+  searchBox.addEventListener("input", function () { state.search = this.value.trim().toLowerCase(); render(); });
+
+  document.querySelectorAll(".link-to-table").forEach(function (btn) {
+    btn.addEventListener("click", function () { document.getElementById("table").scrollIntoView({ behavior: "smooth", block: "start" }); });
+  });
+
+  // ---------------- simulator ----------------
+  var inpDespesaCentral = document.getElementById("inpDespesaCentral");
+  var inpVencimento = document.getElementById("inpVencimento");
+  var simReset = document.getElementById("simReset");
+
+  function parseBRLInput(str) {
+    var n = parseFloat(String(str).replace(/[^\d,.-]/g, "").replace(/\./g, "").replace(",", "."));
+    return isNaN(n) ? 0 : n;
+  }
+  inpDespesaCentral.addEventListener("input", function () {
+    if (state.monthIdx === "ANO") return;
+    state.edits[DATA[state.monthIdx].mes].despesaCentral = parseBRLInput(this.value);
+    render(true);
+  });
+  inpVencimento.addEventListener("input", function () {
+    if (state.monthIdx === "ANO") return;
+    state.edits[DATA[state.monthIdx].mes].vencimento = parseBRLInput(this.value);
+    render(true);
+  });
+  simReset.addEventListener("click", function () {
+    if (state.monthIdx === "ANO") { resetEditsFromData(); }
+    else {
+      var m = DATA[state.monthIdx];
+      state.edits[m.mes] = { despesaCentral: m.despesaCentral, vencimento: m.vencimento };
+    }
+    render();
+  });
+
+  // ---------------- charts ----------------
+  function renderDivergingBar(containerId, stores, hintId) {
+    var container = document.getElementById(containerId);
+    container.innerHTML = "";
+    if (!stores.length) { container.appendChild(el("div", { "class": "chart-empty" }, "Nenhuma loja encontrada.")); return; }
+
+    var sorted = stores.slice().sort(function (a, b) { return b.resultadoLiquido - a.resultadoLiquido; });
+    document.getElementById(hintId).textContent = sorted.length + " loja" + (sorted.length > 1 ? "s" : "");
+
+    var W = 600, rowH = 26, padTop = 6, padBottom = 6;
+    var H = padTop + padBottom + sorted.length * rowH;
+    var labelW = 128, rightPad = 66, plotW = W - labelW - rightPad;
+
+    var vals = sorted.map(function (s) { return s.resultadoLiquido; });
+    var min = Math.min(0, Math.min.apply(null, vals));
+    var max = Math.max(0, Math.max.apply(null, vals));
+    var span = (max - min) || 1;
+    min -= span * 0.06; max += span * 0.06; span = max - min;
+
+    function xScale(v) { return labelW + ((v - min) / span) * plotW; }
+    var zeroX = xScale(0);
+
+    var svg = svgEl("svg", { viewBox: "0 0 " + W + " " + H, width: "100%", height: H, role: "img", "aria-label": "Resultado líquido por loja" });
+    svg.appendChild(svgEl("line", { x1: zeroX, x2: zeroX, y1: padTop, y2: H - padBottom, "class": "baseline" }));
+
+    sorted.forEach(function (s, i) {
+      var cy = padTop + i * rowH + rowH / 2;
+      var barH = 15;
+      var x1 = xScale(Math.min(0, s.resultadoLiquido));
+      var x2 = xScale(Math.max(0, s.resultadoLiquido));
+      var w = Math.max(1, x2 - x1);
+      var isPos = s.resultadoLiquido >= 0;
+
+      var label = svgEl("text", { x: labelW - 8, y: cy + 3.5, "text-anchor": "end", "class": "bar-label" });
+      label.textContent = s.filial;
+      svg.appendChild(label);
+
+      var rect = svgEl("rect", {
+        x: x1, y: cy - barH / 2, width: w, height: barH, rx: 3,
+        fill: isPos ? "var(--pos)" : "var(--neg)", "class": "bar-rect", tabindex: "0"
+      });
+      svg.appendChild(rect);
+
+      var valText = svgEl("text", {
+        y: cy + 3.5, "class": "bar-value",
+        fill: "var(--ink-2)"
+      });
+      if (isPos) { valText.setAttribute("x", x2 + 6); valText.setAttribute("text-anchor", "start"); }
+      else { valText.setAttribute("x", x1 - 6); valText.setAttribute("text-anchor", "end"); }
+      valText.textContent = fmtCompactBRL(s.resultadoLiquido);
+      svg.appendChild(valText);
+
+      function onMove(evt) {
+        rect.classList.add("hover");
+        var r = rect.getBoundingClientRect();
+        showTooltip(r.left + r.width / 2, r.top,
+          '<div class="t-title"></div><div class="t-row"><span>Resultado líquido</span><span class="t-val"></span></div><div class="t-row"><span>% líquido</span><span class="t-val"></span></div>');
+        var rows = tooltip.querySelectorAll(".t-val");
+        tooltip.querySelector(".t-title").textContent = s.filial;
+        rows[0].textContent = fmtBRLSigned(s.resultadoLiquido, 0);
+        rows[0].style.color = isPos ? "#8fd0ff" : "#ffb0af";
+        rows[1].textContent = fmtPct(s.pctLiquido);
+      }
+      rect.addEventListener("pointermove", onMove);
+      rect.addEventListener("mouseenter", onMove);
+      rect.addEventListener("focus", onMove);
+      rect.addEventListener("mouseleave", function () { rect.classList.remove("hover"); hideTooltip(); });
+      rect.addEventListener("blur", function () { rect.classList.remove("hover"); hideTooltip(); });
+    });
+
+    container.appendChild(svg);
+  }
+
+  function renderCategoricalBar(containerId, stores, hintId, legendId) {
+    var container = document.getElementById(containerId);
+    container.innerHTML = "";
+    var legendEl = document.getElementById(legendId);
+    if (legendEl) legendEl.innerHTML = "";
+    if (!stores.length) { container.appendChild(el("div", { "class": "chart-empty" }, "Nenhuma loja encontrada.")); return; }
+
+    var sorted = stores.slice().sort(function (a, b) { return b.faturamento - a.faturamento; });
+    document.getElementById(hintId).textContent = sorted.length + " loja" + (sorted.length > 1 ? "s" : "");
+
+    if (legendEl) {
+      [["A", "Porte A"], ["B", "Porte B"], ["C", "Porte C"]].forEach(function (p) {
+        var item = el("span", { "class": "item" });
+        var sw = el("span", { "class": "swatch" }); sw.style.background = porteColor(p[0]);
+        item.appendChild(sw); item.appendChild(document.createTextNode(p[1]));
+        legendEl.appendChild(item);
+      });
+    }
+
+    var W = 600, rowH = 26, padTop = 6, padBottom = 6;
+    var H = padTop + padBottom + sorted.length * rowH;
+    var labelW = 128, rightPad = 70, plotW = W - labelW - rightPad;
+    var max = Math.max.apply(null, sorted.map(function (s) { return s.faturamento; })) * 1.05;
+
+    var svg = svgEl("svg", { viewBox: "0 0 " + W + " " + H, width: "100%", height: H, role: "img", "aria-label": "Faturamento por loja" });
+
+    sorted.forEach(function (s, i) {
+      var cy = padTop + i * rowH + rowH / 2;
+      var barH = 15;
+      var w = Math.max(1, (s.faturamento / max) * plotW);
+
+      var label = svgEl("text", { x: labelW - 8, y: cy + 3.5, "text-anchor": "end", "class": "bar-label" });
+      label.textContent = s.filial;
+      svg.appendChild(label);
+
+      var rect = svgEl("rect", { x: labelW, y: cy - barH / 2, width: w, height: barH, rx: 3, fill: porteColor(s.porte), "class": "bar-rect", tabindex: "0" });
+      svg.appendChild(rect);
+
+      var valText = svgEl("text", { x: labelW + w + 6, y: cy + 3.5, "text-anchor": "start", "class": "bar-value", fill: "var(--ink-2)" });
+      valText.textContent = fmtCompactBRL(s.faturamento);
+      svg.appendChild(valText);
+
+      function onMove() {
+        rect.classList.add("hover");
+        var r = rect.getBoundingClientRect();
+        showTooltip(r.right, r.top,
+          '<div class="t-title"></div><div class="t-row"><span>Faturamento</span><span class="t-val"></span></div><div class="t-row"><span>Porte</span><span class="t-val"></span></div>');
+        var rows = tooltip.querySelectorAll(".t-val");
+        tooltip.querySelector(".t-title").textContent = s.filial;
+        rows[0].textContent = fmtBRL(s.faturamento, 0);
+        rows[1].textContent = s.porte;
+      }
+      rect.addEventListener("pointermove", onMove);
+      rect.addEventListener("mouseenter", onMove);
+      rect.addEventListener("focus", onMove);
+      rect.addEventListener("mouseleave", function () { rect.classList.remove("hover"); hideTooltip(); });
+      rect.addEventListener("blur", function () { rect.classList.remove("hover"); hideTooltip(); });
+    });
+
+    container.appendChild(svg);
+  }
+
+  function renderTrend(containerId, points, valueFmt, colorBySign, highlightIdx) {
+    var container = document.getElementById(containerId);
+    container.innerHTML = "";
+    var W = 600, H = 190, padL = 54, padR = 18, padT = 16, padB = 28;
+    var plotW = W - padL - padR, plotH = H - padT - padB;
+
+    var vals = points.map(function (p) { return p.v; });
+    var min = Math.min.apply(null, vals.concat([0]));
+    var max = Math.max.apply(null, vals.concat([0]));
+    var span = (max - min) || 1;
+    min -= span * 0.12; max += span * 0.12; span = max - min;
+
+    function xScale(i) { return padL + (i / (points.length - 1)) * plotW; }
+    function yScale(v) { return padT + plotH - ((v - min) / span) * plotH; }
+
+    var svg = svgEl("svg", { viewBox: "0 0 " + W + " " + H, width: "100%", height: H, role: "img" });
+
+    var steps = 4;
+    for (var g = 0; g <= steps; g++) {
+      var gv = min + (span * g / steps);
+      var gy = yScale(gv);
+      svg.appendChild(svgEl("line", { x1: padL, x2: W - padR, y1: gy, y2: gy, "class": "gridline" }));
+      var gt = svgEl("text", { x: padL - 8, y: gy + 3, "text-anchor": "end", "class": "axis-label" });
+      gt.textContent = valueFmt(gv, true);
+      svg.appendChild(gt);
+    }
+    if (min < 0 && max > 0) {
+      var zy = yScale(0);
+      svg.appendChild(svgEl("line", { x1: padL, x2: W - padR, y1: zy, y2: zy, "class": "baseline" }));
+    }
+
+    var pathD = points.map(function (p, i) { return (i === 0 ? "M" : "L") + xScale(i) + "," + yScale(p.v); }).join(" ");
+    svg.appendChild(svgEl("path", { d: pathD, fill: "none", stroke: "var(--accent)", "stroke-width": "2", "stroke-linejoin": "round", "stroke-linecap": "round" }));
+
+    points.forEach(function (p, i) {
+      var cx = xScale(i), cy = yScale(p.v);
+      var color = colorBySign ? (p.v >= 0 ? "var(--good)" : "var(--critical)") : "var(--accent)";
+      var isHi = i === highlightIdx;
+
+      var xt = svgEl("text", { x: cx, y: H - 8, "text-anchor": "middle", "class": "axis-label" });
+      xt.textContent = MONTH_SHORT[p.label] || p.label;
+      xt.style.fontWeight = isHi ? "700" : "400";
+      xt.style.fill = isHi ? "var(--ink-1)" : "var(--ink-3)";
+      svg.appendChild(xt);
+
+      var hit = svgEl("circle", { cx: cx, cy: cy, r: 12, fill: "transparent", "class": "dot", tabindex: "0" });
+      var dot = svgEl("circle", { cx: cx, cy: cy, r: isHi ? 6 : 5, fill: color, stroke: "var(--surface-1)", "stroke-width": "2" });
+      svg.appendChild(dot);
+      svg.appendChild(hit);
+
+      function onMove() {
+        showTooltip(cx === undefined ? 0 : hit.getBoundingClientRect().left + 6, hit.getBoundingClientRect().top,
+          '<div class="t-title"></div><div class="t-row"><span>Valor</span><span class="t-val"></span></div>');
+        var r = hit.getBoundingClientRect();
+        tooltip.style.left = (r.left + r.width / 2) + "px";
+        tooltip.style.top = r.top + "px";
+        tooltip.querySelector(".t-title").textContent = p.label;
+        tooltip.querySelector(".t-val").textContent = valueFmt(p.v, false);
+      }
+      hit.addEventListener("pointermove", onMove);
+      hit.addEventListener("mouseenter", onMove);
+      hit.addEventListener("focus", onMove);
+      hit.addEventListener("mouseleave", hideTooltip);
+      hit.addEventListener("blur", hideTooltip);
+    });
+
+    container.appendChild(svg);
+  }
+
+  // ---------------- table ----------------
+  var COLS = [
+    { key: "filial", label: "Loja", align: "left" },
+    { key: "porte", label: "Porte", align: "left" },
+    { key: "faturamento", label: "Faturamento" },
+    { key: "margemTrier", label: "Margem" },
+    { key: "manipulados", label: "Manipulados" },
+    { key: "margemManipulado", label: "Margem c/ Manipulado" },
+    { key: "despesa", label: "Despesa" },
+    { key: "rateio", label: "Rateio Desp. Central" },
+    { key: "despesaTotal", label: "Despesa Total" },
+    { key: "resultadoBruto", label: "Resultado Bruto" },
+    { key: "resultadoLiquido", label: "Resultado Líquido" },
+    { key: "pctLiquido", label: "% Líquido" }
+  ];
+
+  var tableHead = document.getElementById("tableHead");
+  COLS.forEach(function (c) {
+    var th = el("th", {}, c.label);
+    var arrow = el("span", { "class": "arrow" }, "");
+    th.appendChild(arrow);
+    th.addEventListener("click", function () {
+      if (state.sortKey === c.key) state.sortDir = state.sortDir === "desc" ? "asc" : "desc";
+      else { state.sortKey = c.key; state.sortDir = c.key === "filial" || c.key === "porte" ? "asc" : "desc"; }
+      render();
+    });
+    tableHead.appendChild(th);
+  });
+
+  function renderTable(stores) {
+    var thead = tableHead.children;
+    for (var i = 0; i < COLS.length; i++) {
+      var th = thead[i];
+      th.classList.toggle("sorted", COLS[i].key === state.sortKey);
+      th.querySelector(".arrow").textContent = COLS[i].key === state.sortKey ? (state.sortDir === "desc" ? "↓" : "↑") : "↕";
+    }
+
+    var sorted = stores.slice().sort(function (a, b) {
+      var k = state.sortKey, dir = state.sortDir === "desc" ? -1 : 1;
+      if (typeof a[k] === "string") return a[k].localeCompare(b[k]) * dir;
+      return (a[k] - b[k]) * dir;
+    });
+
+    var tbody = document.getElementById("tableBody");
+    tbody.innerHTML = "";
+    sorted.forEach(function (s) {
+      var tr = el("tr", { "class": s.resultadoLiquido >= 0 ? "pos" : "neg" });
+
+      var tdName = el("td", {}, s.filial);
+      tr.appendChild(tdName);
+
+      var tdPorte = el("td", {});
+      var pill = el("span", { "class": "porte-pill" }, s.porte);
+      pill.style.background = porteColor(s.porte);
+      tdPorte.appendChild(pill);
+      tr.appendChild(tdPorte);
+
+      tr.appendChild(el("td", {}, fmtBRL(s.faturamento, 0)));
+      tr.appendChild(el("td", {}, fmtPct(s.margemTrier, 1)));
+      tr.appendChild(el("td", {}, fmtBRL(s.manipulados, 0)));
+      tr.appendChild(el("td", {}, fmtPct(s.margemManipulado, 1)));
+      tr.appendChild(el("td", {}, fmtBRL(s.despesa, 0)));
+      tr.appendChild(el("td", {}, fmtBRL(s.rateio, 0)));
+      tr.appendChild(el("td", {}, fmtBRL(s.despesaTotal, 0)));
+      tr.appendChild(el("td", {}, fmtBRL(s.resultadoBruto, 0)));
+
+      var tdLiq = el("td", {});
+      var pillLiq = el("span", { "class": "result-pill " + (s.resultadoLiquido >= 0 ? "pos" : "neg") }, (s.resultadoLiquido >= 0 ? "▲ " : "▼ ") + fmtBRLSigned(s.resultadoLiquido, 0));
+      tdLiq.appendChild(pillLiq);
+      tr.appendChild(tdLiq);
+
+      var tdPct = el("td", {});
+      var pillPct = el("span", { "class": "result-pill " + (s.pctLiquido >= 0 ? "pos" : "neg") }, fmtPct(s.pctLiquido));
+      tdPct.appendChild(pillPct);
+      tr.appendChild(tdPct);
+
+      tbody.appendChild(tr);
+    });
+
+    document.getElementById("tableFoot").textContent = sorted.length + " de " + stores.length + " lojas exibidas · clique no cabeçalho para ordenar";
+  }
+
+  // ---------------- kpis ----------------
+  function kpiTile(label, value, deltaText, deltaDir, deltaGood, sub) {
+    var t = el("div", { "class": "kpi" });
+    t.appendChild(el("div", { "class": "label" }, label));
+    t.appendChild(el("div", { "class": "value" }, value));
+    if (deltaText) {
+      var d = el("div", { "class": "delta " + (deltaGood ? "up" : "down") });
+      d.appendChild(document.createTextNode((deltaDir ? "↑ " : "↓ ") + deltaText));
+      var vs = el("span", { "class": "vs" }, " vs. mês anterior");
+      d.appendChild(vs);
+      t.appendChild(d);
+    } else if (sub) {
+      t.appendChild(el("div", { "class": "sub" }, sub));
+    }
+    return t;
+  }
+
+  // ---------------- main render ----------------
+  function render(skipInputSync) {
+    var isAnnual = state.monthIdx === "ANO";
+    var m = isAnnual ? null : DATA[state.monthIdx];
+    var edit = isAnnual ? null : state.edits[m.mes];
+    var cur = isAnnual ? computeAnnual() : computeMonth(m, edit.despesaCentral, edit.vencimento);
+    var monthLabel = isAnnual ? periodLabel() : m.mes;
+
+    var prevIdx = isAnnual ? -1 : state.monthIdx - 1;
+    var prevCur = prevIdx >= 0 ? computeMonth(DATA[prevIdx], state.edits[DATA[prevIdx].mes].despesaCentral, state.edits[DATA[prevIdx].mes].vencimento) : null;
+
+    // toolbar active states
+    Array.prototype.forEach.call(monthTabsEl.children, function (b, i) {
+      if (i < DATA.length) b.classList.toggle("active", !isAnnual && i === state.monthIdx);
+      else b.classList.toggle("active", isAnnual);
+    });
+    Array.prototype.forEach.call(porteChipsEl.children, function (c) { c.classList.toggle("active", c.getAttribute("data-p") === state.porte); });
+
+    // filter predicate — shared by kpis, charts and table so the numbers always agree
+    function matchesFilter(s) {
+      if (state.porte !== "ALL" && s.porte !== state.porte) return false;
+      if (state.search && s.filial.toLowerCase().indexOf(state.search) === -1) return false;
+      return true;
+    }
+    var filtered = cur.stores.filter(matchesFilter);
+    var prevFiltered = prevCur ? prevCur.stores.filter(matchesFilter) : null;
+
+    function sumStores(list) {
+      var fat = 0, liq = 0, desp = 0;
+      list.forEach(function (s) { fat += s.faturamento; liq += s.resultadoLiquido; desp += s.despesaTotal; });
+      return { fat: fat, liq: liq, desp: desp, pct: fat > 0 ? (liq / fat) * 100 : 0 };
+    }
+    var curSum = sumStores(filtered);
+    var prevSum = prevFiltered ? sumStores(prevFiltered) : null;
+    var periodSub = isAnnual ? "Soma de " + DATA.length + " meses (" + monthLabel.replace("Ano (", "").replace(")", "") + ")" : null;
+
+    // kpis
+    var kpiGrid = document.getElementById("kpiGrid");
+    kpiGrid.innerHTML = "";
+    var fatUp = prevSum ? curSum.fat >= prevSum.fat : true;
+    kpiGrid.appendChild(kpiTile("Faturamento total", fmtCompactBRL(curSum.fat),
+      prevSum && prevSum.fat ? fmtPct(((curSum.fat - prevSum.fat) / prevSum.fat) * 100, 1) : null,
+      fatUp, fatUp, periodSub));
+    var despUp = prevSum ? curSum.desp >= prevSum.desp : true;
+    var despGood = prevSum ? curSum.desp <= prevSum.desp : true;
+    kpiGrid.appendChild(kpiTile("Despesa total", fmtCompactBRL(curSum.desp),
+      prevSum ? fmtCompactBRL(curSum.desp - prevSum.desp) : null,
+      despUp, despGood, periodSub));
+    var liqUp = prevSum ? curSum.liq >= prevSum.liq : true;
+    kpiGrid.appendChild(kpiTile("Resultado líquido", fmtCompactBRL(curSum.liq),
+      prevSum ? fmtCompactBRL(curSum.liq - prevSum.liq) : null,
+      liqUp, liqUp, periodSub));
+    var pctUp = prevSum ? curSum.pct >= prevSum.pct : true;
+    kpiGrid.appendChild(kpiTile("% líquido", fmtPct(curSum.pct, 2),
+      prevSum ? (Math.abs(curSum.pct - prevSum.pct)).toFixed(1) + " p.p." : null,
+      pctUp, pctUp, periodSub));
+    var negCount = filtered.filter(function (s) { return s.resultadoLiquido < 0; }).length;
+    kpiGrid.appendChild(kpiTile("Lojas no prejuízo", String(negCount) + " de " + filtered.length, null, null, null, isAnnual ? "No acumulado do período" : (negCount === 0 ? "Nenhuma loja no negativo" : "Precisam de atenção")));
+
+    // simulator
+    var simFormulaEl = document.querySelector(".sim-head .formula");
+    if (isAnnual) {
+      document.getElementById("simTitle").textContent = "Rateio no período — " + monthLabel;
+      simFormulaEl.textContent = "Soma da Despesa Central + Vencimento de cada mês. Para simular, edite mês a mês.";
+      inpDespesaCentral.disabled = true;
+      inpVencimento.disabled = true;
+      inpDespesaCentral.value = "";
+      inpVencimento.value = "";
+      simReset.textContent = "Restaurar todos os meses";
+      document.getElementById("simNote").classList.remove("show");
+    } else {
+      document.getElementById("simTitle").textContent = "Simulador de rateio — " + monthLabel;
+      simFormulaEl.textContent = "Rateio da loja = (Faturamento da loja ÷ Faturamento total) × (Despesa Central + Vencimento)";
+      inpDespesaCentral.disabled = false;
+      inpVencimento.disabled = false;
+      if (!skipInputSync) {
+        inpDespesaCentral.value = edit.despesaCentral.toLocaleString("pt-BR");
+        inpVencimento.value = edit.vencimento.toLocaleString("pt-BR");
+      }
+      simReset.textContent = "Restaurar valores da planilha";
+      document.getElementById("simNote").classList.toggle("show", m.despesaCentral === 0 && m.vencimento === 0);
+    }
+    document.getElementById("simTotal").textContent = fmtBRL(cur.dcv, 0);
+
+    // charts
+    renderDivergingBar("chart1", filtered, "chart1Hint");
+    renderCategoricalBar("chart2", filtered, "chart2Hint", "chart2Legend");
+
+    var trend1Points = DATA.map(function (mm) {
+      var e = state.edits[mm.mes];
+      var c = computeMonth(mm, e.despesaCentral, e.vencimento);
+      return { label: mm.mes, v: c.resultadoLiquidoTotal };
+    });
+    var trend2Points = DATA.map(function (mm) {
+      var e = state.edits[mm.mes];
+      var c = computeMonth(mm, e.despesaCentral, e.vencimento);
+      return { label: mm.mes, v: c.pctLiquidoTotal };
+    });
+    renderTrend("trend1", trend1Points, function (v) { return fmtCompactBRL(v); }, true, state.monthIdx);
+    renderTrend("trend2", trend2Points, function (v) { return fmtPct(v, 1); }, false, state.monthIdx);
+
+    // table
+    document.getElementById("tableHint").textContent = monthLabel + (state.porte !== "ALL" ? " · Porte " + state.porte : "") + (state.search ? " · \"" + state.search + "\"" : "");
+    renderTable(filtered);
+  }
+
+  loadData().catch(function (err) { showToast("Não consegui carregar os dados: " + err.message, true); });
+})();
+</script>
+</body>
+</html>

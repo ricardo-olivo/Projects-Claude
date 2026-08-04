@@ -1,0 +1,1883 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dashboard de Férias - RH</title>
+  <style>
+    :root {
+      --primary: #1a56db;
+      --primary-light: #e8f0fe;
+      --success: #0e9f6e;
+      --success-light: #def7ec;
+      --warning: #c27803;
+      --warning-light: #fdf6b2;
+      --danger: #e02424;
+      --danger-light: #fde8e8;
+      --gray-50: #f9fafb;
+      --gray-100: #f3f4f6;
+      --gray-200: #e5e7eb;
+      --gray-500: #6b7280;
+      --gray-700: #374151;
+      --gray-900: #111827;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--gray-50);
+      color: var(--gray-900);
+    }
+    /* HEADER */
+    .header {
+      background: var(--primary);
+      color: white;
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    }
+    .header h1 { font-size: 20px; font-weight: 600; }
+    .header-sub { font-size: 13px; opacity: .8; margin-top: 2px; }
+    .last-update { font-size: 12px; opacity: .75; text-align: right; }
+    .refresh-btn {
+      background: rgba(255,255,255,0.2);
+      border: 1px solid rgba(255,255,255,0.4);
+      color: white;
+      padding: 6px 14px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      margin-top: 4px;
+    }
+    .refresh-btn:hover { background: rgba(255,255,255,0.3); }
+    /* LAYOUT */
+    .container { max-width: 1400px; margin: 0 auto; padding: 24px; }
+    /* CARDS */
+    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
+    .card {
+      background: white;
+      border-radius: 10px;
+      padding: 20px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+      border-left: 4px solid var(--primary);
+    }
+    .card.success { border-color: var(--success); }
+    .card.warning { border-color: var(--warning); }
+    .card.danger  { border-color: var(--danger);  }
+    .card-label { font-size: 12px; color: var(--gray-500); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 6px; }
+    .card-value { font-size: 32px; font-weight: 700; }
+    .card-sub   { font-size: 12px; color: var(--gray-500); margin-top: 4px; }
+    .card { color: var(--primary); }
+    .card.success .card-value { color: var(--success); }
+    .card.warning .card-value { color: var(--warning); }
+    .card.danger  .card-value { color: var(--danger);  }
+    /* ALERTS */
+    .alerts-section { margin-bottom: 24px; }
+    .alerts-section h2 { font-size: 15px; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center; gap: 6px; }
+    .alert-item {
+      background: var(--warning-light);
+      border: 1px solid #f6d860;
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin-bottom: 8px;
+      font-size: 13px;
+    }
+    .alert-branch { font-weight: 600; color: var(--warning); }
+    .alert-detail { color: var(--gray-700); margin-top: 2px; }
+    /* FILTERS */
+    .filters {
+      background: white;
+      border-radius: 10px;
+      padding: 16px 20px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+      margin-bottom: 20px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: flex-end;
+    }
+    .filter-group { display: flex; flex-direction: column; gap: 4px; }
+    .filter-group label { font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: var(--gray-500); }
+    .filter-group select,
+    .filter-group input {
+      padding: 8px 12px;
+      border: 1px solid var(--gray-200);
+      border-radius: 6px;
+      font-size: 13px;
+      min-width: 160px;
+      outline: none;
+    }
+    .filter-group select:focus,
+    .filter-group input:focus { border-color: var(--primary); }
+    .filter-reset {
+      padding: 8px 16px;
+      background: var(--gray-100);
+      border: 1px solid var(--gray-200);
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      align-self: flex-end;
+    }
+    .filter-reset:hover { background: var(--gray-200); }
+    /* MULTI-SELECT */
+    .ms-wrap { position: relative; }
+    .ms-box {
+      min-width: 220px;
+      max-width: 340px;
+      min-height: 36px;
+      border: 1px solid var(--gray-200);
+      border-radius: 6px;
+      padding: 4px 28px 4px 8px;
+      background: white;
+      cursor: pointer;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      align-items: center;
+      position: relative;
+      user-select: none;
+    }
+    .ms-box:focus-within, .ms-box.open { border-color: var(--primary); }
+    .ms-box::after {
+      content: '▾';
+      position: absolute;
+      right: 8px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--gray-500);
+      font-size: 12px;
+      pointer-events: none;
+    }
+    .ms-placeholder { color: var(--gray-500); font-size: 13px; }
+    .ms-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: var(--primary-light);
+      color: var(--primary);
+      border-radius: 999px;
+      padding: 1px 8px;
+      font-size: 12px;
+      font-weight: 500;
+      white-space: nowrap;
+    }
+    .ms-pill-x {
+      cursor: pointer;
+      font-size: 14px;
+      line-height: 1;
+      opacity: .6;
+    }
+    .ms-pill-x:hover { opacity: 1; }
+    .ms-dropdown {
+      position: absolute;
+      top: calc(100% + 4px);
+      left: 0;
+      min-width: 260px;
+      max-width: 340px;
+      max-height: 280px;
+      overflow-y: auto;
+      background: white;
+      border: 1px solid var(--gray-200);
+      border-radius: 8px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+      z-index: 100;
+      display: none;
+    }
+    .ms-dropdown.open { display: block; }
+    .ms-search-wrap { padding: 8px; border-bottom: 1px solid var(--gray-100); }
+    .ms-search {
+      width: 100%;
+      border: 1px solid var(--gray-200);
+      border-radius: 6px;
+      padding: 6px 10px;
+      font-size: 13px;
+      outline: none;
+    }
+    .ms-search:focus { border-color: var(--primary); }
+    .ms-actions {
+      display: flex;
+      gap: 8px;
+      padding: 6px 8px;
+      border-bottom: 1px solid var(--gray-100);
+    }
+    .ms-action-btn {
+      font-size: 11px;
+      color: var(--primary);
+      cursor: pointer;
+      background: none;
+      border: none;
+      padding: 0;
+      text-decoration: underline;
+    }
+    .ms-action-btn:hover { opacity: .7; }
+    .ms-list { padding: 4px 0; }
+    .ms-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 12px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    .ms-item:hover { background: var(--primary-light); }
+    .ms-item input[type="checkbox"] { accent-color: var(--primary); width: 14px; height: 14px; cursor: pointer; }
+    .ms-item label { cursor: pointer; flex: 1; }
+    .ms-empty { padding: 12px; text-align: center; font-size: 13px; color: var(--gray-500); }
+    /* TABS */
+    .tabs { display: flex; gap: 4px; margin-bottom: 20px; }
+    .tab {
+      padding: 8px 18px;
+      border-radius: 6px;
+      border: none;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      background: var(--gray-100);
+      color: var(--gray-500);
+    }
+    .tab.active { background: var(--primary); color: white; }
+    .tab:hover:not(.active) { background: var(--gray-200); }
+    /* TABLE */
+    .table-wrap { background: white; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); overflow: hidden; }
+    .table-header { padding: 14px 20px; border-bottom: 1px solid var(--gray-200); display: flex; justify-content: space-between; align-items: center; }
+    .table-header h2 { font-size: 15px; font-weight: 600; }
+    .result-count { font-size: 12px; color: var(--gray-500); }
+    table { width: 100%; border-collapse: collapse; }
+    thead th {
+      background: var(--gray-50);
+      padding: 10px 16px;
+      text-align: left;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      color: var(--gray-500);
+      border-bottom: 1px solid var(--gray-200);
+      white-space: nowrap;
+      cursor: pointer;
+      user-select: none;
+    }
+    thead th:hover { background: var(--gray-100); }
+    tbody td {
+      padding: 11px 16px;
+      font-size: 13px;
+      border-bottom: 1px solid var(--gray-100);
+      color: var(--gray-700);
+    }
+    tbody tr:hover td { background: var(--primary-light); }
+    tbody tr:last-child td { border-bottom: none; }
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .badge-active  { background: var(--success-light); color: var(--success); }
+    .badge-future  { background: var(--primary-light); color: var(--primary); }
+    .badge-done    { background: var(--gray-100);      color: var(--gray-500); }
+    /* CALENDAR GRID */
+    .calendar-section { background: white; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); padding: 20px; }
+    .calendar-nav { display: flex; align-items: center; gap: 16px; margin-bottom: 20px; }
+    .calendar-nav button {
+      background: var(--gray-100);
+      border: none;
+      border-radius: 6px;
+      padding: 6px 14px;
+      cursor: pointer;
+      font-size: 16px;
+    }
+    .calendar-nav button:hover { background: var(--gray-200); }
+    .calendar-nav span { font-size: 16px; font-weight: 600; min-width: 160px; text-align: center; }
+    .timeline { overflow-x: auto; }
+    .timeline-grid { display: grid; gap: 0; min-width: 800px; }
+    .timeline-header { display: flex; background: var(--gray-50); border-bottom: 2px solid var(--gray-200); }
+    .timeline-label { width: 220px; min-width: 220px; padding: 8px 12px; font-size: 11px; font-weight: 600; color: var(--gray-500); text-transform: uppercase; border-right: 1px solid var(--gray-200); }
+    .timeline-days { display: flex; flex: 1; }
+    .day-header {
+      flex: 1;
+      text-align: center;
+      padding: 6px 2px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--gray-500);
+      border-right: 1px solid var(--gray-100);
+    }
+    .day-header.today { background: var(--primary-light); color: var(--primary); font-weight: 700; }
+    .day-header.weekend { color: var(--gray-200); }
+    .timeline-row { display: flex; border-bottom: 1px solid var(--gray-100); }
+    .timeline-row:hover { background: var(--gray-50); }
+    .employee-label {
+      width: 220px;
+      min-width: 220px;
+      padding: 8px 12px;
+      font-size: 12px;
+      border-right: 1px solid var(--gray-200);
+    }
+    .employee-name { font-weight: 500; }
+    .employee-branch { font-size: 11px; color: var(--gray-500); }
+    .timeline-cells { display: flex; flex: 1; align-items: center; position: relative; }
+    .day-cell {
+      flex: 1;
+      height: 36px;
+      border-right: 1px solid var(--gray-100);
+      position: relative;
+    }
+    .vacation-bar {
+      position: absolute;
+      height: 20px;
+      top: 8px;
+      background: var(--primary);
+      border-radius: 4px;
+      z-index: 1;
+      opacity: 0.85;
+    }
+    .vacation-bar.active { background: var(--success); opacity: .9; }
+    /* CALENDAR VIEW TOGGLE */
+    .cal-view-btns { display: flex; gap: 4px; margin-left: auto; }
+    .cal-view-btn {
+      padding: 5px 14px; border-radius: 6px; border: 1px solid var(--gray-200);
+      background: var(--gray-100); color: var(--gray-500);
+      cursor: pointer; font-size: 12px; font-weight: 500;
+    }
+    .cal-view-btn.active { background: var(--primary); border-color: var(--primary); color: white; }
+    .cal-view-btn:hover:not(.active) { background: var(--gray-200); }
+    /* MULTI-MONTH GRID */
+    .mm-grid { min-width: 700px; }
+    .mm-header-row { display: flex; background: var(--gray-50); border-bottom: 2px solid var(--gray-200); }
+    .mm-label-col { width: 220px; min-width: 220px; padding: 8px 12px; font-size: 11px; font-weight: 600; color: var(--gray-500); text-transform: uppercase; border-right: 1px solid var(--gray-200); }
+    .mm-month-cols { display: flex; flex: 1; }
+    .mm-month-hdr {
+      flex: 1; text-align: center; padding: 7px 4px; font-size: 11px;
+      font-weight: 700; color: var(--gray-500);
+      border-right: 1px solid var(--gray-100);
+    }
+    .mm-month-hdr.current-month { background: var(--primary-light); color: var(--primary); }
+    .mm-row { display: flex; border-bottom: 1px solid var(--gray-100); }
+    .mm-row:hover { background: var(--gray-50); }
+    .mm-employee { width: 220px; min-width: 220px; padding: 8px 12px; font-size: 12px; border-right: 1px solid var(--gray-200); }
+    .mm-cells { display: flex; flex: 1; }
+    .mm-cell { flex: 1; height: 38px; border-right: 1px solid var(--gray-100); position: relative; }
+    .mm-bar {
+      position: absolute; top: 9px; height: 20px;
+      background: var(--primary); border-radius: 3px; opacity: .8;
+      min-width: 4px;
+    }
+    .mm-bar.active  { background: var(--success); opacity: .9; }
+    .mm-bar.future  { background: var(--primary); opacity: .75; }
+    .mm-bar.done    { background: var(--gray-400, #9ca3af); opacity: .6; }
+    .mm-bar-label {
+      position: absolute; top: 11px; left: 0; right: 0;
+      font-size: 9px; font-weight: 600; color: white;
+      text-align: center; pointer-events: none; overflow: hidden;
+      white-space: nowrap; padding: 0 2px;
+    }
+    .mm-cell:hover .mm-tooltip { display: block; }
+    .mm-tooltip {
+      display: none; position: absolute; bottom: calc(100% + 4px); left: 50%;
+      transform: translateX(-50%); background: var(--gray-900); color: white;
+      padding: 5px 8px; border-radius: 5px; font-size: 11px;
+      white-space: nowrap; z-index: 50; pointer-events: none;
+    }
+    .mm-tooltip::after {
+      content: ''; position: absolute; top: 100%; left: 50%;
+      transform: translateX(-50%); border: 4px solid transparent;
+      border-top-color: var(--gray-900);
+    }
+    /* EMPTY STATE */
+    .empty { text-align: center; padding: 48px; color: var(--gray-500); }
+    .empty svg { opacity: .3; margin-bottom: 12px; }
+    /* LOADING */
+    .loading { text-align: center; padding: 48px; color: var(--gray-500); font-size: 14px; }
+    .spinner {
+      width: 36px; height: 36px;
+      border: 3px solid var(--gray-200);
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+      margin: 0 auto 12px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    /* ERROR BANNER */
+    .error-banner {
+      background: var(--danger-light);
+      border: 1px solid #fca5a5;
+      border-radius: 8px;
+      padding: 12px 16px;
+      font-size: 13px;
+      color: var(--danger);
+      margin-bottom: 20px;
+    }
+    /* MODAL */
+    .modal-overlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,.45);
+      z-index: 200;
+      display: flex; align-items: center; justify-content: center;
+      padding: 16px;
+      opacity: 0; pointer-events: none;
+      transition: opacity .18s;
+    }
+    .modal-overlay.open { opacity: 1; pointer-events: all; }
+    .modal {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 8px 40px rgba(0,0,0,.2);
+      width: 100%;
+      max-width: 480px;
+      transform: translateY(16px);
+      transition: transform .18s;
+    }
+    .modal-overlay.open .modal { transform: translateY(0); }
+    .modal-header {
+      padding: 20px 24px 16px;
+      border-bottom: 1px solid var(--gray-200);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .modal-header h3 { font-size: 16px; font-weight: 600; }
+    .modal-close {
+      background: none; border: none; cursor: pointer;
+      font-size: 20px; color: var(--gray-500); line-height: 1;
+      padding: 2px 6px; border-radius: 4px;
+    }
+    .modal-close:hover { background: var(--gray-100); }
+    .modal-body { padding: 20px 24px; display: flex; flex-direction: column; gap: 16px; }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .form-group { display: flex; flex-direction: column; gap: 5px; }
+    .form-group.full { grid-column: 1 / -1; }
+    .form-group label { font-size: 12px; font-weight: 600; color: var(--gray-700); text-transform: uppercase; letter-spacing: .4px; }
+    .form-group input,
+    .form-group select {
+      padding: 9px 12px;
+      border: 1px solid var(--gray-200);
+      border-radius: 7px;
+      font-size: 14px;
+      outline: none;
+      width: 100%;
+      background: white;
+    }
+    .form-group input:focus,
+    .form-group select:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(26,86,219,.1); }
+    .form-group input.error { border-color: var(--danger); }
+    .form-error { font-size: 11px; color: var(--danger); margin-top: 2px; }
+    .form-group input[readonly] {
+      background: var(--gray-50);
+      color: var(--gray-500);
+      cursor: default;
+    }
+    .calc-hint { font-size: 11px; color: var(--gray-500); margin-top: 2px; }
+    .modal-footer {
+      padding: 16px 24px;
+      border-top: 1px solid var(--gray-200);
+      display: flex; justify-content: flex-end; gap: 10px;
+    }
+    .btn { padding: 9px 20px; border-radius: 7px; font-size: 14px; font-weight: 500; cursor: pointer; border: none; }
+    .btn-secondary { background: var(--gray-100); color: var(--gray-700); border: 1px solid var(--gray-200); }
+    .btn-secondary:hover { background: var(--gray-200); }
+    .btn-primary { background: var(--primary); color: white; }
+    .btn-primary:hover { background: #1648c0; }
+    .btn-primary:disabled { background: var(--gray-200); color: var(--gray-500); cursor: not-allowed; }
+    .btn-add-vacation {
+      display: flex; align-items: center; gap: 6px;
+      background: var(--primary); color: white;
+      border: none; border-radius: 7px;
+      padding: 8px 16px; font-size: 13px; font-weight: 600;
+      cursor: pointer; white-space: nowrap;
+    }
+    .btn-add-vacation:hover { background: #1648c0; }
+    /* EDITABLE CELLS */
+    .editable-date {
+      cursor: pointer;
+      position: relative;
+      white-space: nowrap;
+    }
+    .editable-date:hover .cell-val { text-decoration: underline dotted var(--primary); }
+    .editable-date .edit-icon {
+      opacity: 0;
+      font-size: 11px;
+      margin-left: 4px;
+      color: var(--primary);
+      transition: opacity .15s;
+    }
+    .editable-date:hover .edit-icon { opacity: 1; }
+    .editable-date input[type="date"] {
+      border: 1px solid var(--primary);
+      border-radius: 4px;
+      padding: 3px 6px;
+      font-size: 13px;
+      outline: none;
+      width: 140px;
+      background: white;
+    }
+    .saving-indicator {
+      font-size: 11px;
+      color: var(--primary);
+      margin-left: 4px;
+    }
+    .save-success td { background: var(--success-light) !important; transition: background .4s; }
+    .save-error   td { background: var(--danger-light)  !important; transition: background .4s; }
+    .cell-saving  { opacity: .5; pointer-events: none; }
+    .edit-row-hint {
+      font-size: 11px;
+      color: var(--gray-500);
+      padding: 6px 16px;
+      border-bottom: 1px solid var(--gray-100);
+      background: var(--gray-50);
+    }
+    /* PAYMENT SECTION */
+    .payment-section { background: white; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); overflow: hidden; }
+    .payment-header { padding: 14px 20px; border-bottom: 1px solid var(--gray-200); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
+    .payment-header h2 { font-size: 15px; font-weight: 600; }
+    .payment-month-badge {
+      background: var(--danger-light);
+      color: var(--danger);
+      border: 1px solid #fca5a5;
+      border-radius: 999px;
+      padding: 3px 12px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .pay30-yes  { background: var(--danger-light); color: var(--danger); }
+    .pay30-no   { background: var(--gray-100);     color: var(--gray-500); }
+    .payment-filter-bar {
+      padding: 12px 20px;
+      border-bottom: 1px solid var(--gray-100);
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .pf-btn {
+      padding: 5px 14px;
+      border-radius: 6px;
+      border: 1px solid var(--gray-200);
+      background: var(--gray-100);
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--gray-500);
+    }
+    .pf-btn.active { background: var(--primary); border-color: var(--primary); color: white; }
+    .pf-btn:hover:not(.active) { background: var(--gray-200); }
+    .pf-search {
+      padding: 5px 12px;
+      border: 1px solid var(--gray-200);
+      border-radius: 6px;
+      font-size: 12px;
+      outline: none;
+      min-width: 180px;
+    }
+    .pf-search:focus { border-color: var(--primary); }
+    .month-group-header td {
+      background: var(--gray-50);
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--gray-500);
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      padding: 8px 16px;
+      border-top: 2px solid var(--gray-200);
+    }
+    .month-group-header.current td {
+      background: var(--primary-light);
+      color: var(--primary);
+      border-color: var(--primary);
+    }
+    .month-group-header.past td {
+      background: var(--gray-100);
+      color: var(--gray-500);
+    }
+    .month-group-header.future td {
+      background: var(--success-light);
+      color: var(--success);
+      border-color: var(--success);
+    }
+    /* RESPONSIVE */
+    @media (max-width: 640px) {
+      .container { padding: 12px; }
+      .cards { grid-template-columns: repeat(2, 1fr); }
+    }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <h1>Dashboard de Férias</h1>
+    <div class="header-sub">Painel consolidado — Recursos Humanos</div>
+  </div>
+  <div class="last-update">
+    <div id="last-update-text">Carregando...</div>
+    <button class="refresh-btn" onclick="loadData()">↻ Atualizar</button>
+  </div>
+</div>
+
+<div class="container">
+
+  <!-- CARDS DE RESUMO -->
+  <div class="cards">
+    <div class="card">
+      <div class="card-label">Total de Registros</div>
+      <div class="card-value" id="stat-total">—</div>
+      <div class="card-sub">em todas as filiais</div>
+    </div>
+    <div class="card success">
+      <div class="card-label">Em Férias Agora</div>
+      <div class="card-value" id="stat-active">—</div>
+      <div class="card-sub">período em andamento</div>
+    </div>
+    <div class="card warning">
+      <div class="card-label">Retornando em 7 dias</div>
+      <div class="card-value" id="stat-returning">—</div>
+      <div class="card-sub">próxima semana</div>
+    </div>
+    <div class="card danger">
+      <div class="card-label">Conflitos</div>
+      <div class="card-value" id="stat-conflicts">—</div>
+      <div class="card-sub">filiais com sobreposição</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Férias Futuras</div>
+      <div class="card-value" id="stat-future">—</div>
+      <div class="card-sub">agendadas</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Filiais Ativas</div>
+      <div class="card-value" id="stat-branches">—</div>
+      <div class="card-sub">com registros</div>
+    </div>
+    <div class="card danger">
+      <div class="card-label">Pagar este Mês</div>
+      <div class="card-value" id="stat-payment-due">—</div>
+      <div class="card-sub">sem registro — mês vigente</div>
+    </div>
+  </div>
+
+  <!-- ALERTAS DE CONFLITO -->
+  <div class="alerts-section" id="alerts-section" style="display:none">
+    <h2>⚠️ Alertas de Conflito</h2>
+    <div id="alerts-list"></div>
+  </div>
+
+  <!-- FILTROS -->
+  <div class="filters">
+    <div class="filter-group">
+      <label>Filial</label>
+      <div class="ms-wrap" id="ms-wrap">
+        <div class="ms-box" id="ms-box" onclick="toggleMsDropdown(event)">
+          <span class="ms-placeholder" id="ms-placeholder">Todas as filiais</span>
+        </div>
+        <div class="ms-dropdown" id="ms-dropdown">
+          <div class="ms-search-wrap">
+            <input class="ms-search" id="ms-search" type="text"
+              placeholder="Buscar filial..." oninput="filterMsItems()" onclick="event.stopPropagation()" />
+          </div>
+          <div class="ms-actions">
+            <button class="ms-action-btn" onclick="selectAllBranches();event.stopPropagation()">Selecionar todas</button>
+            <button class="ms-action-btn" onclick="clearBranches();event.stopPropagation()">Limpar</button>
+          </div>
+          <div class="ms-list" id="ms-list"></div>
+        </div>
+      </div>
+    </div>
+    <div class="filter-group">
+      <label>Status</label>
+      <select id="filter-status" onchange="applyFilters()">
+        <option value="">Todos</option>
+        <option value="active">Em férias agora</option>
+        <option value="future">Agendadas</option>
+        <option value="done">Concluídas</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label>Mês de início</label>
+      <input type="month" id="filter-month" onchange="applyFilters()" />
+    </div>
+    <div class="filter-group">
+      <label>Buscar funcionário</label>
+      <input type="text" id="filter-name" placeholder="Nome..." oninput="applyFilters()" />
+    </div>
+    <button class="filter-reset" onclick="resetFilters()">Limpar filtros</button>
+  </div>
+
+  <!-- TABS -->
+  <div class="tabs">
+    <button class="tab active" onclick="showTab('table', this)">Tabela</button>
+    <button class="tab" onclick="showTab('calendar', this)">Calendário</button>
+    <button class="tab" onclick="showTab('payment', this)">Pagamentos do Mês</button>
+  </div>
+
+  <!-- VISÃO TABELA -->
+  <div id="view-table">
+    <div class="table-wrap">
+      <div class="table-header">
+        <h2>Registros de Férias</h2>
+        <div style="display:flex;align-items:center;gap:12px">
+          <span class="result-count" id="result-count"></span>
+          <button class="btn-add-vacation" onclick="openAddModal()">+ Incluir Férias</button>
+        </div>
+      </div>
+      <div id="table-loading" class="loading">
+        <div class="spinner"></div>
+        Carregando dados das filiais...
+      </div>
+      <div id="table-error" class="error-banner" style="display:none;margin:16px"></div>
+      <div id="table-container" style="overflow-x:auto; display:none">
+        <table>
+          <thead>
+            <tr>
+              <th onclick="sortBy('branch')">Filial <span id="sort-branch"></span></th>
+              <th onclick="sortBy('name')">Funcionário <span id="sort-name"></span></th>
+              <th onclick="sortBy('startDate')">Início ✏ <span id="sort-startDate"></span></th>
+              <th onclick="sortBy('endDate')">Fim ✏ <span id="sort-endDate"></span></th>
+              <th onclick="sortBy('returnDate')">Retorno <span id="sort-returnDate"></span></th>
+              <th onclick="sortBy('total')">Total dias <span id="sort-total"></span></th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="table-body"></tbody>
+        </table>
+        <div class="edit-row-hint">✏ Clique em <strong>Início</strong> ou <strong>Fim</strong> para editar. Retorno e Total são calculados automaticamente.</div>
+      </div>
+      <div id="table-empty" class="empty" style="display:none">
+        <div>Nenhum registro encontrado para os filtros selecionados.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- VISÃO CALENDÁRIO -->
+  <div id="view-calendar" style="display:none">
+    <div class="calendar-section">
+      <div class="calendar-nav" style="flex-wrap:wrap;gap:10px">
+        <button onclick="calPrev()">‹</button>
+        <span id="calendar-month-label"></span>
+        <button onclick="calNext()">›</button>
+        <div class="cal-view-btns">
+          <button class="cal-view-btn active" id="cvbtn-month"    onclick="setCalView('month',this)">Mensal</button>
+          <button class="cal-view-btn"        id="cvbtn-semester" onclick="setCalView('semester',this)">Semestral</button>
+          <button class="cal-view-btn"        id="cvbtn-year"     onclick="setCalView('year',this)">Anual</button>
+        </div>
+      </div>
+      <div class="timeline" id="timeline-container"></div>
+    </div>
+  </div>
+
+  <!-- VISÃO PAGAMENTOS DO MÊS -->
+  <div id="view-payment" style="display:none">
+    <div class="payment-section">
+      <div class="payment-header">
+        <div>
+          <h2>Funcionários Sem Registro — Pagamento de Férias</h2>
+          <div style="font-size:12px;color:var(--gray-500);margin-top:3px">
+            Funcionários que não possuem registro nas planilhas de filiais e devem receber pagamento de férias
+          </div>
+        </div>
+        <span class="payment-month-badge" id="payment-month-badge">Mês vigente</span>
+      </div>
+      <div class="payment-filter-bar">
+        <button class="pf-btn active" id="pfbtn-month"  onclick="setPayFilter('month', this)">Mês Vigente</button>
+        <button class="pf-btn"        id="pfbtn-future" onclick="setPayFilter('future',this)">Próximos Meses</button>
+        <button class="pf-btn"        id="pfbtn-past"   onclick="setPayFilter('past',  this)">Meses Anteriores</button>
+        <button class="pf-btn"        id="pfbtn-all"    onclick="setPayFilter('all',   this)">Todos</button>
+        <input class="pf-search" id="pf-search" type="text" placeholder="Buscar nome ou filial..." oninput="renderPaymentTable()" />
+      </div>
+      <div id="payment-loading" class="loading">
+        <div class="spinner"></div>
+        Carregando dados de pagamento...
+      </div>
+      <div id="payment-container" style="overflow-x:auto;display:none">
+        <table>
+          <thead>
+            <tr>
+              <th>Funcionário</th>
+              <th>Filial</th>
+              <th>Mês do Vencimento</th>
+              <th>Pagar 30 dias?</th>
+            </tr>
+          </thead>
+          <tbody id="payment-body"></tbody>
+        </table>
+      </div>
+      <div id="payment-empty" class="empty" style="display:none">
+        Nenhum funcionário encontrado para o filtro selecionado.
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- MODAL INCLUIR FÉRIAS -->
+<div class="modal-overlay" id="modal-overlay" onclick="handleOverlayClick(event)">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div class="modal-header">
+      <h3 id="modal-title">Incluir Férias</h3>
+      <button class="modal-close" onclick="closeAddModal()" aria-label="Fechar">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group full">
+          <label for="m-name">Funcionário</label>
+          <input type="text" id="m-name" placeholder="Nome completo" autocomplete="off" oninput="clearFieldError('m-name')" />
+          <span class="form-error" id="err-m-name"></span>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group full">
+          <label for="m-branch">Filial</label>
+          <select id="m-branch" onchange="clearFieldError('m-branch')">
+            <option value="">Selecione a filial...</option>
+          </select>
+          <span class="form-error" id="err-m-branch"></span>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="m-start">Início das Férias</label>
+          <input type="date" id="m-start" oninput="calcModalDates();clearFieldError('m-start')" />
+          <span class="form-error" id="err-m-start"></span>
+        </div>
+        <div class="form-group">
+          <label for="m-end">Fim das Férias</label>
+          <input type="date" id="m-end" oninput="calcModalDates();clearFieldError('m-end')" />
+          <span class="form-error" id="err-m-end"></span>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Retorno (calculado)</label>
+          <input type="text" id="m-return" readonly placeholder="—" />
+          <span class="calc-hint">Preenchido automaticamente</span>
+        </div>
+        <div class="form-group">
+          <label>Total de Dias (calculado)</label>
+          <input type="text" id="m-total" readonly placeholder="—" />
+          <span class="calc-hint">Dias corridos (inclusive)</span>
+        </div>
+      </div>
+      <div id="modal-save-error" class="error-banner" style="display:none"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeAddModal()">Cancelar</button>
+      <button class="btn btn-primary" id="btn-save-vacation" onclick="submitAddVacation()">Salvar Férias</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  let allData = [];
+  let filteredData = [];
+  let conflicts = [];
+  let paymentAll = [];
+  let paymentDue = [];
+  let payFilter  = 'month';
+  let sortCol = 'startDate';
+  let sortDir = 1;
+  let calYear, calMonth;
+
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  calYear  = today.getFullYear();
+  calMonth = today.getMonth();
+
+  // ── MOCK DATA (usado apenas fora do Google Apps Script) ───
+  const MOCK_PAYMENT_DATA = (() => {
+    const MONTHS_PT = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho',
+                       'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+    const cur = today.getMonth(); // 0-based
+    const mk = (offsetMonths, name, branch, pay30) => {
+      const mIdx = ((cur + offsetMonths) % 12 + 12) % 12;
+      return { name, branch, month: MONTHS_PT[mIdx], monthNum: mIdx + 1, pay30, isDue: mIdx === cur };
+    };
+    return [
+      // Meses anteriores
+      mk(-3, 'Patricia Souza',    'Filial 04',        false),
+      mk(-3, 'Marcos Antônio',    'Caçador Centro',   true ),
+      mk(-2, 'Luciene Ferreira',  'Iomere',           false),
+      mk(-2, 'Bruno Cavalcanti',  'Filial 02',        true ),
+      mk(-2, 'Tânia Ribeiro',     'Caçador Ipiranga', false),
+      mk(-1, 'Eduardo Pinheiro',  'Filial 01',        true ),
+      mk(-1, 'Geovana Machado',   'Iomere',           false),
+      mk(-1, 'Ricardo Almeida',   'Filial 03',        true ),
+      // Mês atual
+      mk( 0, 'Rose',              'Iomere',           false),
+      mk( 0, 'Cláudio Matos',     'Filial 03',        true ),
+      mk( 0, 'Sandra Lima',       'Filial 01',        false),
+      mk( 0, 'Vera Aparecida',    'Iomere',           true ),
+      // Próximos meses
+      mk(+1, 'Izanir',            'Caçador Ipiranga', true ),
+      mk(+1, 'Fernando Cruz',     'Caçador Centro',   true ),
+      mk(+1, 'Simone Barros',     'Filial 02',        false),
+      mk(+2, 'Antônio Neves',     'Filial 04',        true ),
+      mk(+2, 'Cleusa Monteiro',   'Caçador Centro',   false),
+      mk(+3, 'Diego Figueiredo',  'Filial 01',        true ),
+    ];
+  })();
+
+  const MOCK_DATA = (function() {
+    const t = new Date(); t.setHours(0,0,0,0);
+    const d = (offset, days) => {
+      const s = new Date(t); s.setDate(s.getDate() + offset);
+      const e = new Date(s); e.setDate(e.getDate() + (days - 1));
+      return [s.toISOString().split('T')[0], e.toISOString().split('T')[0], days];
+    };
+    const rows = [
+      ['Filial 01','Ana Paula Ferreira',    ...d(-5,  30)],
+      ['Filial 01','Carlos Eduardo Lima',   ...d(-3,  15)],
+      ['Filial 01','Mariana Souza',         ...d( 5,  30)],
+      ['Filial 02','João Pedro Alves',      ...d(-10, 30)],
+      ['Filial 02','Fernanda Costa',        ...d(-2,  15)],
+      ['Filial 02','Roberto Silva',         ...d(-8,  30)],
+      ['Filial 02','Luciana Martins',       ...d(-6,  15)],
+      ['Filial 03','Paulo Henrique Santos', ...d( 3,  30)],
+      ['Filial 03','Beatriz Oliveira',      ...d(10,  15)],
+      ['Filial 04','Thiago Nascimento',     ...d(-20, 30)],
+      ['Filial 04','Juliana Rocha',         ...d( 2,  30)],
+      ['Filial 05','André Luiz Pereira',    ...d(-1,  15)],
+      ['Filial 05','Camila Mendes',         ...d(-3,  30)],
+      ['Filial 05','Diego Carvalho',        ...d( 7,  30)],
+      ['Filial 06','Priscila Torres',       ...d(14,  15)],
+    ];
+    const retDate = (end, days) => {
+      const r = new Date(end); r.setDate(r.getDate() + 1);
+      return r.toISOString().split('T')[0];
+    };
+    return rows.map(([branch, name, start, end, total], i) => ({
+      branch, name, startDate: start, endDate: end,
+      returnDate: retDate(end, total), total, rowIndex: i + 2,
+    }));
+  })();
+
+  // ── DATA LOADING ──────────────────────────────────────────
+  function loadData() {
+    document.getElementById('table-loading').style.display = 'block';
+    document.getElementById('table-container').style.display = 'none';
+    document.getElementById('table-empty').style.display = 'none';
+    document.getElementById('table-error').style.display = 'none';
+
+    if (typeof google === 'undefined' || !google.script) {
+      // Modo demo — sem Apps Script
+      setTimeout(() => {
+        const conflicts = detectConflictsJS(MOCK_DATA);
+        const curMon = today.getMonth() + 1;
+        onDataLoaded(JSON.stringify({
+          data: MOCK_DATA,
+          conflicts,
+          errors: [],
+          paymentDue: MOCK_PAYMENT_DATA.filter(r => r.monthNum === curMon),
+          paymentAll: MOCK_PAYMENT_DATA,
+          paymentErrors: [],
+        }));
+      }, 600);
+      return;
+    }
+
+    google.script.run
+      .withSuccessHandler(onDataLoaded)
+      .withFailureHandler(onDataError)
+      .getVacationData();
+  }
+
+  function detectConflictsJS(data) {
+    const conflicts = [], byBranch = {};
+    for (const r of data) {
+      if (!byBranch[r.branch]) byBranch[r.branch] = [];
+      byBranch[r.branch].push(r);
+    }
+    for (const [branch, records] of Object.entries(byBranch)) {
+      for (let i = 0; i < records.length; i++) {
+        const overlapping = [];
+        const startA = new Date(records[i].startDate), endA = new Date(records[i].endDate);
+        for (let j = 0; j < records.length; j++) {
+          if (i === j) continue;
+          const startB = new Date(records[j].startDate), endB = new Date(records[j].endDate);
+          if (startA <= endB && endA >= startB) overlapping.push(records[j].name);
+        }
+        if (overlapping.length >= 2) {
+          const key = [branch, records[i].startDate, ...[...overlapping].sort()].join('|');
+          if (!conflicts.find(c => c.key === key))
+            conflicts.push({ key, branch, period: `${fmtDateBR(records[i].startDate)} a ${fmtDateBR(records[i].endDate)}`, employees: [records[i].name, ...overlapping], count: overlapping.length + 1 });
+        }
+      }
+    }
+    return conflicts;
+  }
+
+  function onDataLoaded(jsonStr) {
+    const result = JSON.parse(jsonStr);
+    allData    = result.data;
+    conflicts  = result.conflicts || [];
+    paymentAll = result.paymentAll || [];
+    paymentDue = result.paymentDue || [];
+    const errors = result.errors || [];
+
+    document.getElementById('table-loading').style.display = 'none';
+    document.getElementById('last-update-text').textContent =
+      'Atualizado: ' + new Date().toLocaleString('pt-BR');
+
+    if (errors.length) {
+      const msg = errors.map(e => `${e.branch}: ${e.error}`).join('; ');
+      const el = document.getElementById('table-error');
+      el.textContent = '⚠️ Erros ao carregar: ' + msg;
+      el.style.display = 'block';
+    }
+
+    populateBranchFilter();
+    renderAlerts();
+    applyFilters();
+    renderPaymentBadge();
+    renderPaymentTable();
+  }
+
+  function onDataError(err) {
+    document.getElementById('table-loading').style.display = 'none';
+    const el = document.getElementById('table-error');
+    el.textContent = 'Erro ao carregar dados: ' + err.message;
+    el.style.display = 'block';
+  }
+
+  // ── MULTI-SELECT FILIAL ───────────────────────────────────
+  let selectedBranches = [];
+  let allBranchNames   = [];
+
+  function toggleMsDropdown(e) {
+    e.stopPropagation();
+    const dd  = document.getElementById('ms-dropdown');
+    const box = document.getElementById('ms-box');
+    const open = dd.classList.toggle('open');
+    box.classList.toggle('open', open);
+    if (open) {
+      document.getElementById('ms-search').value = '';
+      filterMsItems();
+      document.getElementById('ms-search').focus();
+    }
+  }
+
+  function closeMsDropdown() {
+    document.getElementById('ms-dropdown').classList.remove('open');
+    document.getElementById('ms-box').classList.remove('open');
+  }
+
+  document.addEventListener('click', e => {
+    if (!document.getElementById('ms-wrap').contains(e.target)) closeMsDropdown();
+  });
+
+  function filterMsItems() {
+    const q = document.getElementById('ms-search').value.toLowerCase();
+    document.querySelectorAll('.ms-item').forEach(item => {
+      item.style.display = item.dataset.branch.toLowerCase().includes(q) ? '' : 'none';
+    });
+    const visible = [...document.querySelectorAll('.ms-item')].filter(i => i.style.display !== 'none');
+    const empty = document.getElementById('ms-list-empty');
+    if (empty) empty.style.display = visible.length ? 'none' : 'block';
+  }
+
+  function populateBranchFilter() {
+    allBranchNames = [...new Set(allData.map(r => r.branch))].sort();
+    const list = document.getElementById('ms-list');
+    list.innerHTML = allBranchNames.map(b => `
+      <div class="ms-item" data-branch="${escHtml(b)}" onclick="toggleBranch('${escHtml(b)}');event.stopPropagation()">
+        <input type="checkbox" id="ms-cb-${escHtml(b)}" ${selectedBranches.includes(b) ? 'checked' : ''}
+          onchange="toggleBranch('${escHtml(b)}')" onclick="event.stopPropagation()" />
+        <label for="ms-cb-${escHtml(b)}">${escHtml(b)}</label>
+      </div>`).join('') +
+      `<div id="ms-list-empty" class="ms-empty" style="display:none">Nenhuma filial encontrada</div>`;
+    updateMsBox();
+  }
+
+  function toggleBranch(branch) {
+    const idx = selectedBranches.indexOf(branch);
+    if (idx === -1) selectedBranches.push(branch);
+    else            selectedBranches.splice(idx, 1);
+    const cb = document.getElementById('ms-cb-' + branch);
+    if (cb) cb.checked = selectedBranches.includes(branch);
+    updateMsBox();
+    applyFilters();
+  }
+
+  function selectAllBranches() {
+    selectedBranches = [...allBranchNames];
+    document.querySelectorAll('.ms-item input[type="checkbox"]')
+      .forEach(cb => { cb.checked = true; });
+    updateMsBox();
+    applyFilters();
+  }
+
+  function clearBranches() {
+    selectedBranches = [];
+    document.querySelectorAll('.ms-item input[type="checkbox"]')
+      .forEach(cb => { cb.checked = false; });
+    updateMsBox();
+    applyFilters();
+  }
+
+  function updateMsBox() {
+    const box = document.getElementById('ms-box');
+    const placeholder = document.getElementById('ms-placeholder');
+    // Remove existing pills (keep placeholder)
+    box.querySelectorAll('.ms-pill').forEach(p => p.remove());
+
+    if (!selectedBranches.length) {
+      placeholder.style.display = '';
+      return;
+    }
+    placeholder.style.display = 'none';
+    selectedBranches.forEach(b => {
+      const pill = document.createElement('span');
+      pill.className = 'ms-pill';
+      pill.innerHTML = `${escHtml(b)} <span class="ms-pill-x" onclick="event.stopPropagation();toggleBranch('${escHtml(b)}')">×</span>`;
+      box.insertBefore(pill, box.lastElementChild);
+    });
+  }
+
+  // ── FILTERS ───────────────────────────────────────────────
+  function applyFilters() {
+    const status = document.getElementById('filter-status').value;
+    const month  = document.getElementById('filter-month').value;
+    const name   = document.getElementById('filter-name').value.toLowerCase().trim();
+
+    filteredData = allData.filter(r => {
+      if (selectedBranches.length && !selectedBranches.includes(r.branch)) return false;
+      if (name && !r.name.toLowerCase().includes(name)) return false;
+      if (status && getStatus(r) !== status) return false;
+      if (month && r.startDate && r.startDate.substring(0, 7) !== month) return false;
+      return true;
+    });
+
+    sortData();
+    renderTable();
+    renderStats();
+    renderCalendar();
+  }
+
+  function resetFilters() {
+    clearBranches();
+    document.getElementById('filter-status').value = '';
+    document.getElementById('filter-month').value  = '';
+    document.getElementById('filter-name').value   = '';
+    applyFilters();
+  }
+
+  // ── STATUS ────────────────────────────────────────────────
+  function getStatus(r) {
+    if (!r.startDate || !r.endDate) return 'unknown';
+    const start = new Date(r.startDate);
+    const end   = new Date(r.endDate);
+    start.setHours(0,0,0,0); end.setHours(23,59,59,999);
+    if (today >= start && today <= end) return 'active';
+    if (start > today) return 'future';
+    return 'done';
+  }
+
+  function statusBadge(status) {
+    const map = {
+      active:  ['badge-active',  'Em férias'],
+      future:  ['badge-future',  'Agendado'],
+      done:    ['badge-done',    'Concluído'],
+      unknown: ['badge-done',    '—'],
+    };
+    const [cls, lbl] = map[status] || map.unknown;
+    return `<span class="badge ${cls}">${lbl}</span>`;
+  }
+
+  // ── SORT ──────────────────────────────────────────────────
+  function sortBy(col) {
+    if (sortCol === col) sortDir = -sortDir;
+    else { sortCol = col; sortDir = 1; }
+    ['branch','name','startDate','endDate','returnDate','total'].forEach(c => {
+      document.getElementById('sort-' + c).textContent = '';
+    });
+    document.getElementById('sort-' + col).textContent = sortDir === 1 ? ' ▲' : ' ▼';
+    sortData();
+    renderTable();
+  }
+
+  function sortData() {
+    filteredData.sort((a, b) => {
+      let va = a[sortCol] || '', vb = b[sortCol] || '';
+      if (sortCol.includes('Date') || sortCol === 'startDate') {
+        va = new Date(va || '1900-01-01');
+        vb = new Date(vb || '1900-01-01');
+      }
+      return va < vb ? -sortDir : va > vb ? sortDir : 0;
+    });
+  }
+
+  // ── RENDER TABLE ──────────────────────────────────────────
+  function renderTable() {
+    const tbody = document.getElementById('table-body');
+    document.getElementById('result-count').textContent = filteredData.length + ' registro(s)';
+
+    if (!filteredData.length) {
+      document.getElementById('table-container').style.display = 'none';
+      document.getElementById('table-empty').style.display = 'block';
+      return;
+    }
+
+    document.getElementById('table-container').style.display = 'block';
+    document.getElementById('table-empty').style.display = 'none';
+
+    tbody.innerHTML = filteredData.map((r, idx) => {
+      const di = JSON.stringify({ branch: r.branch, rowIndex: r.rowIndex || 0 }).replace(/"/g, '&quot;');
+      const editCell = (field, val) =>
+        `<td class="editable-date" onclick="startEdit(this,'${field}',${r.rowIndex || 0},'${escHtml(r.branch)}',${idx})">`+
+        `<span class="cell-val">${fmtDateBR(val)}</span>`+
+        `<span class="edit-icon">✏</span></td>`;
+      return `
+      <tr data-idx="${idx}">
+        <td>${escHtml(r.branch)}</td>
+        <td><strong>${escHtml(r.name)}</strong></td>
+        ${editCell('startDate', r.startDate)}
+        ${editCell('endDate',   r.endDate)}
+        <td id="ret-${idx}">${fmtDateBR(r.returnDate)}</td>
+        <td id="tot-${idx}" style="text-align:center">${r.total || '—'}</td>
+        <td>${statusBadge(getStatus(r))}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  // ── RENDER STATS ──────────────────────────────────────────
+  function renderStats() {
+    const source = filteredData.length < allData.length ? filteredData : allData;
+    const active    = source.filter(r => getStatus(r) === 'active').length;
+    const future    = source.filter(r => getStatus(r) === 'future').length;
+    const returning = source.filter(r => {
+      if (!r.returnDate) return false;
+      const ret = new Date(r.returnDate); ret.setHours(0,0,0,0);
+      const diff = (ret - today) / 864e5;
+      return diff >= 0 && diff <= 7;
+    }).length;
+    const branches = new Set(source.map(r => r.branch)).size;
+
+    document.getElementById('stat-total').textContent       = source.length;
+    document.getElementById('stat-active').textContent      = active;
+    document.getElementById('stat-returning').textContent   = returning;
+    document.getElementById('stat-conflicts').textContent   = conflicts.length;
+    document.getElementById('stat-future').textContent      = future;
+    document.getElementById('stat-branches').textContent    = branches;
+    document.getElementById('stat-payment-due').textContent = paymentDue.length;
+  }
+
+  // ── RENDER ALERTS ─────────────────────────────────────────
+  function renderAlerts() {
+    const section = document.getElementById('alerts-section');
+    const list    = document.getElementById('alerts-list');
+    if (!conflicts.length) { section.style.display = 'none'; return; }
+    section.style.display = 'block';
+    list.innerHTML = conflicts.map(c => `
+      <div class="alert-item">
+        <div class="alert-branch">${escHtml(c.branch)}</div>
+        <div class="alert-detail">
+          <strong>${c.count} funcionários</strong> com férias sobrepostas no período ${escHtml(c.period)}:<br>
+          ${c.employees.map(escHtml).join(', ')}
+        </div>
+      </div>`).join('');
+  }
+
+  // ── RENDER CALENDAR ───────────────────────────────────────
+  let calView = 'month';
+
+  function setCalView(view, btn) {
+    calView = view;
+    document.querySelectorAll('.cal-view-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    renderCalendar();
+  }
+
+  function calPrev() {
+    if (calView === 'month')    { calMonth--; if (calMonth < 0) { calMonth = 11; calYear--; } }
+    if (calView === 'semester') { calMonth -= 6; if (calMonth < 0) { calMonth += 12; calYear--; } }
+    if (calView === 'year')     { calYear--; calMonth = 0; }
+    renderCalendar();
+  }
+  function calNext() {
+    if (calView === 'month')    { calMonth++; if (calMonth > 11) { calMonth = 0; calYear++; } }
+    if (calView === 'semester') { calMonth += 6; if (calMonth > 11) { calMonth -= 12; calYear++; } }
+    if (calView === 'year')     { calYear++; calMonth = 0; }
+    renderCalendar();
+  }
+
+  function renderCalendar() {
+    if (calView === 'month')    renderMonthlyCalendar();
+    if (calView === 'semester') renderMultiMonthCalendar(6);
+    if (calView === 'year')     renderMultiMonthCalendar(12);
+  }
+
+  // ── MONTHLY (days as columns) ─────────────────────────────
+  function renderMonthlyCalendar() {
+    const label = document.getElementById('calendar-month-label');
+    const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
+    const monthISO    = `${calYear}-${String(calMonth+1).padStart(2,'0')}`;
+
+    label.textContent = new Date(calYear, calMonth, 1)
+      .toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+
+    const source = filteredData.length < allData.length ? filteredData : allData;
+    const relevant = source.filter(r => {
+      if (!r.startDate || !r.endDate) return false;
+      return r.startDate.substring(0,7) <= monthISO && r.endDate.substring(0,7) >= monthISO;
+    });
+
+    const container = document.getElementById('timeline-container');
+    if (!relevant.length) { container.innerHTML = '<div class="empty">Nenhuma férias neste mês.</div>'; return; }
+
+    const days = Array.from({length: daysInMonth}, (_, i) => i + 1);
+    const todayDay = (today.getFullYear() === calYear && today.getMonth() === calMonth) ? today.getDate() : -1;
+
+    const dayHeaders = days.map(d => {
+      const isWeekend = new Date(calYear, calMonth, d).getDay() % 6 === 0;
+      const isToday   = d === todayDay;
+      return `<div class="day-header${isWeekend?' weekend':''}${isToday?' today':''}">${d}</div>`;
+    }).join('');
+
+    const rows = relevant.map(r => {
+      const cells = days.map(d => {
+        const cd = new Date(calYear, calMonth, d, 12);
+        const s  = new Date(r.startDate); s.setHours(0,0,0,0);
+        const e  = new Date(r.endDate);   e.setHours(23,59,59,0);
+        const on = cd >= s && cd <= e;
+        return `<div class="day-cell">${on ? `<div class="vacation-bar${getStatus(r)==='active'?' active':''}" style="left:1px;right:1px;"></div>` : ''}</div>`;
+      }).join('');
+      return `<div class="timeline-row">
+        <div class="employee-label">
+          <div class="employee-name">${escHtml(r.name)}</div>
+          <div class="employee-branch">${escHtml(r.branch)}</div>
+        </div>
+        <div class="timeline-cells">${cells}</div>
+      </div>`;
+    }).join('');
+
+    container.innerHTML = `<div class="timeline-grid">
+      <div class="timeline-header">
+        <div class="timeline-label">Funcionário / Filial</div>
+        <div class="timeline-days">${dayHeaders}</div>
+      </div>${rows}</div>`;
+  }
+
+  // ── MULTI-MONTH (semester / annual) ───────────────────────
+  function renderMultiMonthCalendar(numMonths) {
+    const label  = document.getElementById('calendar-month-label');
+    const source = filteredData.length < allData.length ? filteredData : allData;
+
+    // Build the list of months to display
+    const months = [];
+    for (let i = 0; i < numMonths; i++) {
+      let m = calMonth + i, y = calYear;
+      if (m > 11) { m -= 12; y++; }
+      months.push({ year: y, month: m });
+    }
+
+    const first = months[0], last = months[months.length - 1];
+    const firstLabel = new Date(first.year, first.month, 1)
+      .toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
+    const lastLabel  = new Date(last.year,  last.month,  1)
+      .toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
+    label.textContent = `${firstLabel} — ${lastLabel}`;
+
+    // Filter employees with any overlap in the window
+    const windowStart = new Date(first.year, first.month, 1);
+    const windowEnd   = new Date(last.year,  last.month + 1, 0, 23, 59, 59);
+
+    const relevant = source.filter(r => {
+      if (!r.startDate || !r.endDate) return false;
+      const s = new Date(r.startDate), e = new Date(r.endDate);
+      return s <= windowEnd && e >= windowStart;
+    });
+
+    const container = document.getElementById('timeline-container');
+    if (!relevant.length) { container.innerHTML = '<div class="empty">Nenhuma férias neste período.</div>'; return; }
+
+    const MONTHS_SHORT = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+    const isCurMonth = m => m.year === today.getFullYear() && m.month === today.getMonth();
+
+    const monthHeaders = months.map(m =>
+      `<div class="mm-month-hdr${isCurMonth(m)?' current-month':''}">${MONTHS_SHORT[m.month]}<br><span style="font-weight:400;font-size:10px">${m.year}</span></div>`
+    ).join('');
+
+    const rows = relevant.map(r => {
+      const rStart = new Date(r.startDate); rStart.setHours(0,0,0,0);
+      const rEnd   = new Date(r.endDate);   rEnd.setHours(23,59,59,0);
+      const status = getStatus(r);
+
+      const cells = months.map(m => {
+        const mStart = new Date(m.year, m.month, 1);
+        const mEnd   = new Date(m.year, m.month + 1, 0, 23, 59, 59);
+        const daysInM = new Date(m.year, m.month + 1, 0).getDate();
+
+        const overlapS = rStart > mStart ? rStart : mStart;
+        const overlapE = rEnd   < mEnd   ? rEnd   : mEnd;
+
+        if (overlapS > overlapE) return `<div class="mm-cell"></div>`;
+
+        const pctLeft  = ((overlapS.getDate() - 1) / daysInM * 100).toFixed(1);
+        const pctWidth = ((overlapE.getDate() - overlapS.getDate() + 1) / daysInM * 100).toFixed(1);
+        const tipText  = `${fmtDateBR(r.startDate)} – ${fmtDateBR(r.endDate)} (${r.total||'?'} dias)`;
+        const barLabel = Number(pctWidth) > 35 ? `${r.total||''}d` : '';
+
+        return `<div class="mm-cell">
+          <div class="mm-bar ${status}" style="left:${pctLeft}%;width:${pctWidth}%">
+            <span class="mm-bar-label">${barLabel}</span>
+          </div>
+          <div class="mm-tooltip">${escHtml(tipText)}</div>
+        </div>`;
+      }).join('');
+
+      return `<div class="mm-row">
+        <div class="mm-employee">
+          <div class="employee-name">${escHtml(r.name)}</div>
+          <div class="employee-branch">${escHtml(r.branch)}</div>
+        </div>
+        <div class="mm-cells">${cells}</div>
+      </div>`;
+    }).join('');
+
+    container.innerHTML = `<div class="timeline" style="overflow-x:auto">
+      <div class="mm-grid" style="min-width:${Math.max(700, 220 + numMonths*70)}px">
+        <div class="mm-header-row">
+          <div class="mm-label-col">Funcionário / Filial</div>
+          <div class="mm-month-cols">${monthHeaders}</div>
+        </div>
+        ${rows}
+      </div>
+    </div>`;
+  }
+
+  // ── MODAL INCLUIR FÉRIAS ──────────────────────────────────
+  function openAddModal() {
+    // Populate branch dropdown from live data
+    const sel = document.getElementById('m-branch');
+    const current = sel.value;
+    sel.innerHTML = '<option value="">Selecione a filial...</option>';
+    allBranchNames.forEach(b => {
+      const opt = document.createElement('option');
+      opt.value = b; opt.textContent = b;
+      if (b === current) opt.selected = true;
+      sel.appendChild(opt);
+    });
+
+    // Pre-select if only one branch filtered
+    if (selectedBranches.length === 1) sel.value = selectedBranches[0];
+
+    // Reset form
+    ['m-name','m-start','m-end'].forEach(id => {
+      document.getElementById(id).value = '';
+      document.getElementById(id).classList.remove('error');
+    });
+    document.getElementById('m-return').value = '';
+    document.getElementById('m-total').value  = '';
+    document.getElementById('modal-save-error').style.display = 'none';
+    document.getElementById('btn-save-vacation').disabled = false;
+    document.querySelectorAll('.form-error').forEach(el => el.textContent = '');
+
+    document.getElementById('modal-overlay').classList.add('open');
+    document.getElementById('m-name').focus();
+  }
+
+  function closeAddModal() {
+    document.getElementById('modal-overlay').classList.remove('open');
+  }
+
+  function handleOverlayClick(e) {
+    if (e.target === document.getElementById('modal-overlay')) closeAddModal();
+  }
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') closeAddModal();
+  });
+
+  function calcModalDates() {
+    const start = document.getElementById('m-start').value;
+    const end   = document.getElementById('m-end').value;
+    if (!start || !end) {
+      document.getElementById('m-return').value = '';
+      document.getElementById('m-total').value  = '';
+      return;
+    }
+    const s = new Date(start), e2 = new Date(end);
+    if (e2 < s) {
+      document.getElementById('m-return').value = '';
+      document.getElementById('m-total').value  = '⚠ Fim anterior ao Início';
+      document.getElementById('m-end').classList.add('error');
+      return;
+    }
+    document.getElementById('m-end').classList.remove('error');
+    const ret = new Date(e2); ret.setDate(ret.getDate() + 1);
+    const tot = Math.round((e2 - s) / 864e5) + 1;
+    document.getElementById('m-return').value = fmtDateBR(ret.toISOString().split('T')[0]);
+    document.getElementById('m-total').value  = tot + ' dias';
+  }
+
+  function clearFieldError(id) {
+    document.getElementById(id).classList.remove('error');
+    const err = document.getElementById('err-' + id);
+    if (err) err.textContent = '';
+  }
+
+  function validateModal() {
+    let valid = true;
+    const setErr = (id, msg) => {
+      document.getElementById(id).classList.add('error');
+      document.getElementById('err-' + id).textContent = msg;
+      valid = false;
+    };
+    if (!document.getElementById('m-name').value.trim())
+      setErr('m-name', 'Informe o nome do funcionário');
+    if (!document.getElementById('m-branch').value)
+      setErr('m-branch', 'Selecione a filial');
+    if (!document.getElementById('m-start').value)
+      setErr('m-start', 'Informe a data de início');
+    if (!document.getElementById('m-end').value)
+      setErr('m-end', 'Informe a data de fim');
+    if (document.getElementById('m-start').value && document.getElementById('m-end').value) {
+      const s = new Date(document.getElementById('m-start').value);
+      const e = new Date(document.getElementById('m-end').value);
+      if (e < s) setErr('m-end', 'Data de fim anterior ao início');
+    }
+    return valid;
+  }
+
+  function submitAddVacation() {
+    if (!validateModal()) return;
+
+    const payload = {
+      branch:    document.getElementById('m-branch').value,
+      name:      document.getElementById('m-name').value.trim(),
+      startDate: document.getElementById('m-start').value,
+      endDate:   document.getElementById('m-end').value,
+    };
+
+    const btn = document.getElementById('btn-save-vacation');
+    btn.disabled = true;
+    btn.textContent = 'Salvando…';
+    document.getElementById('modal-save-error').style.display = 'none';
+
+    const onSuccess = jsonStr => {
+      const result = JSON.parse(jsonStr);
+      if (result.success) {
+        closeAddModal();
+        // Add record locally so table updates immediately
+        const ret = result.returnDate || '';
+        const tot = result.total      || '';
+        allData.push({
+          branch:     payload.branch,
+          name:       payload.name,
+          startDate:  payload.startDate,
+          endDate:    payload.endDate,
+          returnDate: ret,
+          total:      tot,
+          rowIndex:   result.rowIndex || 0,
+        });
+        applyFilters();
+        renderStats();
+        // Flash the new row
+        const newIdx = filteredData.findIndex(r =>
+          r.name === payload.name && r.branch === payload.branch &&
+          r.startDate === payload.startDate
+        );
+        if (newIdx >= 0) setTimeout(() => flashRow(newIdx, 'success'), 100);
+      } else {
+        btn.disabled = false;
+        btn.textContent = 'Salvar Férias';
+        const errEl = document.getElementById('modal-save-error');
+        errEl.textContent = 'Erro: ' + result.error;
+        errEl.style.display = 'block';
+      }
+    };
+
+    const onError = err => {
+      btn.disabled = false;
+      btn.textContent = 'Salvar Férias';
+      const errEl = document.getElementById('modal-save-error');
+      errEl.textContent = 'Erro de comunicação: ' + err.message;
+      errEl.style.display = 'block';
+    };
+
+    if (typeof google !== 'undefined' && google.script) {
+      google.script.run
+        .withSuccessHandler(onSuccess)
+        .withFailureHandler(onError)
+        .addVacationRecord(payload);
+    } else {
+      // Demo mode
+      setTimeout(() => {
+        const s = new Date(payload.startDate), e = new Date(payload.endDate);
+        const ret = new Date(e); ret.setDate(ret.getDate() + 1);
+        const tot = Math.round((e - s) / 864e5) + 1;
+        onSuccess(JSON.stringify({
+          success: true,
+          rowIndex: allData.length + 2,
+          returnDate: ret.toISOString().split('T')[0],
+          total: tot,
+        }));
+      }, 700);
+    }
+  }
+
+  // ── INLINE EDITING ────────────────────────────────────────
+  let activeEditCell = null;
+
+  function startEdit(td, field, rowIndex, branch, dataIdx) {
+    if (activeEditCell) cancelEdit();
+
+    const span = td.querySelector('.cell-val');
+    const currentISO = filteredData[dataIdx]?.[field] || '';
+
+    activeEditCell = { td, span, field, rowIndex, branch, dataIdx, original: span.textContent };
+
+    const input = document.createElement('input');
+    input.type = 'date';
+    input.value = currentISO;
+    input.onblur    = () => setTimeout(() => saveEdit(input, dataIdx), 150);
+    input.onkeydown = e => {
+      if (e.key === 'Enter')  { e.preventDefault(); input.blur(); }
+      if (e.key === 'Escape') { e.preventDefault(); cancelEdit(); }
+    };
+
+    td.innerHTML = '';
+    td.appendChild(input);
+    input.focus();
+  }
+
+  function cancelEdit() {
+    if (!activeEditCell) return;
+    const { td, span, original } = activeEditCell;
+    td.innerHTML = `<span class="cell-val">${original}</span><span class="edit-icon">✏</span>`;
+    td.onclick = activeEditCell._onclick;
+    activeEditCell = null;
+  }
+
+  function saveEdit(input, dataIdx) {
+    if (!activeEditCell) return;
+    const { td, field, rowIndex, branch } = activeEditCell;
+    const newVal = input.value;
+    if (!newVal) { cancelEdit(); return; }
+
+    const rec = filteredData[dataIdx];
+    if (!rec) { cancelEdit(); return; }
+
+    // Build updated dates
+    const newStart = field === 'startDate' ? newVal : (rec.startDate || '');
+    const newEnd   = field === 'endDate'   ? newVal : (rec.endDate   || '');
+
+    if (!newStart || !newEnd) {
+      // Only one date known — just update locally, no save yet
+      rec[field] = newVal;
+      restoreCell(td, field, dataIdx, newVal, null);
+      activeEditCell = null;
+      return;
+    }
+
+    // Mark as saving
+    td.classList.add('cell-saving');
+    td.innerHTML = `<span class="cell-val">${fmtDateBR(newVal)}</span><span class="saving-indicator">…</span>`;
+    activeEditCell = null;
+
+    const payload = { branch, rowIndex, startDate: newStart, endDate: newEnd };
+
+    const onSuccess = jsonStr => {
+      td.classList.remove('cell-saving');
+      const result = JSON.parse(jsonStr);
+      if (result.success) {
+        rec.startDate  = newStart;
+        rec.endDate    = newEnd;
+        rec.returnDate = result.returnDate || rec.returnDate;
+        rec.total      = result.total      !== undefined ? result.total : rec.total;
+
+        restoreCell(td, field, dataIdx, newVal, 'success');
+        restoreCell(getOtherDateCell(dataIdx, field), field === 'startDate' ? 'endDate' : 'startDate', dataIdx, field === 'startDate' ? newEnd : newStart, null);
+
+        const retEl = document.getElementById('ret-' + dataIdx);
+        const totEl = document.getElementById('tot-' + dataIdx);
+        if (retEl) retEl.textContent = fmtDateBR(rec.returnDate);
+        if (totEl) totEl.textContent = rec.total || '—';
+
+        flashRow(dataIdx, 'success');
+      } else {
+        restoreCell(td, field, dataIdx, newVal, 'error');
+        flashRow(dataIdx, 'error');
+        alert('Erro ao salvar: ' + result.error);
+      }
+    };
+
+    const onError = err => {
+      td.classList.remove('cell-saving');
+      restoreCell(td, field, dataIdx, newVal, 'error');
+      flashRow(dataIdx, 'error');
+      alert('Erro de comunicação: ' + err.message);
+    };
+
+    if (typeof google !== 'undefined' && google.script) {
+      google.script.run
+        .withSuccessHandler(onSuccess)
+        .withFailureHandler(onError)
+        .updateVacationRecord(payload);
+    } else {
+      // Demo mode — simulate success
+      setTimeout(() => {
+        const fakeReturn = (() => {
+          const d = new Date(newEnd); d.setDate(d.getDate() + 1);
+          return d.toISOString().split('T')[0];
+        })();
+        const fakeTotal = Math.round((new Date(newEnd) - new Date(newStart)) / 864e5) + 1;
+        onSuccess(JSON.stringify({ success: true, returnDate: fakeReturn, total: fakeTotal }));
+      }, 600);
+    }
+  }
+
+  function restoreCell(td, field, dataIdx, isoVal, state) {
+    if (!td) return;
+    td.innerHTML = `<span class="cell-val">${fmtDateBR(isoVal)}</span><span class="edit-icon">✏</span>`;
+    const di = dataIdx;
+    const br = filteredData[dataIdx]?.branch || '';
+    const ri = filteredData[dataIdx]?.rowIndex || 0;
+    td.onclick = () => startEdit(td, field, ri, br, di);
+  }
+
+  function getOtherDateCell(dataIdx, editedField) {
+    const row = document.querySelector(`tr[data-idx="${dataIdx}"]`);
+    if (!row) return null;
+    const cells = row.querySelectorAll('.editable-date');
+    return editedField === 'startDate' ? cells[1] : cells[0];
+  }
+
+  function flashRow(dataIdx, type) {
+    const row = document.querySelector(`tr[data-idx="${dataIdx}"]`);
+    if (!row) return;
+    row.classList.add('save-' + type);
+    setTimeout(() => row.classList.remove('save-' + type), 1500);
+  }
+
+  // ── PAYMENT RENDERING ─────────────────────────────────────
+  function renderPaymentBadge() {
+    const MONTHS_PT = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho',
+                       'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+    const badge = document.getElementById('payment-month-badge');
+    if (badge) badge.textContent = MONTHS_PT[today.getMonth()] + ' / ' + today.getFullYear();
+  }
+
+  function setPayFilter(mode, btn) {
+    payFilter = mode;
+    document.querySelectorAll('.pf-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    renderPaymentTable();
+  }
+
+  function renderPaymentTable() {
+    const curMonthNum = today.getMonth() + 1;
+    const search = (document.getElementById('pf-search')?.value || '').toLowerCase().trim();
+
+    const classify = r => {
+      if (r.monthNum === curMonthNum) return 'current';
+      if (r.monthNum  > curMonthNum)  return 'future';
+      return 'past';
+    };
+
+    let source;
+    if      (payFilter === 'month')  source = paymentAll.filter(r => r.monthNum === curMonthNum);
+    else if (payFilter === 'future') source = paymentAll.filter(r => r.monthNum  > curMonthNum);
+    else if (payFilter === 'past')   source = paymentAll.filter(r => r.monthNum  < curMonthNum);
+    else                             source = [...paymentAll];
+
+    if (search) source = source.filter(r =>
+      r.name.toLowerCase().includes(search) || r.branch.toLowerCase().includes(search)
+    );
+
+    // Sort: past desc (latest first), future asc (soonest first), current alpha
+    source.sort((a, b) => {
+      if (payFilter === 'past') return b.monthNum - a.monthNum;
+      if (payFilter === 'future') return a.monthNum - b.monthNum;
+      if (payFilter === 'all') {
+        // current first, then future asc, then past desc
+        const order = x => x.monthNum === curMonthNum ? 0 : x.monthNum > curMonthNum ? x.monthNum : 100 - x.monthNum;
+        return order(a) - order(b);
+      }
+      return a.name.localeCompare(b.name);
+    });
+
+    const loading   = document.getElementById('payment-loading');
+    const container = document.getElementById('payment-container');
+    const empty     = document.getElementById('payment-empty');
+    const tbody     = document.getElementById('payment-body');
+    if (!loading || !container) return;
+    loading.style.display = 'none';
+
+    if (!source.length) {
+      container.style.display = 'none';
+      empty.style.display = 'block';
+      return;
+    }
+    empty.style.display = 'none';
+    container.style.display = 'block';
+
+    // Group by month
+    const groups = [];
+    let lastMonth = null;
+    for (const r of source) {
+      if (r.monthNum !== lastMonth) {
+        groups.push({ monthNum: r.monthNum, month: r.month, cls: classify(r), rows: [] });
+        lastMonth = r.monthNum;
+      }
+      groups[groups.length - 1].rows.push(r);
+    }
+
+    const MONTHS_LABELS = {
+      past: ' — Meses Anteriores',
+      current: ' — Mês Vigente',
+      future: ' — Próximos Meses',
+    };
+
+    tbody.innerHTML = groups.map(g => {
+      const headerLabel = escHtml(g.month) + (MONTHS_LABELS[g.cls] || '');
+      const countLabel  = `${g.rows.length} funcionário${g.rows.length > 1 ? 's' : ''}`;
+      const groupRows   = g.rows.map(r => `
+        <tr>
+          <td><strong>${escHtml(r.name)}</strong></td>
+          <td>${escHtml(r.branch)}</td>
+          <td>
+            <span class="badge ${r.monthNum === curMonthNum ? 'badge-active' : r.monthNum > curMonthNum ? 'badge-future' : 'badge-done'}">
+              ${escHtml(r.month)}
+            </span>
+          </td>
+          <td>
+            <span class="badge ${r.pay30 ? 'pay30-yes' : 'pay30-no'}">
+              ${r.pay30 ? 'Sim — 30 dias' : 'Não'}
+            </span>
+          </td>
+        </tr>`).join('');
+      return `
+        <tr class="month-group-header ${g.cls}">
+          <td colspan="4">${headerLabel} <span style="font-weight:400;opacity:.7">(${countLabel})</span></td>
+        </tr>
+        ${groupRows}`;
+    }).join('');
+  }
+
+  // ── TABS ──────────────────────────────────────────────────
+  function showTab(tab, btn) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('view-table').style.display    = tab === 'table'    ? 'block' : 'none';
+    document.getElementById('view-calendar').style.display = tab === 'calendar' ? 'block' : 'none';
+    document.getElementById('view-payment').style.display  = tab === 'payment'  ? 'block' : 'none';
+    if (tab === 'calendar') { calView = document.querySelector('.cal-view-btn.active')?.id?.replace('cvbtn-','') || 'month'; renderCalendar(); }
+    if (tab === 'payment')  renderPaymentTable();
+  }
+
+  // ── UTILS ─────────────────────────────────────────────────
+  function fmtDateBR(iso) {
+    if (!iso) return '—';
+    const p = iso.split('-');
+    if (p.length === 3) return `${p[2]}/${p[1]}/${p[0]}`;
+    return iso;
+  }
+  function escHtml(str) {
+    return String(str || '')
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  // ── INIT ──────────────────────────────────────────────────
+  loadData();
+</script>
+</body>
+</html>
