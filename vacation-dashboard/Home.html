@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:ital,wght@0,600;0,700;0,800;1,700;1,900&display=swap" rel="stylesheet">
+  <style>
+    :root{
+      --verde:#8cc63e; --verde-esc:#6fae23;
+      --laranja:#f07f1a; --laranja-esc:#d96e0f;
+      --tinta:#2b2f36; --suave:#6b7280;
+      --card:#ffffff; --fundo:#f4f6f4; --linha:#e6e9e6;
+    }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{
+      font-family:'Nunito',-apple-system,'Segoe UI',sans-serif;
+      background:radial-gradient(1200px 500px at 50% -10%, #eaf3df 0%, var(--fundo) 60%);
+      color:var(--tinta); min-height:100vh;
+      display:flex; align-items:center; justify-content:center; padding:24px;
+    }
+    .card{
+      background:var(--card); width:100%; max-width:520px;
+      border:1px solid var(--linha); border-radius:20px;
+      box-shadow:0 10px 40px -12px rgba(43,47,54,.18);
+      padding:38px 34px 30px; text-align:center;
+    }
+
+    /* ---- LOGO (recriação — troque por LOGO_DATA_URI p/ usar o PNG oficial) ---- */
+    .logo{ margin:0 auto 6px; width:280px; }
+    .logo img{ width:100%; display:block; }
+    .logo-word{
+      font-weight:900; font-style:italic; font-size:58px; line-height:1;
+      letter-spacing:-2px; white-space:nowrap;
+    }
+    .logo-word .g{ color:var(--verde); }
+    .logo-word .o{ color:var(--laranja); }
+    .logo-swoosh{ display:block; width:96%; height:15px; margin:1px auto 0; }
+    .logo-tag{
+      color:var(--laranja); font-style:italic; font-weight:700; font-size:15px;
+      text-align:right; width:96%; margin:3px auto 0; letter-spacing:.2px;
+    }
+
+    h1{ font-size:20px; font-weight:800; margin:20px 0 4px; }
+    .sub{ color:var(--suave); font-size:13.5px; margin-bottom:22px; }
+
+    .tiles{ display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:22px; }
+    .tile{ background:var(--fundo); border:1px solid var(--linha); border-radius:12px; padding:12px 6px; }
+    .tile .n{ font-size:24px; font-weight:900; color:var(--verde-esc); font-variant-numeric:tabular-nums; }
+    .tile.laranja .n{ color:var(--laranja-esc); }
+    .tile .l{ font-size:10.5px; text-transform:uppercase; letter-spacing:.5px; color:var(--suave); margin-top:2px; }
+
+    .quem{ font-size:12px; color:var(--suave); margin-bottom:18px; min-height:16px; }
+    .quem b{ color:var(--tinta); }
+
+    .btn{
+      display:inline-block; width:100%; padding:13px 20px; border-radius:12px;
+      background:var(--verde); color:#fff; font-weight:800; font-size:15px;
+      text-decoration:none; border:0; cursor:pointer; transition:filter .15s;
+    }
+    .btn:hover{ filter:brightness(1.05); }
+    .btn.off{ background:var(--linha); color:var(--suave); pointer-events:none; }
+
+    .aviso{
+      display:none; margin-bottom:16px; padding:10px 12px; border-radius:10px;
+      background:#fdf0e1; border:1px solid #f6d5ac; color:var(--laranja-esc); font-size:12.5px;
+    }
+    .rodape{ margin-top:16px; font-size:11px; color:var(--suave); }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="logo" id="logo">
+      <!-- Para usar a imagem oficial: gere o base64 do PNG e cole em LOGO_DATA_URI (script no fim). -->
+      <div class="logo-word"><span class="g">líder</span><span class="o">farma</span></div>
+      <svg class="logo-swoosh" viewBox="0 0 300 24" preserveAspectRatio="none" aria-hidden="true">
+        <path d="M3,17 C55,3 115,2 165,10 C210,17 260,20 297,6"
+              fill="none" stroke="#8cc63e" stroke-width="10" stroke-linecap="round"/>
+      </svg>
+      <div class="logo-tag">bem-estar e confiança</div>
+    </div>
+
+    <h1>Controle de Férias</h1>
+    <div class="sub">Painel de acompanhamento de férias da rede</div>
+
+    <div class="tiles">
+      <div class="tile"><div class="n" id="t-func">—</div><div class="l">Funcionários</div></div>
+      <div class="tile laranja"><div class="n" id="t-ferias">—</div><div class="l">Em férias hoje</div></div>
+      <div class="tile"><div class="n" id="t-filiais">—</div><div class="l">Filiais</div></div>
+    </div>
+
+    <div class="quem" id="quem">Carregando seu acesso…</div>
+
+    <div class="aviso" id="aviso"></div>
+
+    <a class="btn" id="btn" href="#">Acessar o painel</a>
+
+    <div class="rodape">Recursos Humanos · Líderfarma</div>
+  </div>
+
+  <script>
+    // Cole aqui o PNG oficial em base64 ("data:image/png;base64,....") para
+    // substituir a recriação por texto. Deixe '' para manter o texto.
+    var LOGO_DATA_URI = '';
+
+    (function () {
+      if (LOGO_DATA_URI) {
+        document.getElementById('logo').innerHTML =
+          '<img src="' + LOGO_DATA_URI + '" alt="Líderfarma">';
+      }
+      var url = "<?!= scriptUrl ?>";
+      var btn = document.getElementById('btn');
+      btn.href = url + '?page=painel';   // fallback p/ abrir em nova aba
+
+      btn.addEventListener('click', function (ev) {
+        ev.preventDefault();
+        if (btn.classList.contains('off')) return;
+        if (typeof google === 'undefined' || !google.script) {
+          window.location.href = url + '?page=painel';
+          return;
+        }
+        btn.textContent = 'Abrindo painel…';
+        google.script.run
+          .withSuccessHandler(function (html) {
+            document.open(); document.write(html); document.close();
+          })
+          .withFailureHandler(function () {
+            btn.textContent = 'Acessar o painel';
+            alert('Não foi possível abrir o painel. Tente novamente.');
+          })
+          .paginaPainel();
+      });
+
+      if (typeof google === 'undefined' || !google.script) {
+        document.getElementById('quem').textContent = '';
+        return;
+      }
+      google.script.run
+        .withSuccessHandler(function (txt) {
+          var r;
+          try { r = JSON.parse(txt); } catch (e) { r = { ok: false }; }
+          if (!r.ok) {
+            document.getElementById('quem').textContent = '';
+            return;
+          }
+          document.getElementById('t-func').textContent    = r.funcionarios;
+          document.getElementById('t-ferias').textContent  = r.emFerias;
+          document.getElementById('t-filiais').textContent = r.filiais;
+
+          var quem = document.getElementById('quem');
+          if (r.perfil === 'nenhum') {
+            quem.innerHTML = r.email ? ('Login: <b>' + r.email + '</b>') : '';
+            var av = document.getElementById('aviso');
+            av.style.display = 'block';
+            av.textContent = 'Seu acesso ainda não foi liberado. Fale com o RH para vincular seu e-mail a uma filial.';
+            document.getElementById('btn').classList.add('off');
+            document.getElementById('btn').textContent = 'Acesso pendente';
+          } else {
+            var perfil = r.perfil === 'rh' ? 'RH' : 'Gerente';
+            quem.innerHTML = (r.email ? '<b>' + r.email + '</b> · ' : '') + perfil + ' · ' + r.escopo;
+          }
+        })
+        .withFailureHandler(function () {
+          document.getElementById('quem').textContent = '';
+        })
+        .getResumoHome();
+    })();
+  </script>
+</body>
+</html>

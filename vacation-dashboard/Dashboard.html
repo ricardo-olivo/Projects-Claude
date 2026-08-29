@@ -486,6 +486,53 @@
       cursor: pointer; white-space: nowrap;
     }
     .btn-add-vacation:hover { background: #1648c0; }
+    /* FICHA (clique no funcionário) */
+    .emp-link { color: var(--primary); cursor: pointer; text-decoration: none; font-weight: 600; }
+    .emp-link:hover { text-decoration: underline; }
+    .modal.modal-wide { max-width: 800px; }
+    .modal-body.ficha-body { max-height: 78vh; overflow-y: auto; gap: 18px; }
+    .ficha-id-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+    .ficha-chip { font-size: 11px; background: var(--gray-100); color: var(--gray-700); padding: 3px 9px; border-radius: 999px; }
+    .ficha-warn { background: var(--warning-light); border: 1px solid #f6d860; color: #8a5300; font-size: 12.5px; padding: 8px 12px; border-radius: 8px; }
+    .ficha-sec-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; color: var(--gray-500); margin-bottom: 8px; }
+    .ficha-saldo { display: flex; align-items: center; gap: 22px; flex-wrap: wrap; }
+    .ficha-saldo-num { font-size: 40px; font-weight: 700; color: var(--primary); line-height: 1.05; font-variant-numeric: tabular-nums; }
+    .ficha-saldo-num .u { display: block; font-size: 11px; font-weight: 600; letter-spacing: .1em; color: var(--gray-500); text-transform: uppercase; }
+    .ficha-break { flex: 1; min-width: 250px; display: flex; flex-direction: column; }
+    .ficha-break .row { display: flex; justify-content: space-between; gap: 16px; padding: 5px 0; border-bottom: 1px dashed var(--gray-200); font-size: 13px; }
+    .ficha-break .row:last-child { border-bottom: 0; }
+    .ficha-break .row b { font-variant-numeric: tabular-nums; }
+    .ficha-break .neg { color: var(--danger); }
+    .ficha-tbl-wrap { overflow-x: auto; border: 1px solid var(--gray-200); border-radius: 8px; }
+    table.ficha-tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
+    table.ficha-tbl th { text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: .5px; color: var(--gray-500); padding: 7px 8px; background: var(--gray-50); border-bottom: 1px solid var(--gray-200); white-space: nowrap; }
+    table.ficha-tbl td { padding: 7px 8px; border-bottom: 1px solid var(--gray-100); white-space: nowrap; }
+    table.ficha-tbl tr:last-child td { border-bottom: 0; }
+    table.ficha-tbl td.wrap { white-space: normal; min-width: 220px; }
+    .ficha-empty { font-size: 12px; color: var(--gray-500); padding: 6px 2px; }
+    .mini-btn { font-size: 10px; padding: 3px 9px; border: 1px solid var(--gray-200); background: var(--gray-50); border-radius: 5px; cursor: pointer; white-space: nowrap; }
+    .mini-btn:hover { background: var(--primary-light); border-color: var(--primary); color: var(--primary); }
+    .mini-btn:disabled { opacity: .5; cursor: default; }
+    .del-btn { border: 0; background: transparent; cursor: pointer; font-size: 14px; opacity: .5; padding: 2px 5px; border-radius: 4px; line-height: 1; }
+    .del-btn:hover { opacity: 1; background: var(--danger-light); }
+    td.col-actions { text-align: center; white-space: nowrap; }
+    .emp-fbtns { display: inline-flex; border: 1px solid var(--gray-200); border-radius: 8px; overflow: hidden; }
+    .emp-fbtn { border: 0; background: white; padding: 6px 12px; font-size: 12px; cursor: pointer; color: var(--gray-700); border-right: 1px solid var(--gray-200); }
+    .emp-fbtn:last-child { border-right: 0; }
+    .emp-fbtn:hover { background: var(--gray-50); }
+    .emp-fbtn.active { background: var(--primary); color: #fff; }
+    .ficha-status { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 10.5px; font-weight: 600; }
+    .fs-ok   { background: var(--success-light); color: var(--success); }
+    .fs-warn { background: var(--warning-light); color: var(--warning); }
+    .fs-crit { background: var(--danger-light);  color: var(--danger);  }
+    .fs-mut  { background: var(--gray-100);      color: var(--gray-500); }
+    @media print {
+      body.print-ficha > *:not(#ficha-overlay) { display: none !important; }
+      body.print-ficha #ficha-overlay { position: static; opacity: 1; background: none; padding: 0; display: block; }
+      body.print-ficha #ficha-overlay .modal { box-shadow: none; max-width: 100%; transform: none; }
+      body.print-ficha #ficha-overlay .modal-body { max-height: none; overflow: visible; }
+      body.print-ficha .no-print { display: none !important; }
+    }
     /* EDITABLE CELLS */
     .editable-date {
       cursor: pointer;
@@ -598,6 +645,17 @@
       .container { padding: 12px; }
       .cards { grid-template-columns: repeat(2, 1fr); }
     }
+    /* REPORT PRINTING */
+    @media print {
+      body.printing-report .header,
+      body.printing-report .cards,
+      body.printing-report .alerts-section,
+      body.printing-report .filters,
+      body.printing-report .tabs,
+      body.printing-report .report-toolbar { display: none !important; }
+      body.printing-report .container { padding: 0; max-width: 100%; }
+      body.printing-report .table-wrap { box-shadow: none; }
+    }
   </style>
 </head>
 <body>
@@ -605,7 +663,7 @@
 <div class="header">
   <div>
     <h1>Dashboard de Férias</h1>
-    <div class="header-sub">Painel consolidado — Recursos Humanos</div>
+    <div class="header-sub" id="scope-label">Painel consolidado — Recursos Humanos</div>
   </div>
   <div class="last-update">
     <div id="last-update-text">Carregando...</div>
@@ -618,9 +676,14 @@
   <!-- CARDS DE RESUMO -->
   <div class="cards">
     <div class="card">
-      <div class="card-label">Total de Registros</div>
-      <div class="card-value" id="stat-total">—</div>
-      <div class="card-sub">em todas as filiais</div>
+      <div class="card-label">Funcionários</div>
+      <div class="card-value" id="stat-employees">—</div>
+      <div class="card-sub">no cadastro</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Pagas este Mês</div>
+      <div class="card-value" id="stat-paid-month">—</div>
+      <div class="card-sub">férias com início no mês</div>
     </div>
     <div class="card success">
       <div class="card-label">Em Férias Agora</div>
@@ -628,29 +691,9 @@
       <div class="card-sub">período em andamento</div>
     </div>
     <div class="card warning">
-      <div class="card-label">Retornando em 7 dias</div>
-      <div class="card-value" id="stat-returning">—</div>
-      <div class="card-sub">próxima semana</div>
-    </div>
-    <div class="card danger">
-      <div class="card-label">Conflitos</div>
-      <div class="card-value" id="stat-conflicts">—</div>
-      <div class="card-sub">filiais com sobreposição</div>
-    </div>
-    <div class="card">
-      <div class="card-label">Férias Futuras</div>
-      <div class="card-value" id="stat-future">—</div>
-      <div class="card-sub">agendadas</div>
-    </div>
-    <div class="card">
-      <div class="card-label">Filiais Ativas</div>
-      <div class="card-value" id="stat-branches">—</div>
-      <div class="card-sub">com registros</div>
-    </div>
-    <div class="card danger">
-      <div class="card-label">Pagar este Mês</div>
-      <div class="card-value" id="stat-payment-due">—</div>
-      <div class="card-sub">sem registro — mês vigente</div>
+      <div class="card-label">Não Registrados</div>
+      <div class="card-value" id="stat-unregistered">—</div>
+      <div class="card-sub">funcionários sem carteira</div>
     </div>
   </div>
 
@@ -662,7 +705,7 @@
 
   <!-- FILTROS -->
   <div class="filters">
-    <div class="filter-group">
+    <div class="filter-group" id="fg-filial">
       <label>Filial</label>
       <div class="ms-wrap" id="ms-wrap">
         <div class="ms-box" id="ms-box" onclick="toggleMsDropdown(event)">
@@ -704,8 +747,11 @@
   <!-- TABS -->
   <div class="tabs">
     <button class="tab active" onclick="showTab('table', this)">Tabela</button>
+    <button class="tab" onclick="showTab('employees', this)">Funcionários</button>
     <button class="tab" onclick="showTab('calendar', this)">Calendário</button>
     <button class="tab" onclick="showTab('payment', this)">Pagamentos do Mês</button>
+    <button class="tab" onclick="showTab('report', this)">Relatório Mensal</button>
+    <button class="tab" onclick="showTab('due', this)">Vencimento Mensal</button>
   </div>
 
   <!-- VISÃO TABELA -->
@@ -733,7 +779,10 @@
               <th onclick="sortBy('endDate')">Fim ✏ <span id="sort-endDate"></span></th>
               <th onclick="sortBy('returnDate')">Retorno <span id="sort-returnDate"></span></th>
               <th onclick="sortBy('total')">Total dias <span id="sort-total"></span></th>
+              <th onclick="sortBy('availableDays')">Dias Disponíveis <span id="sort-availableDays"></span></th>
+              <th onclick="sortBy('dueDate')">Vencimento <span id="sort-dueDate"></span></th>
               <th>Status</th>
+              <th></th>
             </tr>
           </thead>
           <tbody id="table-body"></tbody>
@@ -743,6 +792,43 @@
       <div id="table-empty" class="empty" style="display:none">
         <div>Nenhum registro encontrado para os filtros selecionados.</div>
       </div>
+    </div>
+  </div>
+
+  <!-- VISÃO FUNCIONÁRIOS (cadastro completo) -->
+  <div id="view-employees" style="display:none">
+    <div class="table-wrap">
+      <div class="table-header">
+        <h2>Funcionários</h2>
+        <div style="display:flex;align-items:center;gap:12px">
+          <div class="emp-fbtns">
+            <button class="emp-fbtn active" id="empf-todos" onclick="setEmpFiltro('todos', this)">Todos</button>
+            <button class="emp-fbtn" id="empf-sim" onclick="setEmpFiltro('sim', this)">Registrados</button>
+            <button class="emp-fbtn" id="empf-nao" onclick="setEmpFiltro('nao', this)">Sem registro</button>
+          </div>
+          <span class="result-count" id="emp-count"></span>
+        </div>
+      </div>
+      <div style="overflow-x:auto">
+        <table>
+          <thead>
+            <tr>
+              <th>Filial</th>
+              <th>Funcionário</th>
+              <th>Cargo</th>
+              <th>Registrado</th>
+              <th style="text-align:center">Dias Disponíveis</th>
+              <th>Próx. Vencimento</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="emp-body"></tbody>
+        </table>
+      </div>
+      <div id="emp-empty" class="empty" style="display:none">
+        <div>Nenhum funcionário para os filtros selecionados.</div>
+      </div>
+      <div class="edit-row-hint">Use o filtro <strong>Filial</strong> e a busca por <strong>nome</strong> lá em cima. Clique no nome para abrir a ficha.</div>
     </div>
   </div>
 
@@ -805,6 +891,76 @@
     </div>
   </div>
 
+  <!-- VISÃO RELATÓRIO MENSAL -->
+  <div id="view-report" style="display:none">
+    <div class="table-wrap">
+      <div class="table-header report-toolbar" style="flex-wrap:wrap;gap:12px">
+        <h2>Relatório Mensal de Férias</h2>
+        <div style="display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap">
+          <div class="filter-group" style="margin:0">
+            <label>Mês</label>
+            <input type="month" id="report-month" onchange="renderReportView()" />
+          </div>
+          <span class="result-count" id="report-count"></span>
+          <button class="filter-reset" onclick="printReport()">🖨 Imprimir</button>
+        </div>
+      </div>
+      <div id="report-container" style="overflow-x:auto">
+        <table>
+          <thead>
+            <tr>
+              <th>Filial</th>
+              <th>Funcionário</th>
+              <th>Período</th>
+              <th>Total dias</th>
+              <th>Dias Disponíveis</th>
+              <th>Vencimento</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="report-body"></tbody>
+        </table>
+      </div>
+      <div id="report-empty" class="empty" style="display:none">
+        Nenhum funcionário em férias no mês selecionado.
+      </div>
+    </div>
+  </div>
+
+  <!-- VISÃO VENCIMENTO MENSAL -->
+  <div id="view-due" style="display:none">
+    <div class="table-wrap">
+      <div class="table-header report-toolbar" style="flex-wrap:wrap;gap:12px">
+        <h2>Vencimento Mensal de Férias</h2>
+        <div style="display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap">
+          <div class="filter-group" style="margin:0">
+            <label>Mês</label>
+            <input type="month" id="due-month" onchange="renderDueView()" />
+          </div>
+          <span class="result-count" id="due-count"></span>
+          <button class="filter-reset" onclick="printDue()">🖨 Imprimir</button>
+        </div>
+      </div>
+      <div id="due-container" style="overflow-x:auto">
+        <table>
+          <thead>
+            <tr>
+              <th>Filial</th>
+              <th>Funcionário</th>
+              <th>Vencimento</th>
+              <th>Dias Disponíveis</th>
+              <th>Status Férias</th>
+            </tr>
+          </thead>
+          <tbody id="due-body"></tbody>
+        </table>
+      </div>
+      <div id="due-empty" class="empty" style="display:none">
+        Nenhum funcionário com férias vencendo no mês selecionado.
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <!-- MODAL INCLUIR FÉRIAS -->
@@ -818,7 +974,8 @@
       <div class="form-row">
         <div class="form-group full">
           <label for="m-name">Funcionário</label>
-          <input type="text" id="m-name" placeholder="Nome completo" autocomplete="off" oninput="clearFieldError('m-name')" />
+          <input type="text" id="m-name" list="m-name-list" placeholder="Digite para filtrar…" autocomplete="off" oninput="onEmployeePick()" />
+          <datalist id="m-name-list"></datalist>
           <span class="form-error" id="err-m-name"></span>
         </div>
       </div>
@@ -864,12 +1021,74 @@
   </div>
 </div>
 
+<!-- MODAL FICHA DO FUNCIONÁRIO -->
+<div class="modal-overlay" id="ficha-overlay" onclick="if(event.target===this)closeFicha()">
+  <div class="modal modal-wide" role="dialog" aria-modal="true" aria-labelledby="ficha-title">
+    <div class="modal-header">
+      <h3 id="ficha-title">Ficha do Funcionário</h3>
+      <div class="no-print" style="display:flex;gap:8px;align-items:center">
+        <button class="btn btn-secondary" style="padding:6px 12px;font-size:12px" onclick="printFicha()">🖨 Imprimir</button>
+        <button class="modal-close" onclick="closeFicha()" aria-label="Fechar">×</button>
+      </div>
+    </div>
+    <div class="modal-body ficha-body" id="ficha-content">
+      <div class="ficha-empty">Carregando…</div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL INCLUIR PERÍODO AQUISITIVO -->
+<div class="modal-overlay" id="periodo-overlay" onclick="if(event.target===this)fecharNovoPeriodo()">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="periodo-title">
+    <div class="modal-header">
+      <h3 id="periodo-title">Incluir Período Aquisitivo</h3>
+      <button class="modal-close" onclick="fecharNovoPeriodo()" aria-label="Fechar">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group full">
+          <label for="p-emp">Funcionário</label>
+          <input type="text" id="p-emp" readonly />
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="p-ini">Início do período aquisitivo</label>
+          <input type="date" id="p-ini" oninput="pAtualizaPreview()" />
+          <span class="calc-hint">Normalmente = admissão + N anos</span>
+        </div>
+        <div class="form-group">
+          <label for="p-faltas">Faltas injustificadas</label>
+          <input type="number" id="p-faltas" value="0" min="0" oninput="pAtualizaPreview()" />
+          <span class="calc-hint">≤5→30 · 6-14→24 · 15-23→18 · 24-32→12</span>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group full">
+          <label>Resultado (calculado)</label>
+          <input type="text" id="p-preview" readonly placeholder="—" />
+        </div>
+      </div>
+      <div id="periodo-error" class="error-banner" style="display:none"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="fecharNovoPeriodo()">Cancelar</button>
+      <button class="btn btn-primary" id="p-save" onclick="salvarNovoPeriodo()">Salvar Período</button>
+    </div>
+  </div>
+</div>
+
 <script>
   let allData = [];
   let filteredData = [];
   let conflicts = [];
   let paymentAll = [];
   let paymentDue = [];
+  let totals = {};
+  let allEmployees = [];
+  let fichaMat = '', fichaNome = '', fichaData = null;
+  let scope = { perfil: 'rh', filiais: null, email: '' };
+  function ehRH() { return !scope || scope.perfil !== 'gerente'; }
   let payFilter  = 'month';
   let sortCol = 'startDate';
   let sortDir = 1;
@@ -942,9 +1161,15 @@
       const r = new Date(end); r.setDate(r.getDate() + 1);
       return r.toISOString().split('T')[0];
     };
+    const dueDate = (i) => {
+      const dd = new Date(t); dd.setMonth(dd.getMonth() + 1 + (i % 6)); dd.setDate(1);
+      return dd.toISOString().split('T')[0];
+    };
     return rows.map(([branch, name, start, end, total], i) => ({
       branch, name, startDate: start, endDate: end,
       returnDate: retDate(end, total), total, rowIndex: i + 2,
+      availableDays: 30 - (total % 30) + (i % 10),
+      dueDate: dueDate(i),
     }));
   })();
 
@@ -960,6 +1185,16 @@
       setTimeout(() => {
         const conflicts = detectConflictsJS(MOCK_DATA);
         const curMon = today.getMonth() + 1;
+        const regNames = new Set(MOCK_DATA.map(r => r.name));
+        const mockEmployees = [];
+        let mm = 0;
+        regNames.forEach(nm => {
+          const row = MOCK_DATA.find(r => r.name === nm) || {};
+          mockEmployees.push({ matricula: 'D' + (++mm), nome: nm, filial: row.branch || '',
+            cargo: 'Farmacêutico', registrado: true, saldo: row.availableDays || 0, vencimento: row.dueDate || '' });
+        });
+        MOCK_PAYMENT_DATA.forEach(p => mockEmployees.push({ matricula: 'D' + (++mm), nome: p.name,
+          filial: p.branch || '', cargo: 'Auxiliar', registrado: false, saldo: 0, vencimento: '' }));
         onDataLoaded(JSON.stringify({
           data: MOCK_DATA,
           conflicts,
@@ -967,6 +1202,12 @@
           paymentDue: MOCK_PAYMENT_DATA.filter(r => r.monthNum === curMon),
           paymentAll: MOCK_PAYMENT_DATA,
           paymentErrors: [],
+          totals: {
+            funcionarios: regNames.size + MOCK_PAYMENT_DATA.length,
+            registrados: regNames.size,
+            naoRegistrados: MOCK_PAYMENT_DATA.length,
+          },
+          employees: mockEmployees,
         }));
       }, 600);
       return;
@@ -1006,9 +1247,13 @@
   function onDataLoaded(jsonStr) {
     const result = JSON.parse(jsonStr);
     allData    = result.data;
+    allData.forEach((r, i) => { r._id = i; });
     conflicts  = result.conflicts || [];
     paymentAll = result.paymentAll || [];
     paymentDue = result.paymentDue || [];
+    totals     = result.totals || {};
+    allEmployees = result.employees || [];
+    scope      = result.scope || { perfil: 'rh', filiais: null, email: '' };
     const errors = result.errors || [];
 
     document.getElementById('table-loading').style.display = 'none';
@@ -1018,15 +1263,53 @@
     if (errors.length) {
       const msg = errors.map(e => `${e.branch}: ${e.error}`).join('; ');
       const el = document.getElementById('table-error');
-      el.textContent = '⚠️ Erros ao carregar: ' + msg;
+      el.textContent = '⚠️ ' + msg;
       el.style.display = 'block';
     }
 
+    aplicarScope();
     populateBranchFilter();
     renderAlerts();
     applyFilters();
     renderPaymentBadge();
     renderPaymentTable();
+  }
+
+  // ── ESCOPO DE ACESSO (RH / Gerente / sem acesso) ──────────
+  function aplicarScope() {
+    const lbl = document.getElementById('scope-label');
+    const fg  = document.getElementById('fg-filial');
+    document.body.classList.toggle('perfil-gerente', scope.perfil === 'gerente');
+
+    if (scope.perfil === 'nenhum') {
+      lbl.textContent = 'Acesso não liberado' + (scope.email ? ' — ' + scope.email : '');
+      const add = document.querySelector('.btn-add-vacation');
+      if (add) add.style.display = 'none';
+      return;
+    }
+    if (scope.perfil === 'gerente') {
+      const fs = (scope.filiais || []);
+      selectedBranches = fs.slice();
+      lbl.textContent = 'Portal do Gerente · ' + (fs.join(', ') || '—')
+        + (scope.email ? ' · ' + scope.email : '');
+      // trava o filtro de filial
+      if (fg) {
+        fg.querySelector('.ms-wrap').style.display = 'none';
+        if (!fg.querySelector('.ms-lock')) {
+          const s = document.createElement('div');
+          s.className = 'ms-lock';
+          s.style.cssText = 'padding:8px 12px;border:1px solid var(--gray-200);border-radius:6px;'
+            + 'background:var(--gray-50);font-size:13px;min-width:160px';
+          s.textContent = fs.join(', ') || '—';
+          fg.appendChild(s);
+        } else {
+          fg.querySelector('.ms-lock').textContent = fs.join(', ') || '—';
+        }
+      }
+    } else {
+      lbl.textContent = 'Painel RH — todas as filiais'
+        + (scope.email ? ' · ' + scope.email : '');
+    }
   }
 
   function onDataError(err) {
@@ -1148,6 +1431,56 @@
     renderTable();
     renderStats();
     renderCalendar();
+    renderReportView();
+    renderDueView();
+    renderEmployees();
+  }
+
+  // ── VISÃO FUNCIONÁRIOS (cadastro completo) ────────────────
+  let empFiltroReg = 'todos';   // 'todos' | 'sim' | 'nao'
+  function setEmpFiltro(v, btn) {
+    empFiltroReg = v;
+    document.querySelectorAll('.emp-fbtn').forEach(b => b.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+    renderEmployees();
+  }
+
+  function renderEmployees() {
+    const body = document.getElementById('emp-body');
+    if (!body) return;
+    const name = document.getElementById('filter-name').value.toLowerCase().trim();
+
+    const list = allEmployees
+      .filter(e => {
+        if (selectedBranches.length && !selectedBranches.includes(e.filial)) return false;
+        if (name && !e.nome.toLowerCase().includes(name)) return false;
+        if (empFiltroReg === 'sim' && !e.registrado) return false;
+        if (empFiltroReg === 'nao' &&  e.registrado) return false;
+        return true;
+      })
+      .sort((a, b) =>
+        (a.filial || '').localeCompare(b.filial || '', 'pt-BR') ||
+        a.nome.localeCompare(b.nome, 'pt-BR'));
+
+    document.getElementById('emp-count').textContent = list.length + ' funcionário(s)';
+    document.getElementById('emp-empty').style.display = list.length ? 'none' : 'block';
+
+    body.innerHTML = list.map(e => {
+      const mat = escHtml(String(e.matricula));
+      const reg = e.registrado
+        ? '<span class="badge badge-active">Sim</span>'
+        : '<span class="badge badge-done">Não</span>';
+      const saldo = (e.saldo === '' || e.saldo == null) ? '—' : e.saldo;
+      return `<tr>
+        <td>${escHtml(e.filial || '—')}</td>
+        <td><a href="#" class="emp-link" onclick="openFichaFor('${mat}');return false">${escHtml(e.nome)}</a></td>
+        <td>${escHtml(e.cargo || '—')}</td>
+        <td>${reg}</td>
+        <td style="text-align:center">${saldo}</td>
+        <td>${fmtMonthYear(e.vencimento)}</td>
+        <td class="col-actions"><button class="mini-btn" onclick="openFichaFor('${mat}')">Ver ficha</button></td>
+      </tr>`;
+    }).join('');
   }
 
   function resetFilters() {
@@ -1184,7 +1517,7 @@
   function sortBy(col) {
     if (sortCol === col) sortDir = -sortDir;
     else { sortCol = col; sortDir = 1; }
-    ['branch','name','startDate','endDate','returnDate','total'].forEach(c => {
+    ['branch','name','startDate','endDate','returnDate','total','availableDays','dueDate'].forEach(c => {
       document.getElementById('sort-' + c).textContent = '';
     });
     document.getElementById('sort-' + col).textContent = sortDir === 1 ? ' ▲' : ' ▼';
@@ -1219,19 +1552,25 @@
 
     tbody.innerHTML = filteredData.map((r, idx) => {
       const di = JSON.stringify({ branch: r.branch, rowIndex: r.rowIndex || 0 }).replace(/"/g, '&quot;');
-      const editCell = (field, val) =>
-        `<td class="editable-date" onclick="startEdit(this,'${field}',${r.rowIndex || 0},'${escHtml(r.branch)}',${idx})">`+
-        `<span class="cell-val">${fmtDateBR(val)}</span>`+
-        `<span class="edit-icon">✏</span></td>`;
+      const editCell = (field, val) => ehRH()
+        ? `<td class="editable-date" onclick="startEdit(this,'${field}',${r.rowIndex || 0},'${escHtml(r.branch)}',${idx})">`+
+          `<span class="cell-val">${fmtDateBR(val)}</span>`+
+          `<span class="edit-icon">✏</span></td>`
+        : `<td>${fmtDateBR(val)}</td>`;
       return `
       <tr data-idx="${idx}">
         <td>${escHtml(r.branch)}</td>
-        <td><strong>${escHtml(r.name)}</strong></td>
+        <td>${empLink(r)}</td>
         ${editCell('startDate', r.startDate)}
         ${editCell('endDate',   r.endDate)}
         <td id="ret-${idx}">${fmtDateBR(r.returnDate)}</td>
         <td id="tot-${idx}" style="text-align:center">${r.total || '—'}</td>
+        <td style="text-align:center">${r.availableDays !== '' && r.availableDays !== undefined ? r.availableDays : '—'}</td>
+        <td>${fmtMonthYear(r.dueDate)}</td>
         <td>${statusBadge(getStatus(r))}</td>
+        <td class="col-actions">${(r.rowIndex && ehRH())
+          ? `<button class="del-btn" title="Apagar este período de férias" onclick="apagarFerias(${r._id})">🗑</button>`
+          : ''}</td>
       </tr>`;
     }).join('');
   }
@@ -1239,23 +1578,22 @@
   // ── RENDER STATS ──────────────────────────────────────────
   function renderStats() {
     const source = filteredData.length < allData.length ? filteredData : allData;
-    const active    = source.filter(r => getStatus(r) === 'active').length;
-    const future    = source.filter(r => getStatus(r) === 'future').length;
-    const returning = source.filter(r => {
-      if (!r.returnDate) return false;
-      const ret = new Date(r.returnDate); ret.setHours(0,0,0,0);
-      const diff = (ret - today) / 864e5;
-      return diff >= 0 && diff <= 7;
-    }).length;
-    const branches = new Set(source.map(r => r.branch)).size;
+    const active = source.filter(r => getStatus(r) === 'active').length;
 
-    document.getElementById('stat-total').textContent       = source.length;
-    document.getElementById('stat-active').textContent      = active;
-    document.getElementById('stat-returning').textContent   = returning;
-    document.getElementById('stat-conflicts').textContent   = conflicts.length;
-    document.getElementById('stat-future').textContent      = future;
-    document.getElementById('stat-branches').textContent    = branches;
-    document.getElementById('stat-payment-due').textContent = paymentDue.length;
+    const curKey = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0');
+    const paidMonth = source.filter(r => r.startDate && r.startDate.substring(0, 7) === curKey).length;
+
+    const employees = (totals.funcionarios != null)
+      ? totals.funcionarios
+      : new Set(allData.map(r => r.name).filter(Boolean)).size;
+    const unregistered = (totals.naoRegistrados != null)
+      ? totals.naoRegistrados
+      : paymentAll.length;
+
+    document.getElementById('stat-employees').textContent    = employees;
+    document.getElementById('stat-paid-month').textContent   = paidMonth;
+    document.getElementById('stat-active').textContent       = active;
+    document.getElementById('stat-unregistered').textContent = unregistered;
   }
 
   // ── RENDER ALERTS ─────────────────────────────────────────
@@ -1340,7 +1678,7 @@
       }).join('');
       return `<div class="timeline-row">
         <div class="employee-label">
-          <div class="employee-name">${escHtml(r.name)}</div>
+          <div class="employee-name">${empLink(r)}</div>
           <div class="employee-branch">${escHtml(r.branch)}</div>
         </div>
         <div class="timeline-cells">${cells}</div>
@@ -1424,7 +1762,7 @@
 
       return `<div class="mm-row">
         <div class="mm-employee">
-          <div class="employee-name">${escHtml(r.name)}</div>
+          <div class="employee-name">${empLink(r)}</div>
           <div class="employee-branch">${escHtml(r.branch)}</div>
         </div>
         <div class="mm-cells">${cells}</div>
@@ -1443,6 +1781,40 @@
   }
 
   // ── MODAL INCLUIR FÉRIAS ──────────────────────────────────
+  // Lista única de funcionários (nome + filial) a partir dos dados carregados
+  function currentEmployees() {
+    const map = new Map();
+    allData.forEach(r => {
+      if (!r.name) return;
+      const key = r.name + '|' + (r.branch || '');
+      if (!map.has(key)) map.set(key, { name: r.name, branch: r.branch || '' });
+    });
+    return [...map.values()].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+  }
+
+  function populateEmployeeDatalist() {
+    const dl = document.getElementById('m-name-list');
+    dl.innerHTML = '';
+    currentEmployees().forEach(e => {
+      const opt = document.createElement('option');
+      opt.value = e.name;
+      if (e.branch) opt.label = e.branch;
+      dl.appendChild(opt);
+    });
+  }
+
+  // Ao escolher/digitar um nome que casa com um único funcionário, preenche a filial
+  function onEmployeePick() {
+    clearFieldError('m-name');
+    const typed = document.getElementById('m-name').value.trim().toLowerCase();
+    if (!typed) return;
+    const matches = currentEmployees().filter(e => e.name.toLowerCase() === typed);
+    if (matches.length === 1 && matches[0].branch) {
+      document.getElementById('m-branch').value = matches[0].branch;
+      clearFieldError('m-branch');
+    }
+  }
+
   function openAddModal() {
     // Populate branch dropdown from live data
     const sel = document.getElementById('m-branch');
@@ -1457,6 +1829,9 @@
 
     // Pre-select if only one branch filtered
     if (selectedBranches.length === 1) sel.value = selectedBranches[0];
+    // Gerente: filial travada nas dele
+    sel.disabled = !ehRH();
+    if (!ehRH() && !sel.value && selectedBranches.length) sel.value = selectedBranches[0];
 
     // Reset form
     ['m-name','m-start','m-end'].forEach(id => {
@@ -1469,6 +1844,7 @@
     document.getElementById('btn-save-vacation').disabled = false;
     document.querySelectorAll('.form-error').forEach(el => el.textContent = '');
 
+    populateEmployeeDatalist();
     document.getElementById('modal-overlay').classList.add('open');
     document.getElementById('m-name').focus();
   }
@@ -1482,8 +1858,305 @@
   }
 
   document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') closeAddModal();
+    if (e.key === 'Escape') { closeAddModal(); closeFicha(); fecharNovoPeriodo(); }
   });
+
+  // ── FICHA DO FUNCIONÁRIO ──────────────────────────────────
+  function empLink(r) {
+    if (r._id == null) return '<strong>' + escHtml(r.name) + '</strong>';
+    return '<a href="#" class="emp-link" onclick="openFicha(' + r._id + ');return false">' + escHtml(r.name) + '</a>';
+  }
+
+  function closeFicha() {
+    document.getElementById('ficha-overlay').classList.remove('open');
+  }
+
+  function printFicha() {
+    document.body.classList.add('print-ficha');
+    window.print();
+    setTimeout(() => document.body.classList.remove('print-ficha'), 800);
+  }
+  window.addEventListener('afterprint', () => document.body.classList.remove('print-ficha'));
+
+  function openFicha(id) {
+    const r = allData[id];
+    if (r) openFichaFor(r.matricula, r.name);
+  }
+
+  function openFichaFor(matricula, nome) {
+    if (!nome) {
+      const e = allEmployees.find(x => String(x.matricula) === String(matricula));
+      nome = e ? e.nome : '';
+    }
+    fichaMat = matricula || '';
+    fichaNome = nome || '';
+    fichaData = null;
+    document.getElementById('ficha-title').textContent = 'Ficha — ' + (nome || '');
+    document.getElementById('ficha-content').innerHTML = '<div class="ficha-empty">Carregando…</div>';
+    document.getElementById('ficha-overlay').classList.add('open');
+
+    if (typeof google === 'undefined' || !google.script || !matricula) {
+      const base = allData.find(x => x.name === nome) || { name: nome, matricula: matricula || '', branch: '' };
+      renderFicha(mockFicha(base));
+      return;
+    }
+    google.script.run
+      .withSuccessHandler(txt => {
+        let res;
+        try { res = JSON.parse(txt); } catch (e) { res = { success: false, error: 'Resposta inválida do servidor.' }; }
+        if (res && res.success) renderFicha(res);
+        else document.getElementById('ficha-content').innerHTML =
+          '<div class="ficha-warn">' + escHtml((res && res.error) || 'Erro ao carregar a ficha.') + '</div>';
+      })
+      .withFailureHandler(err => {
+        document.getElementById('ficha-content').innerHTML =
+          '<div class="ficha-warn">Erro: ' + escHtml((err && err.message) || err) + '</div>';
+      })
+      .getEmployeeFicha(matricula);
+  }
+
+  function baixarAviso(mat, gozoIni, btn) {
+    if (typeof google === 'undefined' || !google.script) {
+      alert('O Aviso de Férias em PDF é gerado no dashboard publicado (Google Apps Script).');
+      return;
+    }
+    const original = btn ? btn.textContent : '';
+    if (btn) { btn.disabled = true; btn.textContent = '…'; }
+    const restore = () => { if (btn) { btn.disabled = false; btn.textContent = original; } };
+    google.script.run
+      .withSuccessHandler(txt => {
+        restore();
+        let res;
+        try { res = JSON.parse(txt); } catch (e) { res = { success: false, error: 'Resposta inválida.' }; }
+        if (!res.success) { alert('Erro: ' + (res.error || 'não foi possível gerar o aviso.')); return; }
+        const bin = atob(res.bytesB64);
+        const arr = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+        const url = URL.createObjectURL(new Blob([arr], { type: 'application/pdf' }));
+        const a = document.createElement('a');
+        a.href = url; a.download = res.filename || 'Aviso_Ferias.pdf';
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 3000);
+      })
+      .withFailureHandler(err => {
+        restore();
+        alert('Erro ao gerar o aviso: ' + ((err && err.message) || err));
+      })
+      .getAvisoFeriasPdf(mat, gozoIni);
+  }
+
+  // ── INCLUIR PERÍODO AQUISITIVO ────────────────────────────
+  function pFaixaDireito(f) { f = Number(f) || 0; return f <= 5 ? 30 : f <= 14 ? 24 : f <= 23 ? 18 : f <= 32 ? 12 : 0; }
+
+  function pAtualizaPreview() {
+    const ini = document.getElementById('p-ini').value;
+    const faltas = document.getElementById('p-faltas').value;
+    const el = document.getElementById('p-preview');
+    if (!ini) { el.value = '—'; return; }
+    const d = new Date(ini);
+    const fim = new Date(d); fim.setMonth(fim.getMonth() + 12); fim.setDate(fim.getDate() - 1);
+    const conc = new Date(fim); conc.setMonth(conc.getMonth() + 12);
+    el.value = pFaixaDireito(faltas) + ' dias de direito · aquisitivo até '
+      + fmtDateBR(fim.toISOString().slice(0, 10)) + ' · concessão até '
+      + fmtDateBR(conc.toISOString().slice(0, 10));
+  }
+
+  function abrirNovoPeriodo() {
+    if (!fichaMat && !fichaNome) { alert('Abra a ficha de um funcionário primeiro.'); return; }
+    document.getElementById('p-emp').value = fichaNome || fichaMat;
+    document.getElementById('p-faltas').value = '0';
+    document.getElementById('periodo-error').style.display = 'none';
+    const btn = document.getElementById('p-save');
+    btn.disabled = false; btn.textContent = 'Salvar Período';
+
+    // sugere a data: fim do último período + 1 dia; senão a admissão
+    let sug = '';
+    if (fichaData && fichaData.periodos && fichaData.periodos.length) {
+      const iso = fichaData.periodos[fichaData.periodos.length - 1].fimAq;
+      if (iso) { const x = new Date(iso); x.setDate(x.getDate() + 1); sug = x.toISOString().slice(0, 10); }
+    } else if (fichaData && fichaData.func && fichaData.func.admissao) {
+      sug = fichaData.func.admissao;
+    }
+    document.getElementById('p-ini').value = sug;
+    pAtualizaPreview();
+    document.getElementById('periodo-overlay').classList.add('open');
+  }
+
+  function fecharNovoPeriodo() {
+    document.getElementById('periodo-overlay').classList.remove('open');
+  }
+
+  function salvarNovoPeriodo() {
+    const ini = document.getElementById('p-ini').value;
+    const faltas = document.getElementById('p-faltas').value || '0';
+    const err = document.getElementById('periodo-error');
+    if (!ini) { err.textContent = 'Informe a data de início do período aquisitivo.'; err.style.display = 'block'; return; }
+
+    const btn = document.getElementById('p-save');
+    btn.disabled = true; btn.textContent = 'Salvando…';
+    err.style.display = 'none';
+
+    if (typeof google === 'undefined' || !google.script) {
+      alert('A inclusão de período só funciona no dashboard publicado.');
+      btn.disabled = false; btn.textContent = 'Salvar Período';
+      return;
+    }
+    google.script.run
+      .withSuccessHandler(txt => {
+        let res;
+        try { res = JSON.parse(txt); } catch (e) { res = { success: false, error: 'Resposta inválida.' }; }
+        if (res.success) {
+          fecharNovoPeriodo();
+          openFichaFor(fichaMat, fichaNome);   // recarrega a ficha
+          setTimeout(loadData, 300);            // atualiza saldos na tabela/funcionários
+        } else {
+          btn.disabled = false; btn.textContent = 'Salvar Período';
+          err.textContent = res.error || 'Erro ao salvar.'; err.style.display = 'block';
+        }
+      })
+      .withFailureHandler(e => {
+        btn.disabled = false; btn.textContent = 'Salvar Período';
+        err.textContent = 'Erro: ' + ((e && e.message) || e); err.style.display = 'block';
+      })
+      .addPeriodoAquisitivo({ matricula: fichaMat, inicioAquisitivo: ini, faltas: faltas });
+  }
+
+  function apagarFerias(id) {
+    const r = allData[id];
+    if (!r || !r.rowIndex) return;
+    const per = (r.startDate ? fmtDateBR(r.startDate) : '?') + ' a ' + (r.endDate ? fmtDateBR(r.endDate) : '?');
+    if (!confirm('Apagar o período de férias de ' + r.name + '\n(' + per + ')?\n\n'
+      + 'A linha é removida da planilha e não dá para desfazer.')) return;
+
+    if (typeof google === 'undefined' || !google.script) {
+      allData = allData.filter(x => x !== r);
+      allData.forEach((x, i) => { x._id = i; });
+      applyFilters(); renderStats();
+      return;
+    }
+    google.script.run
+      .withSuccessHandler(txt => {
+        let res;
+        try { res = JSON.parse(txt); } catch (e) { res = { success: false, error: 'Resposta inválida.' }; }
+        if (res.success) loadData();
+        else alert('Não foi possível apagar: ' + (res.error || 'erro desconhecido.'));
+      })
+      .withFailureHandler(err => alert('Erro ao apagar: ' + ((err && err.message) || err)))
+      .deleteVacationRecord({ rowIndex: r.rowIndex, matricula: r.matricula, inicio: r.startDate });
+  }
+
+  function fichaStatusClass(t) {
+    t = (t || '').toLowerCase();
+    if (t.indexOf('vencido') >= 0) return 'fs-crit';
+    if (t.indexOf('formaç') >= 0 || t.indexOf('formac') >= 0) return 'fs-mut';
+    if (t.indexOf('em dia') >= 0) return 'fs-ok';
+    if (t.indexOf('vence em') >= 0) return 'fs-warn';
+    return 'fs-mut';
+  }
+
+  function mockFicha(r) {
+    const rows = allData.filter(x => x.name === r.name && x.startDate);
+    const gozadas = rows.reduce((s, x) => s + (Number(x.total) || 0), 0);
+    const atual = Number(r.availableDays) || 0;
+    return {
+      success: true,
+      func: { matricula: r.matricula || '—', nome: r.name, filial: r.branch || '', cargo: '—',
+              admissao: '', situacao: 'Ativo', registrado: true },
+      saldo: { atual, inicial: 0, creditados: atual + gozadas, gozadas, abono: 0, ajustes: 0,
+               risco: 0, proximoCredito: r.dueDate || '' },
+      periodos: r.dueDate ? [{ periodo: '—', iniAq: '', fimAq: '', concessao: r.dueDate,
+               direito: '', creditado: 'Sim', situacao: '' }] : [],
+      lancamentos: rows.map(x => ({ periodo: '', parcela: 1, inicio: x.startDate, termino: x.endDate,
+               retorno: x.returnDate, dias: x.total, tipo: 'Gozo', obs: '' })),
+      ajustes: [],
+    };
+  }
+
+  function renderFicha(d) {
+    fichaData = d;
+    const f = d.func, s = d.saldo;
+    const val = n => (n == null || n === '') ? '—' : n;
+    const signed = n => { n = Number(n) || 0; return (n > 0 ? '+' : '') + n; };
+
+    const warn = f.registrado ? '' :
+      '<div class="ficha-warn">Funcionário <strong>SEM registro</strong> — férias pagas; períodos aquisitivos não se aplicam. Controle pelo saldo inicial e pelos ajustes.</div>';
+
+    const perTbl = d.periodos.length ? `<div class="ficha-tbl-wrap"><table class="ficha-tbl">
+        <thead><tr><th>Período</th><th>Início aq.</th><th>Fim aq.</th><th>Concessão até</th><th>Direito</th><th>Creditado</th><th>Situação</th></tr></thead>
+        <tbody>${d.periodos.map(p => `<tr>
+          <td>${escHtml(p.periodo || '—')}</td>
+          <td>${fmtDateBR(p.iniAq)}</td>
+          <td>${fmtDateBR(p.fimAq)}</td>
+          <td>${fmtDateBR(p.concessao)}</td>
+          <td style="text-align:center">${val(p.direito)}</td>
+          <td style="text-align:center">${escHtml(p.creditado || '—')}</td>
+          <td><span class="ficha-status ${fichaStatusClass(p.situacao)}">${escHtml(p.situacao || '—')}</span></td>
+        </tr>`).join('')}</tbody></table></div>`
+      : '<div class="ficha-empty">Sem períodos aquisitivos cadastrados.</div>';
+
+    const lanTbl = d.lancamentos.length ? `<div class="ficha-tbl-wrap"><table class="ficha-tbl">
+        <thead><tr><th>Período</th><th>Parc.</th><th>Início</th><th>Término</th><th>Retorno útil</th><th>Dias</th><th>Tipo</th><th class="no-print">Aviso</th></tr></thead>
+        <tbody>${d.lancamentos.map(l => `<tr>
+          <td>${escHtml(l.periodo || '—')}</td>
+          <td style="text-align:center">${val(l.parcela)}</td>
+          <td>${fmtDateBR(l.inicio)}</td>
+          <td>${fmtDateBR(l.termino)}</td>
+          <td>${fmtDateBR(l.retorno)}</td>
+          <td style="text-align:center"><strong>${val(l.dias)}</strong></td>
+          <td>${escHtml(l.tipo || '—')}</td>
+          <td class="no-print">${(l.tipo || '').toLowerCase() === 'gozo'
+            ? `<button class="mini-btn" onclick="baixarAviso('${escHtml(String(f.matricula))}','${escHtml(String(l.inicio))}',this)">📄 PDF</button>`
+            : '—'}</td>
+        </tr>`).join('')}</tbody></table></div>`
+      : '<div class="ficha-empty">Nenhuma férias lançada.</div>';
+
+    const ajuTbl = d.ajustes.length ? `<div class="ficha-tbl-wrap"><table class="ficha-tbl">
+        <thead><tr><th>Data</th><th>Dias (+/−)</th><th>Observação</th></tr></thead>
+        <tbody>${d.ajustes.map(a => `<tr>
+          <td>${fmtDateBR(a.data)}</td>
+          <td style="text-align:center">${(a.dias === '' || a.dias == null) ? '—' : signed(a.dias)}</td>
+          <td class="wrap">${escHtml(a.obs || '')}</td>
+        </tr>`).join('')}</tbody></table></div>`
+      : '<div class="ficha-empty">Sem observações.</div>';
+
+    document.getElementById('ficha-content').innerHTML = `
+      <div>
+        <div style="font-size:18px;font-weight:700">${escHtml(f.nome)}</div>
+        <div class="ficha-id-chips">
+          <span class="ficha-chip">Matrícula ${escHtml(String(f.matricula))}</span>
+          <span class="ficha-chip">${escHtml(f.filial || '—')}</span>
+          <span class="ficha-chip">${escHtml(f.cargo || '—')}</span>
+          <span class="ficha-chip">Admissão ${fmtDateBR(f.admissao)}</span>
+          <span class="ficha-chip">Situação: ${escHtml(f.situacao || '—')}</span>
+          <span class="ficha-chip">Registrado: ${f.registrado ? 'Sim' : 'Não'}</span>
+        </div>
+      </div>
+      ${warn}
+      <div>
+        <div class="ficha-sec-title">Saldo de férias (banco de dias)</div>
+        <div class="ficha-saldo">
+          <div class="ficha-saldo-num">${val(s.atual)}<span class="u">dias disponíveis</span></div>
+          <div class="ficha-break">
+            <div class="row"><span>Saldo inicial (anterior ao controle)</span><b>${val(s.inicial)}</b></div>
+            <div class="row"><span>(+) Períodos aquisitivos já creditados</span><b>${val(s.creditados)}</b></div>
+            <div class="row"><span>(−) Férias já gozadas</span><b>${val(s.gozadas)}</b></div>
+            <div class="row"><span>(−) Abono pecuniário</span><b>${val(s.abono)}</b></div>
+            <div class="row"><span>(±) Ajustes manuais</span><b>${s.ajustes ? signed(s.ajustes) : '—'}</b></div>
+            <div class="row"><span>Dias vencidos — risco de dobro</span><b class="${s.risco > 0 ? 'neg' : ''}">${val(s.risco)}</b></div>
+            <div class="row"><span>Próximo crédito de dias em</span><b>${s.proximoCredito ? fmtDateBR(s.proximoCredito) : '—'}</b></div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="ficha-sec-title" style="display:flex;justify-content:space-between;align-items:center">
+          <span>Períodos aquisitivos</span>
+          ${ehRH() ? '<button class="mini-btn no-print" onclick="abrirNovoPeriodo()">+ Incluir período</button>' : ''}
+        </div>${perTbl}
+      </div>
+      <div><div class="ficha-sec-title">Histórico de gozo / abono</div>${lanTbl}</div>
+      <div><div class="ficha-sec-title">Observações / ajustes de saldo</div>${ajuTbl}</div>
+    `;
+  }
 
   function calcModalDates() {
     const start = document.getElementById('m-start').value;
@@ -1520,8 +2193,11 @@
       document.getElementById('err-' + id).textContent = msg;
       valid = false;
     };
-    if (!document.getElementById('m-name').value.trim())
+    const nm = document.getElementById('m-name').value.trim();
+    if (!nm)
       setErr('m-name', 'Informe o nome do funcionário');
+    else if (!currentEmployees().some(e => e.name.toLowerCase() === nm.toLowerCase()))
+      setErr('m-name', 'Selecione um funcionário da lista');
     if (!document.getElementById('m-branch').value)
       setErr('m-branch', 'Selecione a filial');
     if (!document.getElementById('m-start').value)
@@ -1555,26 +2231,33 @@
       const result = JSON.parse(jsonStr);
       if (result.success) {
         closeAddModal();
-        // Add record locally so table updates immediately
-        const ret = result.returnDate || '';
-        const tot = result.total      || '';
+        btn.disabled = false;
+        btn.textContent = 'Salvar Férias';
+        // linha completa (com matrícula e _id) para a tabela atualizar na hora
+        const base = allData.find(r =>
+          r.name === payload.name && r.branch === payload.branch) || {};
         allData.push({
-          branch:     payload.branch,
-          name:       payload.name,
-          startDate:  payload.startDate,
-          endDate:    payload.endDate,
-          returnDate: ret,
-          total:      tot,
-          rowIndex:   result.rowIndex || 0,
+          branch:        payload.branch,
+          name:          payload.name,
+          matricula:     base.matricula || '',
+          startDate:     payload.startDate,
+          endDate:       payload.endDate,
+          returnDate:    result.returnDate || '',
+          total:         result.total || '',
+          availableDays: base.availableDays,
+          dueDate:       base.dueDate || '',
+          rowIndex:      result.rowIndex || 0,
+          _id:           allData.length,
         });
         applyFilters();
         renderStats();
-        // Flash the new row
         const newIdx = filteredData.findIndex(r =>
           r.name === payload.name && r.branch === payload.branch &&
           r.startDate === payload.startDate
         );
         if (newIdx >= 0) setTimeout(() => flashRow(newIdx, 'success'), 100);
+        // reconcilia com o servidor (recalcula saldo, situação, etc.)
+        if (typeof google !== 'undefined' && google.script) setTimeout(loadData, 900);
       } else {
         btn.disabled = false;
         btn.textContent = 'Salvar Férias';
@@ -1856,11 +2539,130 @@
   function showTab(tab, btn) {
     document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
     btn.classList.add('active');
-    document.getElementById('view-table').style.display    = tab === 'table'    ? 'block' : 'none';
-    document.getElementById('view-calendar').style.display = tab === 'calendar' ? 'block' : 'none';
-    document.getElementById('view-payment').style.display  = tab === 'payment'  ? 'block' : 'none';
+    document.getElementById('view-table').style.display     = tab === 'table'     ? 'block' : 'none';
+    document.getElementById('view-employees').style.display = tab === 'employees' ? 'block' : 'none';
+    document.getElementById('view-calendar').style.display  = tab === 'calendar'  ? 'block' : 'none';
+    document.getElementById('view-payment').style.display   = tab === 'payment'   ? 'block' : 'none';
+    document.getElementById('view-report').style.display    = tab === 'report'    ? 'block' : 'none';
+    document.getElementById('view-due').style.display       = tab === 'due'       ? 'block' : 'none';
     if (tab === 'calendar') { calView = document.querySelector('.cal-view-btn.active')?.id?.replace('cvbtn-','') || 'month'; renderCalendar(); }
-    if (tab === 'payment')  renderPaymentTable();
+    if (tab === 'payment')   renderPaymentTable();
+    if (tab === 'report')    renderReportView();
+    if (tab === 'due')       renderDueView();
+    if (tab === 'employees') renderEmployees();
+  }
+
+  // ── RELATÓRIO MENSAL ──────────────────────────────────────
+  function renderReportView() {
+    const monthInput = document.getElementById('report-month');
+    if (!monthInput) return;
+    if (!monthInput.value) {
+      monthInput.value = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+    }
+    const monthISO = monthInput.value;
+
+    const relevant = allData.filter(r => {
+      if (!r.startDate || !r.endDate) return false;
+      return r.startDate.substring(0, 7) <= monthISO && r.endDate.substring(0, 7) >= monthISO;
+    }).sort((a, b) => a.branch.localeCompare(b.branch) || a.name.localeCompare(b.name));
+
+    document.getElementById('report-count').textContent = relevant.length + ' registro(s)';
+
+    const container = document.getElementById('report-container');
+    const empty     = document.getElementById('report-empty');
+
+    if (!relevant.length) {
+      container.style.display = 'none';
+      empty.style.display = 'block';
+      return;
+    }
+    container.style.display = 'block';
+    empty.style.display = 'none';
+
+    const groups = [];
+    let lastBranch = null;
+    for (const r of relevant) {
+      if (r.branch !== lastBranch) { groups.push({ branch: r.branch, rows: [] }); lastBranch = r.branch; }
+      groups[groups.length - 1].rows.push(r);
+    }
+
+    document.getElementById('report-body').innerHTML = groups.map(g => {
+      const rows = g.rows.map(r => `
+        <tr>
+          <td>${escHtml(r.branch)}</td>
+          <td>${empLink(r)}</td>
+          <td>${fmtDateBR(r.startDate)} a ${fmtDateBR(r.endDate)}</td>
+          <td style="text-align:center">${r.total || '—'}</td>
+          <td style="text-align:center">${r.availableDays !== '' && r.availableDays !== undefined ? r.availableDays : '—'}</td>
+          <td>${fmtMonthYear(r.dueDate)}</td>
+          <td>${statusBadge(getStatus(r))}</td>
+        </tr>`).join('');
+      return `
+        <tr class="month-group-header">
+          <td colspan="7">${escHtml(g.branch)} <span style="font-weight:400;opacity:.7">(${g.rows.length} funcionário${g.rows.length > 1 ? 's' : ''})</span></td>
+        </tr>
+        ${rows}`;
+    }).join('');
+  }
+
+  function printReport() {
+    document.body.classList.add('printing-report');
+    window.print();
+  }
+  window.addEventListener('afterprint', () => document.body.classList.remove('printing-report'));
+
+  // ── VENCIMENTO MENSAL ─────────────────────────────────────
+  function renderDueView() {
+    const monthInput = document.getElementById('due-month');
+    if (!monthInput) return;
+    if (!monthInput.value) {
+      monthInput.value = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+    }
+    const monthISO = monthInput.value;
+
+    const relevant = allData.filter(r => r.dueDate && r.dueDate.substring(0, 7) === monthISO)
+      .sort((a, b) => a.branch.localeCompare(b.branch) || a.name.localeCompare(b.name));
+
+    document.getElementById('due-count').textContent = relevant.length + ' funcionário(s)';
+
+    const container = document.getElementById('due-container');
+    const empty     = document.getElementById('due-empty');
+
+    if (!relevant.length) {
+      container.style.display = 'none';
+      empty.style.display = 'block';
+      return;
+    }
+    container.style.display = 'block';
+    empty.style.display = 'none';
+
+    const groups = [];
+    let lastBranch = null;
+    for (const r of relevant) {
+      if (r.branch !== lastBranch) { groups.push({ branch: r.branch, rows: [] }); lastBranch = r.branch; }
+      groups[groups.length - 1].rows.push(r);
+    }
+
+    document.getElementById('due-body').innerHTML = groups.map(g => {
+      const rows = g.rows.map(r => `
+        <tr>
+          <td>${escHtml(r.branch)}</td>
+          <td>${empLink(r)}</td>
+          <td>${fmtMonthYear(r.dueDate)}</td>
+          <td style="text-align:center">${r.availableDays !== '' && r.availableDays !== undefined ? r.availableDays : '—'}</td>
+          <td>${statusBadge(getStatus(r))}</td>
+        </tr>`).join('');
+      return `
+        <tr class="month-group-header">
+          <td colspan="5">${escHtml(g.branch)} <span style="font-weight:400;opacity:.7">(${g.rows.length} funcionário${g.rows.length > 1 ? 's' : ''})</span></td>
+        </tr>
+        ${rows}`;
+    }).join('');
+  }
+
+  function printDue() {
+    document.body.classList.add('printing-report');
+    window.print();
   }
 
   // ── UTILS ─────────────────────────────────────────────────
@@ -1869,6 +2671,15 @@
     const p = iso.split('-');
     if (p.length === 3) return `${p[2]}/${p[1]}/${p[0]}`;
     return iso;
+  }
+  const MONTHS_PT_FULL = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho',
+                          'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  function fmtMonthYear(iso) {
+    if (!iso) return '—';
+    const p = iso.split('-');
+    if (p.length < 2) return iso;
+    const m = parseInt(p[1], 10) - 1;
+    return (MONTHS_PT_FULL[m] || p[1]) + '/' + p[0];
   }
   function escHtml(str) {
     return String(str || '')

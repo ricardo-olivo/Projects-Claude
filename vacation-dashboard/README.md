@@ -79,13 +79,25 @@ Clique em "Avançado" → "Acessar [projeto]" → "Permitir".
 
 Cada planilha de filial deve ter **exatamente estas colunas** (na ordem):
 
-| A | B | C | D | E |
-|---|---|---|---|---|
-| Nome | Período Inicial | Período Final | Retorno | Total |
+| A | B | C | D | E | F | G |
+|---|---|---|---|---|---|---|
+| Nome | Período Inicial | Período Final | Retorno | Total | Dias Disponíveis | Vencimento |
 
 - **Linha 1:** cabeçalho (ignorado)
 - **Linha 2 em diante:** um funcionário por linha
 - Datas no formato `DD/MM/AAAA` ou qualquer formato que o Sheets reconheça como data
+- **Dias Disponíveis (F):** número de dias de férias que o funcionário ainda tem
+  a receber/tirar. Preenchido manualmente pelo gerente — não é calculado pelo
+  script.
+- **Vencimento (G):** data (qualquer dia do mês) indicando o mês/ano em que o
+  período aquisitivo de férias do funcionário vence. O dashboard exibe apenas
+  mês/ano (ex: "Agosto/2026").
+
+> **Configuração inicial das colunas F e G:** no editor do Apps Script, selecione
+> a função `setupHeaderColumns` no menu suspenso ao lado de "Executar" e clique
+> em **Executar**. Isso adiciona os cabeçalhos "Dias Disponíveis" e "Vencimento"
+> em todas as planilhas de filiais automaticamente (não sobrescreve cabeçalhos
+> já preenchidos). Depois, cada gerente preenche os valores manualmente.
 
 ---
 
@@ -99,6 +111,8 @@ Cada planilha de filial deve ter **exatamente estas colunas** (na ordem):
 | Calendário | Visualização em linha do tempo por mês com navegação |
 | Filtros | Por filial, status (em férias / agendado / concluído), mês de início, nome |
 | Botão Atualizar | Relê todas as planilhas em tempo real |
+| Relatório Mensal | Seleciona um mês e lista todos os funcionários com férias sobrepondo aquele mês, agrupados por filial, com período e total de dias. Tem botão de impressão dedicado. |
+| Vencimento Mensal | Seleciona um mês e lista os funcionários cujo período aquisitivo de férias vence naquele mês (coluna Vencimento), agrupados por filial. Tem botão de impressão dedicado. |
 
 ---
 
