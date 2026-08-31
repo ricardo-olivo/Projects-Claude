@@ -1,0 +1,270 @@
+# CLAUDE.md — Dashboard de Férias (Líderfarma)
+
+> Contexto para retomar o desenvolvimento em uma nova conversa.
+> Última atualização: 2026-08-31.
+
+---
+
+## Visão geral do projeto
+
+**Objetivo.** Centralizar o controle de férias dos funcionários de uma rede de
+farmácias (Líderfarma). O RH acompanha saldos, agendamentos, vencimentos e
+conflitos; cada gerente (fase 2) enxerga apenas a própria filial. O sistema
+calcula um **"banco de dias"** por funcionário e gera o **Aviso de Férias em PDF**.
+
+**Usuários.**
+- **RH** — acesso total, todas as filiais, todas as ações.
+- **Gerente de filial** — só a(s) filial(is) dele; pode marcar férias, ver fichas
+  e gerar avisos; NÃO edita datas, não apaga, não inclui período aquisitivo.
+- (No futuro, fase 3) fluxo de aprovação: gerente solicita, RH aprova.
+
+**Principais funcionalidades já implementadas.**
+- Página inicial (`Home.html`) com logo, resumo e botão para o painel.
+- Painel (`Dashboard.html`) com 6 visões: Tabela, Funcionários, Calendário
+  (mensal/semestral/anual), Pagamentos do Mês, Relatório Mensal, Vencimento Mensal.
+- Saldo de férias por funcionário (banco de dias).
+- Ficha individual (modal): identificação, quebra do saldo, períodos aquisitivos,
+  histórico de gozo/abono, observações/ajustes.
+- Incluir / editar / apagar período de férias pelo painel.
+- Incluir período aquisitivo pelo painel (na ficha, só RH).
+- Aviso de Férias em PDF (download).
+- Filtro por filial, status, mês, busca por nome; filtro Registrado/Sem registro
+  na aba Funcionários.
+- Detecção de conflitos (3+ pessoas da mesma filial com férias sobrepostas).
+- Acesso por filial (fase 2) — implementado no código, ainda não testado em produção.
+
+---
+
+## Stack tecnológica
+
+| Camada | Tecnologia |
+|---|---|
+| **Backend** | Google Apps Script (V8) — arquivo `Code.gs` |
+| **Frontend** | HTML + CSS + JavaScript puro (sem framework) — `Dashboard.html`, `Home.html` |
+| **"Banco de dados"** | Uma planilha Google Sheets (abas como tabelas) |
+| **Hospedagem** | Apps Script Web App (`doGet`) — gratuito, sem servidor |
+| **Bibliotecas** | Nenhuma no runtime. Fontes Google (Nunito) só na `Home.html` |
+| **APIs internas** | `google.script.run` (cliente → funções do `Code.gs`) |
+| **Autenticação** | `Session.getActiveUser().getEmail()` + aba `Acessos` na planilha |
+| **Geração de PDF** | `Utilities.newBlob(html, 'text/html').getAs('application/pdf')` |
+| **Preview local** | `serve.ps1` (servidor estático PowerShell, porta 8765) com dados MOCK |
+| **Versionamento** | Git — repositório `Projects-Claude` (multi-projeto) no GitHub |
+
+O arquivo `xlsx` de origem foi importado para o Google Sheets; **`MODEL_SHEET_ID`
+no `Code.gs` aponta para essa planilha** (`1wLN9oZji-Uk6prHMcvav0CNg1u-tFMz_`).
+
+---
+
+## Arquitetura
+
+```
+Navegador do usuário
+   │  (Google Sites embute o Web App em um iframe — opcional/planejado)
+   ▼
+doGet(e)  ──► sem parâmetro  → Home.html  (página inicial)
+          └─► ?page=painel   → Dashboard.html
+   │
+   │  google.script.run.<função>()      (chamadas assíncronas cliente→servidor)
+   ▼
+Code.gs  ── _scopeAtual() decide RH / Gerente / sem acesso (pelo e-mail + aba Acessos)
+   │        toda função de leitura/escrita respeita esse escopo NO SERVIDOR
+   ▼
+Google Sheets  (MODEL_SHEET_ID)
+   abas: Func | Periodos | Lancamentos | Ajustes | Feriados | Lojas? | Acessos?
+```
+
+**Contrato de dados** — `getVacationData()` devolve um JSON com:
+`data[]` (1 linha por lançamento + placeholder por funcionário registrado sem
+lançamento), `employees[]` (cadastro), `conflicts[]`, `paymentDue[]`,
+`paymentAll[]`, `totals{}`, `errors[]`, `scope{perfil,filiais,email}`.
+O front guarda tudo em variáveis globais e re-renderiza cada visão.
+
+**Fluxo Home → Painel dentro do Sites:** o botão da `Home.html` chama
+`google.script.run.paginaPainel()` (que retorna o HTML do dashboard) e faz
+`document.write` no lugar — **não navega a URL**, para não "escapar" do iframe do
+Sites. Fora do Apps Script (preview local) ele navega para `?page=painel`.
+
+---
+
+## Regras de negócio
+
+### Banco de dias (saldo por funcionário)
+```
+SALDO ATUAL = Saldo inicial (Func.G)
+            + Σ dias de direito dos períodos aquisitivos JÁ CREDITADOS
+            − Σ férias gozadas (Lancamentos, tipo "Gozo")
+            − Σ abono pecuniário (Lancamentos, tipo "Abono")
+            + Σ ajustes manuais (Ajustes, coluna Dias, com sinal)
+```
+- **"Creditado"** é calculado pela data: o período está creditado quando
+  `Fim aquisitivo <= hoje` (não lê a coluna "Creditado" da planilha).
+- Se a célula "Dias de direito" não for número, cai para a faixa de faltas.
+
+### Período aquisitivo (ciclo de 12 meses a partir da admissão)
+- Dias de direito por faltas injustificadas (CLT art. 130):
+  `≤5→30 · 6–14→24 · 15–23→18 · 24–32→12 · >32→0`.
+- Fim aquisitivo = início + 12 meses − 1 dia. Concessão até = fim + 12 meses.
+- Situação do prazo: `Em formação` (fim no futuro) · `Vencido — risco de dobro`
+  (hoje > concessão) · `Vence em N d` (≤90) · `Em dia — vence em N d` (>90).
+
+### Férias gozadas
+- Dias corridos = término − início + 1.
+- Retorno = término + 1; **Retorno útil** = próximo dia útil (pula fim de semana e
+  a aba `Feriados`).
+- `addVacationRecord` grava **valores** (nunca fórmulas) — planilha em pt-BR
+  rejeita fórmula com vírgula e vira `#ERROR!`.
+
+### "Dias vencidos — risco de dobro" (aproximação FIFO)
+```
+max(0,  Σ direito dos períodos com concessão já vencida
+      − Σ férias gozadas
+      − (deduções de ajuste, se houver))
+```
+
+### Funcionário sem registro (Registrado = "Não")
+- Aparece na aba Funcionários e em "Pagamentos do Mês".
+- Não tem período aquisitivo; saldo = saldo inicial + ajustes.
+- Mês de vencimento (Pagamentos) = mês de aniversário da admissão;
+  "pagar 30 dias" = saldo ≥ 30. (Regra provisória — confirmar com o RH.)
+
+### Aviso de Férias (PDF)
+- Empresa (Razão Social / CNPJ / Cidade): aba `Lojas` por filial (tem prioridade)
+  ou a constante `EMPRESA_PADRAO` no `Code.gs`.
+- Período aquisitivo do aviso: linha da aba `Periodos` correspondente; se não
+  houver, é **calculado** a partir da admissão (`_periodoAquisitivo`).
+- CTPS: coluna I da aba `Func` se preenchida; senão um número de 7 dígitos
+  **determinístico** por funcionário (`_ctpsFake`) — placeholder, trocar pelo real.
+- Nº Registro e R/H = matrícula. Nº do documento sai como `______ / <matrícula>`.
+
+### Acesso (fase 2)
+- Sem aba `Acessos` (ou vazia) → todo mundo é **RH** (modo migração).
+- Com a aba: e-mail não cadastrado → **sem acesso** (`perfil: 'nenhum'`).
+- `RH` = filiais `null` (todas). `Gerente` = lista de filiais das linhas dele.
+- Filtro por filial é aplicado **no servidor** (nunca confiar no navegador).
+
+---
+
+## Estrutura do projeto
+
+Repositório: `Projects-Claude` (contém vários projetos). Este projeto vive em
+`vacation-dashboard/`.
+
+```
+vacation-dashboard/
+├── Code.gs          Backend Apps Script (1030 linhas). TODA a lógica de negócio.
+├── Dashboard.html   Painel (2694 linhas): HTML + CSS + JS. 6 visões + modais.
+├── Home.html        Página inicial (170 linhas): logo, resumo, botão.
+├── serve.ps1        Servidor estático local (porta 8765) p/ preview com MOCK.
+├── README.md        ⚠️ DESATUALIZADO — descreve a arquitetura ANTIGA (28 planilhas).
+├── CLAUDE.md        Este arquivo.
+└── PROJECT_STATUS.md Estado atual / roadmap.
+```
+
+### `Code.gs` — mapa das funções
+
+| Função | Papel |
+|---|---|
+| `doGet(e)` | roteador: `?page=painel` → Dashboard, senão → Home |
+| `paginaPainel()` | devolve o HTML do Dashboard (abertura "no lugar" pela Home) |
+| `_scopeAtual()` | RH / Gerente / nenhum, pelo e-mail + aba Acessos |
+| `_noEscopo(scope, filial)` | filial permitida para o escopo? |
+| `getResumoHome()` | números da página inicial |
+| `getVacationData()` | **principal** — consolida tudo, filtra por escopo, devolve JSON |
+| `getEmployeeFicha(matricula)` | dados completos de 1 funcionário (ficha) |
+| `getAvisoFeriasPdf(matricula, gozoInicioISO)` | gera o PDF, devolve base64 |
+| `addVacationRecord(payload)` | grava férias na aba Lancamentos |
+| `updateVacationRecord(payload)` | edita início/término (só RH) |
+| `deleteVacationRecord(payload)` | apaga a linha (só RH) |
+| `addPeriodoAquisitivo(payload)` | grava período na aba Periodos (só RH) |
+| `getPaymentData(func, saldoOf)` | funcionários sem registro (aba Func + planilha legada opcional) |
+| `detectConflicts(data)` | 3+ sobreposições na mesma filial |
+| `_avisoHtml(d)` / `_dataExtenso` / `_periodoAquisitivo` / `_ctpsFake` | helpers do aviso |
+| `_mk(v)` | **normaliza matrícula** (número/texto/zeros à esquerda → mesma chave) |
+| `_diasDireito` / `_periodoSituacao` / `_addWorkingDays` / `_feriadosSet` | regras |
+| `_sheet` / `_rows` / `toDate` / `formatDate` / `formatDateBR` / `_midnight` / `_plusDays` / `_addMonths` | utilidades |
+
+### `Dashboard.html` — variáveis globais de estado
+
+`allData`, `filteredData`, `allEmployees`, `conflicts`, `paymentAll`, `paymentDue`,
+`totals`, `scope`, `selectedBranches`, `empFiltroReg`, `fichaMat` / `fichaNome` /
+`fichaData`, `calYear` / `calMonth` / `calView`, `sortCol` / `sortDir`.
+`ehRH()` = `scope.perfil !== 'gerente'`.
+
+### Abas da planilha (colunas base-0 no `Code.gs`)
+
+- **Func**: Matrícula · Nome · Filial · Cargo · Admissão · Situação · Saldo inicial
+  de férias · Registrado · CTPS (I, opcional)
+- **Periodos**: Matrícula · Período · Início aquisitivo · Fim aquisitivo · Faltas ·
+  Dias de direito · Concessão até · Creditado ao banco · Situação do prazo ·
+  _seq · _chave
+- **Lancamentos**: Matrícula · Período · Parcela nº · Início · Término · Dias ·
+  Tipo (Gozo/Abono) · Retorno · Retorno (dia útil) · Observação · _seq · _chave
+- **Ajustes**: Matrícula · Data · Dias (+/−) · Observação · _seq · _chave
+- **Feriados**: Data · Descrição
+- **Lojas** (opcional): Filial · Razão Social · CNPJ · Cidade
+- **Acessos** (opcional): E-mail · Filial · Perfil (RH | Gerente)
+- **Ficha** (aba da planilha, não usada pelo dashboard — visão de impressão)
+- **Instrucoes** (aba de ajuda dentro da planilha)
+
+Colunas `_seq` / `_chave` (cinza) ligam as abas e **não devem ser apagadas**.
+
+---
+
+## Convenções de desenvolvimento
+
+- **Backend em `Code.gs`, front em `Dashboard.html`/`Home.html`.** Nada de framework.
+- **Toda regra de negócio fica no servidor.** O front só renderiza.
+- **Escrever VALORES na planilha, nunca fórmulas** (locale pt-BR → `#ERROR!` com vírgula).
+- **Matrícula sempre pela `_mk()`** ao comparar/indexar (número vs texto vs "0004").
+- **Escopo (`_scopeAtual`) é verificado no servidor em toda função sensível.**
+  O front esconde botões (`ehRH()`), mas isso é só UX.
+- Datas ISO `yyyy-mm-dd` entre servidor↔cliente; `dd/mm/yyyy` na tela; formato de
+  número de data na planilha = `dd/mm/aaaa` (não `dd/mm/yyyy` — no Sheets pt-BR o
+  token de ano é `a`).
+- `google.script.run` retorna **string JSON**; o front dá `JSON.parse` com try/catch.
+- Preview local: `powershell -ExecutionPolicy Bypass -File vacation-dashboard/serve.ps1`
+  → `http://localhost:8765/Home.html` ou `/Dashboard.html`. Usa `MOCK_DATA`
+  (sem Apps Script). `Code.gs` **não roda localmente**.
+- Toda alteração de `Code.gs` / `Dashboard.html` / `Home.html` exige **novo deploy**
+  no Apps Script (colar o arquivo → Implantar → Gerenciar implantações → Nova versão).
+- **`Home.html` é um arquivo HTML separado no projeto Apps Script, com o nome `Home`.**
+
+---
+
+## Cuidados (não alterar sem análise)
+
+- **Não voltar para o modelo antigo** de varrer 27/28 planilhas de filial — foi
+  substituído de propósito pelo modelo de planilha única.
+- **Não trocar `setValues` por `setFormula`** em `addVacationRecord` /
+  `updateVacationRecord` / `addPeriodoAquisitivo` — quebra em planilha pt-BR (`#ERROR!`).
+- **Não remover a normalização `_mk()`** — os dados da planilha têm matrícula
+  inconsistente (número, texto, com/sem zero à esquerda).
+- **Não confiar no filtro de filial do front** — a segurança está no `_scopeAtual`
+  do servidor. Manter os `_noEscopo(...)` nas funções.
+- **Não apagar as colunas `_seq` / `_chave`** das abas da planilha.
+- **Contrato JSON do `getVacationData`** (nomes dos campos) — o `Dashboard.html`
+  inteiro depende deles.
+- **`setXFrameOptionsMode(ALLOWALL)`** nos dois ramos do `doGet` — necessário para
+  embutir no Google Sites.
+- **Manter as duas cópias em sincronia**: `Área de Trabalho/Claude/vacation-dashboard/`
+  (pasta de trabalho, **não** é repo git) e
+  `Projects-Claude/vacation-dashboard/` (versionada). Commitar sempre a segunda.
+
+---
+
+## Decisões técnicas
+
+| Decisão | Motivo |
+|---|---|
+| Apps Script + Google Sheets | Custo zero, sem servidor, RH já vive no Google. |
+| Planilha única (Func/Periodos/Lancamentos/Ajustes) em vez de 27 planilhas | Muito mais simples de manter; saldo calculado num lugar só. |
+| "Banco de dias" (saldo corrente único) em vez de saldo por período | É como o RH pensa: um pote que sobe no aniversário e desce no gozo. |
+| "Creditado" calculado pela data no servidor, não lido da coluna | Linhas gravadas pelo dashboard são valores estáticos; a coluna não "vira" sozinha no aniversário. |
+| Escrever valores, não fórmulas, ao inserir linhas | `setFormula` com vírgula quebra na planilha pt-BR (`#ERROR!`). |
+| `_mk()` normaliza matrícula | Dados reais têm `0004`, `4`, `"0004"` misturados. |
+| PDF via `Utilities.newBlob(...).getAs('application/pdf')` | Único jeito nativo de HTML→PDF no Apps Script, sem libs. |
+| Roteador no `doGet` (`?page=painel`) + `paginaPainel()` | Uma implantação serve Home e Painel; abre "no lugar" dentro do Sites. |
+| Acesso por e-mail + aba `Acessos` (sem senha) | Aproveita o login Google Workspace; nada de senha para gerenciar. |
+| Sem aba `Acessos` → todo mundo é RH | Permite implantar já e ligar o controle depois (migração suave). |
+| Perfil Gerente só marca férias (não edita/apaga/inclui período) | Abre espaço para o fluxo de aprovação (fase 3). |
+| Logo da Home recriado em CSS/SVG | Não temos o PNG oficial no projeto; `LOGO_DATA_URI` permite trocar depois. |
