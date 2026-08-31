@@ -72,6 +72,11 @@
     .card.success .card-value { color: var(--success); }
     .card.warning .card-value { color: var(--warning); }
     .card.danger  .card-value { color: var(--danger);  }
+    .card-click { cursor: pointer; transition: box-shadow .12s, transform .12s; }
+    .card-click:hover { box-shadow: 0 4px 16px rgba(0,0,0,.12); transform: translateY(-2px); }
+    .card-click:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+    .card-cta { font-size: 11px; font-weight: 700; color: var(--primary); margin-left: 4px; opacity: 0; transition: opacity .12s; }
+    .card-click:hover .card-cta, .card-click:focus-visible .card-cta { opacity: 1; }
     /* ALERTS */
     .alerts-section { margin-bottom: 24px; }
     .alerts-section h2 { font-size: 15px; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center; gap: 6px; }
@@ -478,7 +483,8 @@
     .form-group.full { grid-column: 1 / -1; }
     .form-group label { font-size: 12px; font-weight: 600; color: var(--gray-700); text-transform: uppercase; letter-spacing: .4px; }
     .form-group input,
-    .form-group select {
+    .form-group select,
+    .form-group textarea {
       padding: 9px 12px;
       border: 1px solid var(--gray-200);
       border-radius: 7px;
@@ -486,10 +492,14 @@
       outline: none;
       width: 100%;
       background: white;
+      font-family: inherit;
     }
+    .form-group textarea { resize: vertical; min-height: 64px; }
     .form-group input:focus,
-    .form-group select:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(26,86,219,.1); }
-    .form-group input.error { border-color: var(--danger); }
+    .form-group select:focus,
+    .form-group textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(26,86,219,.1); }
+    .form-group input.error,
+    .form-group textarea.error { border-color: var(--danger); }
     .form-error { font-size: 11px; color: var(--danger); margin-top: 2px; }
     .form-group input[readonly] {
       background: var(--gray-50);
@@ -533,6 +543,7 @@
     .ficha-break .row:last-child { border-bottom: 0; }
     .ficha-break .row b { font-variant-numeric: tabular-nums; }
     .ficha-break .neg { color: var(--danger); }
+    .kpi-count { font-size: 12px; color: var(--gray-500); margin: -4px 0 4px; }
     .ficha-tbl-wrap { overflow-x: auto; border: 1px solid var(--gray-200); border-radius: 8px; }
     table.ficha-tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
     table.ficha-tbl th { text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: .5px; color: var(--gray-500); padding: 7px 8px; background: var(--gray-50); border-bottom: 1px solid var(--gray-200); white-space: nowrap; }
@@ -710,27 +721,27 @@
 
 <div class="container">
 
-  <!-- CARDS DE RESUMO -->
+  <!-- CARDS DE RESUMO (clicáveis) -->
   <div class="cards">
-    <div class="card">
+    <div class="card card-click" role="button" tabindex="0" onclick="openKpi('funcionarios')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openKpi('funcionarios')}">
       <div class="card-label">Funcionários</div>
       <div class="card-value" id="stat-employees">—</div>
-      <div class="card-sub">no cadastro</div>
+      <div class="card-sub">no cadastro <span class="card-cta">ver lista →</span></div>
     </div>
-    <div class="card">
+    <div class="card card-click" role="button" tabindex="0" onclick="openKpi('pagas')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openKpi('pagas')}">
       <div class="card-label">Pagas este Mês</div>
       <div class="card-value" id="stat-paid-month">—</div>
-      <div class="card-sub">férias com início no mês</div>
+      <div class="card-sub">férias com início no mês <span class="card-cta">ver lista →</span></div>
     </div>
-    <div class="card success">
+    <div class="card success card-click" role="button" tabindex="0" onclick="openKpi('ferias')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openKpi('ferias')}">
       <div class="card-label">Em Férias Agora</div>
       <div class="card-value" id="stat-active">—</div>
-      <div class="card-sub">período em andamento</div>
+      <div class="card-sub">período em andamento <span class="card-cta">ver lista →</span></div>
     </div>
-    <div class="card warning">
+    <div class="card warning card-click" role="button" tabindex="0" onclick="openKpi('naoreg')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openKpi('naoreg')}">
       <div class="card-label">Não Registrados</div>
       <div class="card-value" id="stat-unregistered">—</div>
-      <div class="card-sub">funcionários sem carteira</div>
+      <div class="card-sub">funcionários sem carteira <span class="card-cta">ver lista →</span></div>
     </div>
   </div>
 
@@ -984,6 +995,7 @@
             <label>Mês</label>
             <input type="month" id="due-month" onchange="renderDueView()" />
           </div>
+          <button class="btn-add-vacation no-print" onclick="renderDueView()">🔍 Pesquisar</button>
           <span class="result-count" id="due-count"></span>
           <button class="filter-reset" onclick="printDue()">🖨 Imprimir</button>
         </div>
@@ -1193,6 +1205,93 @@
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeEmpModal()">Cancelar</button>
       <button class="btn btn-primary" id="btn-save-emp" onclick="submitAddEmployee()">Salvar Funcionário</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL DETALHE DE KPI (cards do topo) -->
+<div class="modal-overlay" id="kpi-overlay" onclick="if(event.target===this)closeKpi()">
+  <div class="modal modal-wide" role="dialog" aria-modal="true" aria-labelledby="kpi-title">
+    <div class="modal-header">
+      <h3 id="kpi-title">Detalhe</h3>
+      <div class="no-print" style="display:flex;gap:8px;align-items:center">
+        <button class="btn btn-secondary" style="padding:6px 12px;font-size:12px" id="kpi-goto" onclick="kpiGoto()">Abrir aba</button>
+        <button class="modal-close" onclick="closeKpi()" aria-label="Fechar">×</button>
+      </div>
+    </div>
+    <div class="modal-body ficha-body" id="kpi-body">
+      <div class="ficha-empty">Carregando…</div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL AJUSTE / OBSERVAÇÃO (ficha) -->
+<div class="modal-overlay" id="ajuste-overlay" onclick="if(event.target===this)fecharAjuste()">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="ajuste-title">
+    <div class="modal-header">
+      <h3 id="ajuste-title">Lançar ajuste de saldo</h3>
+      <button class="modal-close" onclick="fecharAjuste()" aria-label="Fechar">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group full">
+          <label for="aj-emp">Funcionário</label>
+          <input type="text" id="aj-emp" readonly />
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="aj-data">Data</label>
+          <input type="date" id="aj-data" />
+        </div>
+        <div class="form-group" id="aj-dias-group">
+          <label for="aj-dias">Dias (+ credita / − desconta)</label>
+          <input type="number" id="aj-dias" step="0.5" placeholder="ex.: -2" oninput="ajPreview()" />
+          <span class="calc-hint" id="aj-hint">Deixe vazio para registrar só uma observação</span>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group full">
+          <label for="aj-obs">Observação / justificativa</label>
+          <textarea id="aj-obs" rows="3" oninput="clearFieldError('aj-obs')"></textarea>
+          <span class="form-error" id="err-aj-obs"></span>
+        </div>
+      </div>
+      <div id="ajuste-error" class="error-banner" style="display:none"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="fecharAjuste()">Cancelar</button>
+      <button class="btn btn-primary" id="aj-save" onclick="salvarAjuste()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL VENCIMENTO DAS FÉRIAS (ficha) -->
+<div class="modal-overlay" id="venc-overlay" onclick="if(event.target===this)fecharVenc()">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="venc-title">
+    <div class="modal-header">
+      <h3 id="venc-title">Vencimento das férias</h3>
+      <button class="modal-close" onclick="fecharVenc()" aria-label="Fechar">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group full">
+          <label for="venc-emp">Funcionário</label>
+          <input type="text" id="venc-emp" readonly />
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group full">
+          <label for="venc-mes">Mês / ano do vencimento</label>
+          <input type="month" id="venc-mes" />
+          <span class="calc-hint">Deixe em branco e salve para remover o vencimento</span>
+        </div>
+      </div>
+      <div id="venc-error" class="error-banner" style="display:none"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="fecharVenc()">Cancelar</button>
+      <button class="btn btn-primary" id="venc-save" onclick="salvarVenc()">Salvar</button>
     </div>
   </div>
 </div>
@@ -2155,8 +2254,112 @@
   }
 
   document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') { closeAddModal(); closeFicha(); fecharNovoPeriodo(); closeEmpModal(); }
+    if (e.key === 'Escape') { closeAddModal(); closeFicha(); fecharNovoPeriodo(); closeEmpModal(); closeKpi(); fecharAjuste(); fecharVenc(); }
   });
+
+  // ── DETALHE DOS CARDS DE RESUMO (KPIs) ───────────────────
+  let kpiWhich = '';
+
+  function openKpi(which) {
+    kpiWhich = which;
+    const body = document.getElementById('kpi-body');
+    const curKey = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0');
+    const source = filteredData.length < allData.length ? filteredData : allData;
+
+    const tbl = (head, cells) => `<div class="ficha-tbl-wrap"><table class="ficha-tbl">
+        <thead><tr>${head.map(h => `<th>${h}</th>`).join('')}</tr></thead>
+        <tbody>${cells || `<tr><td colspan="${head.length}" style="text-align:center;color:var(--gray-500)">Nada a mostrar.</td></tr>`}</tbody>
+      </table></div>`;
+    const empRow = e => `<tr class="${e.ativo === false ? 'row-inativo' : ''}">
+        <td>${escHtml(e.filial || '—')}</td>
+        <td><a href="#" class="emp-link" onclick="closeKpi();openFichaFor('${escHtml(String(e.matricula))}');return false">${escHtml(e.nome)}</a>${e.ativo === false ? ' <span class="badge badge-inativo">Inativo</span>' : ''}</td>`;
+
+    let title = '', gotoLabel = '', html = '';
+
+    if (which === 'funcionarios') {
+      title = 'Funcionários no cadastro';
+      gotoLabel = 'Abrir aba Funcionários';
+      const list = [...allEmployees].sort((a, b) =>
+        (a.filial || '').localeCompare(b.filial || '', 'pt-BR') || a.nome.localeCompare(b.nome, 'pt-BR'));
+      html = `<p class="kpi-count">${list.length} funcionário(s)</p>` + tbl(
+        ['Filial', 'Funcionário', 'Cargo', 'Registrado', 'Dias disp.'],
+        list.map(e => empRow(e) +
+          `<td>${escHtml(e.cargo || '—')}</td>
+           <td>${e.registrado ? '<span class="badge badge-active">Sim</span>' : '<span class="badge badge-done">Não</span>'}</td>
+           <td style="text-align:center">${(e.saldo === '' || e.saldo == null) ? '—' : e.saldo}</td></tr>`).join(''));
+    }
+    else if (which === 'pagas') {
+      title = 'Férias com início neste mês';
+      gotoLabel = 'Ver na Tabela (filtro do mês)';
+      const list = source.filter(r => r.startDate && r.startDate.substring(0, 7) === curKey)
+        .sort((a, b) => (a.startDate < b.startDate ? -1 : 1));
+      html = `<p class="kpi-count">${list.length} registro(s)</p>` + tbl(
+        ['Filial', 'Funcionário', 'Início', 'Fim', 'Retorno', 'Dias'],
+        list.map(r => `<tr>
+          <td>${escHtml(r.branch)}</td><td>${escHtml(r.name)}</td>
+          <td>${fmtDateBR(r.startDate)}</td><td>${fmtDateBR(r.endDate)}</td>
+          <td>${fmtDateBR(r.returnDate)}</td>
+          <td style="text-align:center">${r.total || '—'}</td></tr>`).join(''));
+    }
+    else if (which === 'ferias') {
+      title = 'Em férias agora';
+      gotoLabel = 'Ver na Tabela (em férias)';
+      const list = source.filter(r => getStatus(r) === 'active')
+        .sort((a, b) => a.branch.localeCompare(b.branch, 'pt-BR') || a.name.localeCompare(b.name, 'pt-BR'));
+      html = `<p class="kpi-count">${list.length} funcionário(s) em férias</p>` + tbl(
+        ['Filial', 'Funcionário', 'Início', 'Fim', 'Retorno'],
+        list.map(r => `<tr>
+          <td>${escHtml(r.branch)}</td><td>${escHtml(r.name)}</td>
+          <td>${fmtDateBR(r.startDate)}</td><td>${fmtDateBR(r.endDate)}</td>
+          <td>${fmtDateBR(r.returnDate)}</td></tr>`).join(''));
+    }
+    else if (which === 'naoreg') {
+      title = 'Funcionários não registrados (sem carteira)';
+      gotoLabel = 'Abrir aba Funcionários (Sem registro)';
+      const list = allEmployees.filter(e => !e.registrado).sort((a, b) =>
+        (a.filial || '').localeCompare(b.filial || '', 'pt-BR') || a.nome.localeCompare(b.nome, 'pt-BR'));
+      html = `<p class="kpi-count">${list.length} funcionário(s) sem registro</p>` + tbl(
+        ['Filial', 'Funcionário', 'Cargo', 'Vencimento', 'Dias disp.'],
+        list.map(e => empRow(e) +
+          `<td>${escHtml(e.cargo || '—')}</td>
+           <td>${fmtMonthYear(e.vencimento)}</td>
+           <td style="text-align:center">${(e.saldo === '' || e.saldo == null) ? '—' : e.saldo}</td></tr>`).join(''));
+    }
+    else return;
+
+    body.innerHTML = html;
+    document.getElementById('kpi-title').textContent = title;
+    document.getElementById('kpi-goto').textContent = gotoLabel;
+    document.getElementById('kpi-overlay').classList.add('open');
+  }
+
+  function closeKpi() {
+    document.getElementById('kpi-overlay').classList.remove('open');
+  }
+
+  function kpiGoto() {
+    const w = kpiWhich;
+    closeKpi();
+    const tabBtns = document.querySelectorAll('.tab');
+    if (w === 'funcionarios' || w === 'naoreg') {
+      showTab('employees', tabBtns[1]);
+      setEmpFiltro(w === 'naoreg' ? 'nao' : 'todos',
+        document.getElementById(w === 'naoreg' ? 'empf-nao' : 'empf-todos'));
+      setEmpStatusFiltro('todos', document.getElementById('emps-todos'));
+      document.getElementById('view-employees').scrollIntoView({ block: 'start' });
+    } else if (w === 'pagas' || w === 'ferias') {
+      tableBranch = null;
+      if (w === 'pagas') {
+        document.getElementById('filter-month').value =
+          today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0');
+      } else {
+        document.getElementById('filter-status').value = 'active';
+      }
+      showTab('table', tabBtns[0]);
+      applyFilters();
+      document.getElementById('view-table').scrollIntoView({ block: 'start' });
+    }
+  }
 
   // ── CADASTRAR FUNCIONÁRIO (só RH) ─────────────────────────
   function nextMatriculaSuggestion() {
@@ -2501,6 +2704,256 @@
       .addPeriodoAquisitivo({ matricula: fichaMat, inicioAquisitivo: ini, faltas: faltas });
   }
 
+  // ── AJUSTE MANUAL / OBSERVAÇÃO (ficha, só RH) ─────────────
+  let ajEditRow = null;    // rowIndex na aba Ajustes (edição); null = inclusão
+  let ajEditIdx = null;    // índice em fichaData.ajustes (para o modo demo)
+  let ajEditOldDias = 0;   // dias que a linha já contribuía p/ o saldo (edição)
+  const demoAjustes = {};  // preview: ajustes por matrícula (não roda no Apps Script)
+  const demoVenc = {};     // preview: vencimento manual por matrícula
+
+  function abrirAjuste(modo) {
+    const mat = (fichaData && fichaData.func && fichaData.func.matricula) || fichaMat;
+    if (!ehRH() || !mat || String(mat) === '—') return;
+    const isObs = modo === 'obs';
+    ajEditRow = null; ajEditIdx = null; ajEditOldDias = 0;
+
+    document.getElementById('aj-emp').value  = fichaNome || mat;
+    document.getElementById('aj-data').value = new Date().toISOString().slice(0, 10);
+    document.getElementById('aj-dias').value = '';
+    document.getElementById('aj-obs').value  = '';
+    document.getElementById('ajuste-error').style.display = 'none';
+    clearFieldError('aj-obs');
+    document.getElementById('ajuste-title').textContent = isObs ? 'Incluir observação' : 'Lançar ajuste de saldo';
+    document.getElementById('aj-dias-group').style.display = isObs ? 'none' : '';
+    const btn = document.getElementById('aj-save');
+    btn.disabled = false; btn.textContent = 'Salvar';
+    ajPreview();
+    document.getElementById('ajuste-overlay').classList.add('open');
+    setTimeout(() => document.getElementById(isObs ? 'aj-obs' : 'aj-dias').focus(), 30);
+  }
+
+  function editarAjuste(idx) {
+    const a = fichaData && fichaData.ajustes && fichaData.ajustes[idx];
+    const mat = (fichaData && fichaData.func && fichaData.func.matricula) || fichaMat;
+    if (!a || !ehRH() || !mat || String(mat) === '—') return;
+
+    ajEditRow = (a.rowIndex != null) ? a.rowIndex : 'demo';
+    ajEditIdx = idx;
+    ajEditOldDias = Number(a.dias) || 0;
+
+    document.getElementById('aj-emp').value  = fichaNome || mat;
+    document.getElementById('aj-data').value = a.data || new Date().toISOString().slice(0, 10);
+    document.getElementById('aj-dias').value = (a.dias === '' || a.dias == null) ? '' : a.dias;
+    document.getElementById('aj-obs').value  = a.obs || '';
+    document.getElementById('ajuste-error').style.display = 'none';
+    clearFieldError('aj-obs');
+    document.getElementById('ajuste-title').textContent = 'Editar ajuste / observação';
+    document.getElementById('aj-dias-group').style.display = '';
+    const btn = document.getElementById('aj-save');
+    btn.disabled = false; btn.textContent = 'Salvar';
+    ajPreview();
+    document.getElementById('ajuste-overlay').classList.add('open');
+    setTimeout(() => document.getElementById('aj-dias').focus(), 30);
+  }
+
+  function fecharAjuste() {
+    document.getElementById('ajuste-overlay').classList.remove('open');
+    ajEditRow = null; ajEditIdx = null; ajEditOldDias = 0;
+  }
+
+  function ajPreview() {
+    const hint = document.getElementById('aj-hint');
+    const v = document.getElementById('aj-dias').value;
+    const base = (fichaData && fichaData.saldo != null) ? Number(fichaData.saldo.atual) - ajEditOldDias : NaN;
+    if (v === '' || isNaN(Number(v)) || isNaN(base)) {
+      hint.textContent = 'Deixe vazio para registrar só uma observação';
+      hint.style.color = '';
+      return;
+    }
+    const novo = base + Number(v);
+    hint.textContent = 'Saldo: ' + (base + ajEditOldDias) + ' → ' + novo + ' dias disponíveis';
+    hint.style.color = novo < 0 ? 'var(--danger)' : 'var(--success)';
+  }
+
+  function _aplicaDeltaSaldo(mat, delta) {
+    if (!delta) return;
+    const key = _mkFront(mat);
+    if (fichaData && fichaData.saldo) {
+      fichaData.saldo.atual   = (Number(fichaData.saldo.atual)   || 0) + delta;
+      fichaData.saldo.ajustes = (Number(fichaData.saldo.ajustes) || 0) + delta;
+    }
+    allData.forEach(r => {
+      if (_mkFront(r.matricula) === key && r.availableDays !== '' && r.availableDays != null)
+        r.availableDays = (Number(r.availableDays) || 0) + delta;
+    });
+    allEmployees.forEach(e => {
+      if (_mkFront(e.matricula) === key && e.saldo !== '' && e.saldo != null)
+        e.saldo = (Number(e.saldo) || 0) + delta;
+    });
+  }
+
+  function salvarAjuste() {
+    const mat = (fichaData && fichaData.func && fichaData.func.matricula) || fichaMat;
+    if (!mat) return;
+    const isEdit = ajEditRow != null;
+    const diasVisible = document.getElementById('aj-dias-group').style.display !== 'none';
+    const dias = document.getElementById('aj-dias').value.trim();
+    const obs  = document.getElementById('aj-obs').value.trim();
+    const data = document.getElementById('aj-data').value;
+    const err  = document.getElementById('ajuste-error');
+
+    if (diasVisible && dias !== '' && isNaN(Number(dias))) {
+      err.textContent = 'Dias inválido — use número (ex.: -2 ou 5).';
+      err.style.display = 'block';
+      return;
+    }
+    const temAjuste = diasVisible && dias !== '' && Number(dias) !== 0;
+    if (!temAjuste && !obs) {
+      document.getElementById('aj-obs').classList.add('error');
+      document.getElementById('err-aj-obs').textContent = 'Escreva a observação / justificativa.';
+      return;
+    }
+
+    const btn = document.getElementById('aj-save');
+    btn.disabled = true; btn.textContent = 'Salvando…';
+    err.style.display = 'none';
+
+    const diasEnviar = diasVisible ? dias : '';
+    const payload = { matricula: mat, data: data, dias: diasEnviar, obs: obs };
+    if (isEdit) payload.rowIndex = ajEditRow;
+
+    if (typeof google === 'undefined' || !google.script) {
+      const novoD = Number(diasEnviar) || 0;
+      if (isEdit && fichaData && fichaData.ajustes && fichaData.ajustes[ajEditIdx]) {
+        const row = fichaData.ajustes[ajEditIdx];
+        row.data = data; row.obs = obs; row.dias = (diasEnviar === '' ? '' : novoD);
+        _aplicaDeltaSaldo(mat, novoD - ajEditOldDias);
+      } else if (fichaData) {
+        fichaData.ajustes = fichaData.ajustes || [];
+        fichaData.ajustes.push({ data: data, dias: (diasEnviar === '' ? '' : novoD), obs: obs });
+        _aplicaDeltaSaldo(mat, novoD);
+      }
+      demoAjustes[_mkFront(mat)] = (fichaData.ajustes || []).map(a => ({ ...a }));
+      fecharAjuste();
+      renderFicha(fichaData);
+      applyFilters();
+      return;
+    }
+
+    const runner = google.script.run
+      .withSuccessHandler(txt => {
+        let res;
+        try { res = JSON.parse(txt); } catch (e) { res = { success: false, error: 'Resposta inválida.' }; }
+        if (res.success) {
+          fecharAjuste();
+          openFichaFor(mat, fichaNome);
+          setTimeout(loadData, 300);
+        } else {
+          btn.disabled = false; btn.textContent = 'Salvar';
+          err.textContent = res.error || 'Erro ao salvar.'; err.style.display = 'block';
+        }
+      })
+      .withFailureHandler(e => {
+        btn.disabled = false; btn.textContent = 'Salvar';
+        err.textContent = 'Erro: ' + ((e && e.message) || e); err.style.display = 'block';
+      });
+
+    if (isEdit) runner.updateAjuste(payload);
+    else        runner.addAjuste(payload);
+  }
+
+  function excluirAjuste(idx) {
+    const a = fichaData && fichaData.ajustes && fichaData.ajustes[idx];
+    const mat = (fichaData && fichaData.func && fichaData.func.matricula) || fichaMat;
+    if (!a || !ehRH() || !mat) return;
+
+    const partes = [a.data ? fmtDateBR(a.data) : ''];
+    if (a.dias !== '' && a.dias != null && Number(a.dias) !== 0)
+      partes.push((Number(a.dias) > 0 ? '+' : '') + a.dias + ' dia(s)');
+    if (a.obs) partes.push('"' + a.obs + '"');
+    if (!confirm('Apagar este lançamento?\n\n' + partes.filter(Boolean).join(' · ') + '\n\nNão dá para desfazer.')) return;
+
+    const d = Number(a.dias) || 0;
+
+    if (typeof google === 'undefined' || !google.script) {
+      fichaData.ajustes.splice(idx, 1);
+      _aplicaDeltaSaldo(mat, -d);
+      demoAjustes[_mkFront(mat)] = (fichaData.ajustes || []).map(a => ({ ...a }));
+      renderFicha(fichaData);
+      applyFilters();
+      return;
+    }
+
+    google.script.run
+      .withSuccessHandler(txt => {
+        let res;
+        try { res = JSON.parse(txt); } catch (e) { res = { success: false, error: 'Resposta inválida.' }; }
+        if (res.success) { openFichaFor(mat, fichaNome); setTimeout(loadData, 300); }
+        else alert('Não foi possível apagar: ' + (res.error || 'erro desconhecido.'));
+      })
+      .withFailureHandler(err => alert('Erro ao apagar: ' + ((err && err.message) || err)))
+      .deleteAjuste({ rowIndex: a.rowIndex, matricula: mat });
+  }
+
+  // ── VENCIMENTO DAS FÉRIAS (manual, ficha, só RH) ──────────
+  function abrirVenc() {
+    const mat = (fichaData && fichaData.func && fichaData.func.matricula) || fichaMat;
+    if (!ehRH() || !mat || String(mat) === '—') return;
+    document.getElementById('venc-emp').value = fichaNome || mat;
+    const vm = (fichaData && fichaData.func && fichaData.func.vencManual) || '';
+    document.getElementById('venc-mes').value = vm ? String(vm).slice(0, 7) : '';
+    document.getElementById('venc-error').style.display = 'none';
+    const b = document.getElementById('venc-save');
+    b.disabled = false; b.textContent = 'Salvar';
+    document.getElementById('venc-overlay').classList.add('open');
+    setTimeout(() => document.getElementById('venc-mes').focus(), 30);
+  }
+
+  function fecharVenc() {
+    document.getElementById('venc-overlay').classList.remove('open');
+  }
+
+  function salvarVenc() {
+    const mat = (fichaData && fichaData.func && fichaData.func.matricula) || fichaMat;
+    if (!mat) return;
+    const mes = document.getElementById('venc-mes').value;   // 'yyyy-mm' ou ''
+    const iso = mes ? mes + '-01' : '';
+    const b = document.getElementById('venc-save');
+    b.disabled = true; b.textContent = 'Salvando…';
+    const err = document.getElementById('venc-error'); err.style.display = 'none';
+
+    if (typeof google === 'undefined' || !google.script) {
+      const key = _mkFront(mat);
+      const isCalc = (fichaData && fichaData.func && fichaData.func.temCalculo) ||
+        ((allEmployees.find(e => _mkFront(e.matricula) === key) || {}).vencCalc === true);
+      if (iso) demoVenc[key] = iso; else delete demoVenc[key];
+      if (!isCalc) {
+        if (fichaData && fichaData.func) { fichaData.func.vencManual = iso; fichaData.func.vencimento = iso; }
+        allEmployees.forEach(e => { if (_mkFront(e.matricula) === key) { e.vencManual = iso; e.vencimento = iso; } });
+        allData.forEach(r => { if (_mkFront(r.matricula) === key) r.dueDate = iso; });
+      } else if (fichaData && fichaData.func) {
+        fichaData.func.vencManual = iso;
+      }
+      fecharVenc();
+      renderFicha(fichaData);
+      applyFilters();
+      return;
+    }
+
+    google.script.run
+      .withSuccessHandler(txt => {
+        let res;
+        try { res = JSON.parse(txt); } catch (e) { res = { success: false, error: 'Resposta inválida.' }; }
+        if (res.success) { fecharVenc(); openFichaFor(mat, fichaNome); setTimeout(loadData, 300); }
+        else { b.disabled = false; b.textContent = 'Salvar'; err.textContent = res.error || 'Erro ao salvar.'; err.style.display = 'block'; }
+      })
+      .withFailureHandler(e => {
+        b.disabled = false; b.textContent = 'Salvar';
+        err.textContent = 'Erro: ' + ((e && e.message) || e); err.style.display = 'block';
+      })
+      .setEmployeeVencimento({ matricula: mat, vencimento: iso });
+  }
+
   function apagarFerias(id) {
     const r = allData[id];
     if (!r || !r.rowIndex) return;
@@ -2541,17 +2994,22 @@
     const emp = allEmployees.find(e => _mkFront(e.matricula) === _mkFront(r.matricula))
              || allData.find(x => x.name === r.name) || {};
     const ativo = emp.ativo !== false;
+    const ajList = demoAjustes[_mkFront(r.matricula)] || [];
+    const ajSum = ajList.reduce((s, a) => s + (Number(a.dias) || 0), 0);
+    const vm = demoVenc[_mkFront(r.matricula)] || '';
+    const temCalc = !!r.dueDate;
     return {
       success: true,
       func: { matricula: r.matricula || '—', nome: r.name, filial: r.branch || '', cargo: '—',
-              admissao: '', situacao: ativo ? 'Ativo' : 'Inativo', ativo: ativo, registrado: true },
-      saldo: { atual, inicial: 0, creditados: atual + gozadas, gozadas, abono: 0, ajustes: 0,
+              admissao: '', situacao: ativo ? 'Ativo' : 'Inativo', ativo: ativo, registrado: true,
+              vencimento: r.dueDate || vm, vencManual: vm, temCalculo: temCalc },
+      saldo: { atual, inicial: 0, creditados: atual + gozadas - ajSum, gozadas, abono: 0, ajustes: ajSum,
                risco: 0, proximoCredito: r.dueDate || '' },
       periodos: r.dueDate ? [{ periodo: '—', iniAq: '', fimAq: '', concessao: r.dueDate,
                direito: '', creditado: 'Sim', situacao: '' }] : [],
       lancamentos: rows.map(x => ({ periodo: '', parcela: 1, inicio: x.startDate, termino: x.endDate,
                retorno: x.returnDate, dias: x.total, tipo: 'Gozo', obs: '' })),
-      ajustes: [],
+      ajustes: ajList.map(a => ({ ...a })),
     };
   }
 
@@ -2604,12 +3062,16 @@
         </tr>`).join('')}</tbody></table></div>`
       : '<div class="ficha-empty">Nenhuma férias lançada.</div>';
 
+    const podeAjuste = ehRH() && f.matricula && String(f.matricula) !== '—';
     const ajuTbl = d.ajustes.length ? `<div class="ficha-tbl-wrap"><table class="ficha-tbl">
-        <thead><tr><th>Data</th><th>Dias (+/−)</th><th>Observação</th></tr></thead>
-        <tbody>${d.ajustes.map(a => `<tr>
+        <thead><tr><th>Data</th><th>Dias (+/−)</th><th>Observação</th>${podeAjuste ? '<th class="no-print"></th>' : ''}</tr></thead>
+        <tbody>${d.ajustes.map((a, i) => `<tr>
           <td>${fmtDateBR(a.data)}</td>
           <td style="text-align:center">${(a.dias === '' || a.dias == null) ? '—' : signed(a.dias)}</td>
           <td class="wrap">${escHtml(a.obs || '')}</td>
+          ${podeAjuste ? `<td class="no-print" style="white-space:nowrap;text-align:right">
+            <button class="mini-btn" title="Editar" onclick="editarAjuste(${i})">✏</button>
+            <button class="del-btn" title="Apagar" onclick="excluirAjuste(${i})">🗑</button></td>` : ''}
         </tr>`).join('')}</tbody></table></div>`
       : '<div class="ficha-empty">Sem observações.</div>';
 
@@ -2623,6 +3085,14 @@
           <span class="ficha-chip">Admissão ${fmtDateBR(f.admissao)}</span>
           <span class="ficha-chip"${f.ativo === false ? ' style="background:var(--danger-light);color:var(--danger)"' : ''}>Situação: ${escHtml(f.situacao || (f.ativo === false ? 'Inativo' : 'Ativo'))}</span>
           <span class="ficha-chip">Registrado: ${f.registrado ? 'Sim' : 'Não'}</span>
+        </div>
+        <div style="margin-top:6px;font-size:12px;color:var(--gray-700)">
+          Vencimento das férias: <strong>${f.vencimento ? fmtMonthYear(f.vencimento) : '—'}</strong>
+          ${f.temCalculo
+            ? '<span style="color:var(--gray-500)"> (calculado do período aquisitivo)</span>'
+            : (podeAjuste
+                ? ` <button class="mini-btn no-print" onclick="abrirVenc()">${f.vencimento ? '✏ alterar' : '+ definir'}</button>`
+                : '')}
         </div>
       </div>
       ${warn}
@@ -2648,7 +3118,17 @@
         </div>${perTbl}
       </div>
       <div><div class="ficha-sec-title">Histórico de gozo / abono</div>${lanTbl}</div>
-      <div><div class="ficha-sec-title">Observações / ajustes de saldo</div>${ajuTbl}</div>
+      <div>
+        <div class="ficha-sec-title" style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+          <span>Observações / ajustes de saldo</span>
+          ${ehRH() && f.matricula && String(f.matricula) !== '—'
+            ? '<span class="no-print" style="display:flex;gap:6px;flex-wrap:wrap">'
+              + '<button class="mini-btn" onclick="abrirAjuste(\'ajuste\')">+ Lançar ajuste</button>'
+              + '<button class="mini-btn" onclick="abrirAjuste(\'obs\')">+ Observação</button>'
+              + '</span>'
+            : ''}
+        </div>${ajuTbl}
+      </div>
     `;
   }
 
@@ -3117,8 +3597,22 @@
     }
     const monthISO = monthInput.value;
 
-    const relevant = allData.filter(r => r.dueDate && r.dueDate.substring(0, 7) === monthISO)
-      .sort((a, b) => a.branch.localeCompare(b.branch) || a.name.localeCompare(b.name));
+    // 1) registrados: linhas de allData com vencimento (concessão calculada) no mês
+    const fromData = allData.filter(r => r.dueDate && r.dueDate.substring(0, 7) === monthISO);
+    const seen = new Set(fromData.map(r => _mkFront(r.matricula || (r.branch + '|' + r.name))));
+
+    // 2) não registrados: vencimento manual (aba Func col. J) no mês — não estão em allData
+    const fromEmp = allEmployees
+      .filter(e => !e.registrado && e.vencimento && e.vencimento.substring(0, 7) === monthISO)
+      .filter(e => !seen.has(_mkFront(e.matricula || (e.filial + '|' + e.nome))))
+      .map(e => ({
+        branch: e.filial || '', name: e.nome, matricula: e.matricula,
+        dueDate: e.vencimento, availableDays: e.saldo,
+        startDate: '', endDate: '',           // sem status de férias
+      }));
+
+    const relevant = fromData.concat(fromEmp)
+      .sort((a, b) => (a.branch || '').localeCompare(b.branch || '') || a.name.localeCompare(b.name));
 
     document.getElementById('due-count').textContent = relevant.length + ' funcionário(s)';
 
@@ -3144,7 +3638,9 @@
       const rows = g.rows.map(r => `
         <tr>
           <td>${escHtml(r.branch)}</td>
-          <td>${empLink(r)}</td>
+          <td>${(r._id == null && r.matricula)
+            ? `<a href="#" class="emp-link" onclick="openFichaFor('${escHtml(String(r.matricula))}');return false">${escHtml(r.name)}</a>`
+            : empLink(r)}</td>
           <td>${fmtMonthYear(r.dueDate)}</td>
           <td style="text-align:center">${r.availableDays !== '' && r.availableDays !== undefined ? r.availableDays : '—'}</td>
           <td>${statusBadge(getStatus(r))}</td>

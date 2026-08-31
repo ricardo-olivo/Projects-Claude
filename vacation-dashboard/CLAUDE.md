@@ -29,6 +29,10 @@ calcula um **"banco de dias"** por funcionário e gera o **Aviso de Férias em P
 - Incluir período aquisitivo pelo painel (na ficha, só RH).
 - Cadastrar funcionário novo pelo painel (aba Funcionários, só RH).
 - Ativar / inativar funcionário (desligamento) pela ficha, só RH — grava `Func.Situação`.
+- Lançar / **editar** / **excluir** ajuste manual de saldo e observação/justificativa
+  pela ficha, só RH (aba `Ajustes`).
+- Definir o vencimento das férias (mês/ano) pela ficha, só RH — para quem não tem
+  período aquisitivo (aba `Func`, coluna J).
 - Aviso de Férias em PDF (download).
 - Filtro por filial, status, mês, busca por nome; filtro Registrado/Sem registro
   na aba Funcionários.
@@ -180,6 +184,9 @@ vacation-dashboard/
 | `addPeriodoAquisitivo(payload)` | grava período na aba Periodos (só RH) |
 | `addEmployee(payload)` | cadastra funcionário na aba Func (só RH); matrícula sugerida/editável; se registrado, cria o 1º período aquisitivo |
 | `setEmployeeStatus(payload)` | grava `Func.Situação` = Ativo/Inativo (desligamento) — só RH. `getVacationData`/`getEmployeeFicha` devolvem `ativo` |
+| `addAjuste(payload)` | grava linha na aba `Ajustes` (Data · Dias ± · Observação) — só RH. Dias vazio/0 = só observação (não mexe no saldo) |
+| `updateAjuste(payload)` / `deleteAjuste(payload)` | edita / apaga uma linha da aba `Ajustes` pelo `rowIndex` (confere a matrícula) — só RH. `getEmployeeFicha` devolve `rowIndex` em cada ajuste |
+| `setEmployeeVencimento(payload)` | grava o vencimento das férias (mês/ano) na coluna J da aba `Func` — só RH. Só é usado quando **não** há período aquisitivo (concessão calculada tem prioridade) |
 | `getPaymentData(func, saldoOf)` | funcionários sem registro (aba Func + planilha legada opcional) |
 | `detectConflicts(data)` | 3+ sobreposições na mesma filial |
 | `_avisoHtml(d)` / `_dataExtenso` / `_periodoAquisitivo` / `_ctpsFake` | helpers do aviso |
@@ -201,7 +208,8 @@ filial), `expandedGroups` (grupos de funcionário abertos), `tableGroups`.
 ### Abas da planilha (colunas base-0 no `Code.gs`)
 
 - **Func**: Matrícula · Nome · Filial · Cargo · Admissão · Situação · Saldo inicial
-  de férias · Registrado · CTPS (I, opcional)
+  de férias · Registrado · CTPS (I, opcional) · Vencimento das férias
+  (J, opcional — mês/ano manual, só vale sem período aquisitivo)
 - **Periodos**: Matrícula · Período · Início aquisitivo · Fim aquisitivo · Faltas ·
   Dias de direito · Concessão até · Creditado ao banco · Situação do prazo ·
   _seq · _chave

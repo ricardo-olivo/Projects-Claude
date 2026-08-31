@@ -1,22 +1,24 @@
 # STATUS DO PROJETO
 
 ## Data do checkpoint
-2026-08-31 (atualizado no mesmo dia: visão Tabela agrupada por funcionário)
+2026-08-31 (atualizado no mesmo dia: agrupamento da Tabela, cards de filial,
+cadastro/inativação de funcionário, cards de resumo clicáveis)
 
 ## Branch atual
 `main` (repositório `Projects-Claude`, remote `https://github.com/ricardo-olivo/Projects-Claude.git`).
-`main` está **1 commit à frente de `origin/main`** (`efd4be2`, checkpoint de docs, ainda
-não pusheado) **+ alterações não commitadas** no working tree (agrupamento da Tabela,
-ver "Arquivos modificados recentemente").
+`main` está **2 commits à frente de `origin/main`** (`efd4be2` docs + `2beccb8`
+features do vacation-dashboard, nenhum pusheado) **+ alteração não commitada** no
+working tree (`Dashboard.html`: cards de resumo clicáveis — ver "Arquivos
+modificados recentemente").
 
 ## Último commit
-`efd4be2` — "docs: add project checkpoint and development context" (2026-08-31 08:32 -0300).
-Último commit **de código**: `c93b28c` — "Rebuild vacation-dashboard on the
-single-spreadsheet \"banco de dias\" model" (2026-08-29 12:21 -0300).
-Autor: ricardo.olivo <rfolivo@gmail.com>.
+`2beccb8` — "vacation-dashboard: group Tabela by employee/branch, add employee CRUD
+and active/inactive" (2026-08-31). Autor: ricardo.olivo <rfolivo@gmail.com>.
 
 Commits recentes do repositório (multi-projeto):
 ```
+2beccb8 vacation-dashboard: group Tabela by employee/branch, add employee CRUD and active/inactive  <-- este projeto
+efd4be2 docs: add project checkpoint and development context                          (este projeto)
 c93b28c Rebuild vacation-dashboard on the single-spreadsheet "banco de dias" model   <-- este projeto
 b84f09e Add Margem c/ Manipulados to the KPI row                                     (farmacias-dashboard)
 fac376b Auto-classify store porte from faturamento instead of the sheet column        (farmacias-dashboard)
@@ -69,6 +71,16 @@ segmentado por filial (RH x Gerente).
   `Func.Situação` = Ativo/Inativo. Inativo continua na Tabela/cards/ficha com selo
   "Inativo", some da lista de "Incluir Férias"; aba Funcionários tem filtro
   Ativos/Inativos/Todos (padrão Ativos).
+- **Ajuste manual de saldo** e **observação/justificativa** pela ficha (só RH):
+  incluir, **editar** e **excluir**; grava na aba `Ajustes`; ajuste com dias ±
+  recalcula os dias disponíveis (prévia no modal), observação sem dias só registra
+  o texto.
+- **Cards de resumo do topo clicáveis**: cada um abre um modal com a lista por
+  trás do número (funcionários, férias iniciando no mês, em férias agora, não
+  registrados).
+- **Vencimento das férias manual** pela ficha (só RH): define mês/ano de
+  vencimento para quem não tem período aquisitivo; aparece na coluna Vencimento
+  das listas/KPIs.
 - **Aviso de Férias em PDF**: HTML → PDF via `Utilities.getAs('application/pdf')`,
   entregue como download base64. CNPJ/Razão Social por `Lojas` ou `EMPRESA_PADRAO`;
   período aquisitivo da aba `Periodos` ou calculado da admissão; CTPS real ou
@@ -103,7 +115,8 @@ segmentado por filial (RH x Gerente).
    para Aprovado; (opcional) e-mails via `MailApp` (limite 100/dia Gmail).
 2. ~~Cadastrar funcionário (aba `Func`) pelo dashboard.~~ **Feito** (só RH) — falta
    commit + deploy do `Code.gs`.
-3. **Lançar ajuste manual (aba `Ajustes`) pelo dashboard.** Hoje é manual.
+3. ~~Lançar ajuste manual (aba `Ajustes`) pelo dashboard.~~ **Feito** (pela ficha,
+   só RH) — falta commit + deploy do `Code.gs`.
 4. **Reescrever o `README.md`** — está descrevendo a arquitetura antiga (28 planilhas).
 5. **Trocar o logo recriado pelo PNG oficial** (`LOGO_DATA_URI` na `Home.html`).
 6. Preencher `EMPRESA_PADRAO` / criar aba `Lojas` com CNPJ correto por filial
@@ -159,70 +172,83 @@ segmentado por filial (RH x Gerente).
 - `EMPRESA_PADRAO` pré-preenchido com os dados do exemplo do usuário (conferir).
 
 ## Arquivos modificados recentemente
-No commit `c93b28c` (2026-08-29): `vacation-dashboard/Code.gs`,
-`vacation-dashboard/Dashboard.html`, `vacation-dashboard/README.md` alterados;
-`vacation-dashboard/Home.html` criado (4 arquivos, +1966 / −284).
 
-**Não commitado (working tree):** `vacation-dashboard/Dashboard.html` — visão Tabela
-agrupada por funcionário. Só front (nada no `Code.gs`):
-- `renderTable()` reescrito: agrupa `filteredData` por funcionário
-  (`empKey` = matrícula, ou `filial|nome`). 1 período → linha normal; 2+ → linha-resumo
-  `grp-row` recolhível + linhas-filhas `grp-child` (mantêm `data-idx` real, então
-  edição inline / 🗑 / `flashRow` / ficha continuam funcionando).
-- Novos helpers: `empKey`, `groupFiltered`, `groupSummary`, `detailRow`, `toggleGroup`.
-- Novo estado: `expandedGroups` (Set de chaves abertas, persiste entre ordenações) e
-  `tableGroups`.
-- Resumo mostra: filial, nome + "N períodos", período representativo (em férias →
-  próximo agendado → mais recente), **soma dos dias**, dias disponíveis, vencimento,
-  status mais relevante. Grupos começam recolhidos; incluir férias abre o grupo.
-- Contador virou `N funcionário(s) · M registro(s)`.
-- CSS: `.grp-row` / `.grp-caret` / `.grp-count` / `.grp-child`.
-- `MOCK_DATA`: adicionado "Jeovany Fossatti" com 5 períodos só para testar o
-  agrupamento no preview local (não roda no Apps Script).
+### Commitado em `2beccb8` (2026-08-31) — `Code.gs` + `Dashboard.html` + docs
 
-**Cadastrar funcionário pelo dashboard** (backend + front):
-- `Code.gs`: nova função `addEmployee(payload)` — grava uma linha na aba `Func`
-  (só VALORES), **só RH** (`_scopeAtual().perfil !== 'rh'` recusa). Matrícula: usa a
-  informada ou sugere "maior número + 1"; valida unicidade com `_mk()`. Se
-  `registrado`, chama `addPeriodoAquisitivo` para criar o 1º período aquisitivo a
-  partir da admissão (0 faltas); se isso falhar, o funcionário é salvo mesmo assim
-  e volta `periodoAviso`.
-- `Dashboard.html`: botão "+ Cadastrar Funcionário" no cabeçalho da aba Funcionários
-  (classe `rh-only` → escondido para Gerente via `body.perfil-gerente`), modal
-  `#emp-overlay` (nome, filial c/ datalist, cargo, admissão, matrícula sugerida
-  editável, registrado Sim/Não, saldo inicial, CTPS opcional), funções
-  `openEmpModal` / `closeEmpModal` / `validateEmpModal` / `submitAddEmployee` /
-  `nextMatriculaSuggestion`. Sucesso → `loadData()` (no preview, espelha o
-  cadastro + linha placeholder localmente). CSS `body.perfil-gerente .rh-only`.
+**1. Visão Tabela agrupada por funcionário + grade de cards de filial** (só front):
+- A aba Tabela abre numa **grade de cards de filial** (`renderBranchCards`); clicar
+  entra na filial. Estado `tableBranch` (null = cards; string = tabela da filial),
+  botão "← Filiais", contador "N filial(is)".
+- Dentro da filial, `renderTable()` agrupa por funcionário (`empKey` = matrícula ou
+  `filial|nome`): 1 período → linha normal; 2+ → linha-resumo `grp-row` recolhível
+  + `grp-child` (mantêm `data-idx` real → edição inline / 🗑 / ficha ok).
+- Helpers: `empKey`, `groupFiltered`, `groupSummary`, `detailRow`, `toggleGroup`,
+  `branchList`, `renderBranchCards`, `setTableBranch`, `clearTableBranch`.
+  Estado: `expandedGroups`, `tableGroups`.
+- CSS: `.grp-*`, `.branch-grid` / `.branch-card` / `.bc-*` / `.btn-back`.
+- `MOCK_DATA` ganhou "Jeovany Fossatti" (5 períodos) e `matricula` por funcionário
+  (preview).
 
-E também: **visão Tabela agora abre numa grade de cards de filial**. Só front:
-- Novo estado `tableBranch` (`null` = grade de cards; string = tabela daquela filial).
-- `renderTable()` bifurca: sem filial → `renderBranchCards()` (esconde a `<table>`);
-  com filial → tabela agrupada só com os registros dessa filial
-  (`groupFiltered()` filtra por `tableBranch` preservando o `idx` original).
-- Novos: `branchList()`, `renderBranchCards()`, `setTableBranch()`, `clearTableBranch()`.
-- Card por filial: nome, nº de funcionários, nº de registros, tags "N em férias" /
-  "N conflitos". Cabeçalho da visão troca entre "Filiais" e o nome da filial, com
-  botão "← Filiais". Contador vira "N filial(is)".
-- Cards e drilldown respeitam os filtros do topo (status / mês / nome / multiselect).
-- Incluir Férias leva direto para a filial do lançamento (`tableBranch = payload.branch`).
-- CSS: `.branch-grid` / `.branch-card` / `.bc-name` / `.bc-stats` / `.bc-tag` / `.btn-back`.
+**2. Cadastrar funcionário** (só RH):
+- `Code.gs`: `addEmployee(payload)` — grava linha na aba `Func` (só VALORES);
+  matrícula informada ou "maior nº + 1", unicidade por `_mk()`; se `registrado`,
+  chama `addPeriodoAquisitivo` (admissão, 0 faltas).
+- `Dashboard.html`: botão "+ Cadastrar Funcionário" (`rh-only`) na aba Funcionários,
+  modal `#emp-overlay`, `openEmpModal`/`closeEmpModal`/`validateEmpModal`/
+  `submitAddEmployee`/`nextMatriculaSuggestion`. CSS `body.perfil-gerente .rh-only`.
 
-**Ativar / inativar funcionário** (backend + front):
-- `Code.gs`: nova `setEmployeeStatus({matricula, ativo})` — grava `Func.Situação`
-  ("Ativo"/"Inativo"), **só RH**. `getVacationData` passou a devolver `ativo` em
-  `data[]` e `employees[]`; `getEmployeeFicha` devolve `func.ativo`.
-- `Dashboard.html`: botão "⊘ Marcar inativo / ✓ Reativar" no cabeçalho da ficha
+**3. Ativar / inativar funcionário** (só RH):
+- `Code.gs`: `setEmployeeStatus({matricula, ativo})` — grava `Func.Situação`
+  Ativo/Inativo. `getVacationData` devolve `ativo` em `data[]` e `employees[]`;
+  `getEmployeeFicha` devolve `func.ativo`.
+- `Dashboard.html`: botão "⊘ Marcar inativo / ✓ Reativar" na ficha
   (`#ficha-status-btn`, `rh-only`), `toggleEmpStatus()`, `_mkFront()`. Aba
-  Funcionários: 2º grupo de pills Ativos/Inativos/Todos (`empFiltroStatus`, padrão
-  `ativos`), selo "Inativo" + `row-inativo` na tabela e na visão Tabela;
-  `currentEmployees()` (lista de Incluir Férias) exclui inativos. CSS `.emp-fbtn2`,
-  `.badge-inativo`, `.row-inativo`. MOCK_DATA ganhou `matricula` por funcionário
-  para o toggle funcionar no preview.
+  Funcionários com pills Ativos/Inativos/Todos (`empFiltroStatus`, padrão `ativos`),
+  selo "Inativo" na aba e na Tabela; `currentEmployees()` (Incluir Férias) exclui
+  inativos. CSS `.emp-fbtn2`, `.badge-inativo`, `.row-inativo`.
 
-Arquivos com alteração não commitada: `vacation-dashboard/Dashboard.html` e
-`vacation-dashboard/Code.gs`. Ainda **não commitado** e **não redeployado** no
-Apps Script (deploy do `Code.gs` também é necessário agora).
+### Não commitado (working tree) — `Dashboard.html` + `Code.gs`
+
+**a) Cards de resumo (KPIs) clicáveis** (só `Dashboard.html`): os 4 cards do topo
+viraram botões; clicar abre o modal `#kpi-overlay` com a lista correspondente
+(`openKpi(which)` / `closeKpi` / `kpiGoto`). O botão "Abrir aba" leva à aba/filtro
+certos. CSS novo: `.card-click`, `.card-cta`, `.kpi-count`.
+
+**c) Vencimento das férias manual pela ficha** (só RH):
+- `Code.gs`: nova coluna **J** na aba `Func` (`F.VENC = 9`). `setEmployeeVencimento
+  ({matricula, vencimento})` grava mês/ano (1º dia do mês) ou limpa. Monta a data
+  por `new Date(ano, mes-1, 1)` a partir do texto `yyyy-mm` — **não** usa
+  `new Date(string)` (parseava como UTC e deslocava o mês para trás em UTC−3). `dueOf()` e
+  `getEmployeeFicha` caem para esse valor **só quando não há período aquisitivo**
+  (concessão calculada tem prioridade). `employees[]` ganhou `vencManual` /
+  `vencCalc`; `getEmployeeFicha.func` ganhou `vencimento` / `vencManual` /
+  `temCalculo`. `addEmployee` reserva a coluna J.
+- `Dashboard.html`: linha "Vencimento das férias" na ficha com botão
+  "+ definir / ✏ alterar" (`rh-only`, só quando não é calculado), modal
+  `#venc-overlay` (`<input type="month">`), `abrirVenc` / `fecharVenc` /
+  `salvarVenc`. Preview: `demoVenc` por matrícula.
+- `renderDueView()` (aba **Vencimento Mensal**) agora inclui **não registrados**
+  com vencimento manual no mês (antes só varria `allData`, onde eles não entram);
+  botão **"🔍 Pesquisar"** adicionado ao lado do seletor de mês.
+
+**b) Ajuste manual / observação pela ficha** (só RH) — incluir, **editar** e **excluir**:
+- `Code.gs`: `addAjuste({matricula, data?, dias?, obs})` grava linha na aba `Ajustes`
+  (só VALORES). Dias vazio/0 → só observação (não altera saldo); dias ± credita/
+  desconta do banco de dias. `updateAjuste({rowIndex, matricula, ...})` reescreve a
+  linha; `deleteAjuste({rowIndex, matricula})` apaga (ambos conferem a matrícula da
+  linha antes). `getEmployeeFicha` passou a devolver `rowIndex` em cada ajuste.
+- `Dashboard.html`: seção "Observações / ajustes de saldo" ganhou "+ Lançar ajuste"
+  e "+ Observação" (`rh-only`) + **✏ / 🗑 por linha**. Modal `#ajuste-overlay`
+  compartilhado por incluir/editar (`abrirAjuste` / `editarAjuste` / `excluirAjuste`
+  / `salvarAjuste` / `ajPreview` / `_aplicaDeltaSaldo`), estado `ajEditRow` /
+  `ajEditIdx` / `ajEditOldDias`, prévia do novo saldo. CSS `.form-group textarea`.
+  Preview: `demoAjustes` guarda os ajustes por matrícula no modo mock.
+
+Ainda **não commitado**.
+
+### Deploy
+`efd4be2` e `2beccb8` **não pusheados**; nada redeployado no Apps Script — o
+próximo deploy precisa de **`Code.gs` + `Dashboard.html`** (nova versão).
 
 ## Banco de dados
 "Banco" = uma planilha Google Sheets (`MODEL_SHEET_ID = 1wLN9oZji-Uk6prHMcvav0CNg1u-tFMz_`),
@@ -236,6 +262,9 @@ Alterações de schema pendentes:
 - Criar a aba **`Acessos`** (E-mail | Filial | Perfil) para ligar a fase 2.
 - Opcional: aba **`Lojas`** (Filial | Razão Social | CNPJ | Cidade) para o aviso.
 - Opcional: coluna **I (CTPS)** na aba `Func`.
+- Opcional: coluna **J (Vencimento das férias)** na aba `Func` — mês/ano manual,
+  usado só para quem não tem período aquisitivo. O `Code.gs` trata a ausência
+  (célula vazia = sem vencimento manual); `setEmployeeVencimento` grava nela.
 Sem migrations formais — as abas/colunas são editadas manualmente na planilha; o
 `Code.gs` trata a ausência delas.
 

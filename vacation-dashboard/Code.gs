@@ -22,8 +22,9 @@ const TAB = {
 const AC = { EMAIL:0, FILIAL:1, PERFIL:2 };
 
 // Índice das colunas (base 0)
-// Func: coluna I (CTPS) é opcional — deixe em branco se não usar
-const F  = { MAT:0, NOME:1, FILIAL:2, CARGO:3, ADMISSAO:4, SITUACAO:5, SALDO_INI:6, REGISTRADO:7, CTPS:8 };
+// Func: coluna I (CTPS) é opcional; coluna J (Vencimento) = mês/ano de vencimento
+// das férias definido à mão (só usado quando não há período aquisitivo calculado)
+const F  = { MAT:0, NOME:1, FILIAL:2, CARGO:3, ADMISSAO:4, SITUACAO:5, SALDO_INI:6, REGISTRADO:7, CTPS:8, VENC:9 };
 const P  = { MAT:0, PERIODO:1, INI_AQ:2, FIM_AQ:3, FALTAS:4, DIREITO:5, CONCESSAO:6, CREDITADO:7, SITUACAO:8 };
 const L  = { MAT:0, PERIODO:1, PARCELA:2, INICIO:3, TERMINO:4, DIAS:5, TIPO:6, RETORNO:7, RETORNO_UTIL:8, OBS:9 };
 const AJ = { MAT:0, DATA:1, DIAS:2, OBS:3 };
@@ -187,6 +188,7 @@ function getVacationData() {
       registrado: reg !== 'não' && reg !== 'nao',
       situacao: sit,
       ativo: sit.toLowerCase() !== 'inativo',
+      vencManual: formatDate(r[F.VENC]),
     };
   });
 
@@ -230,9 +232,11 @@ function getVacationData() {
     return (e ? e.saldoIni : 0) + (credit[mat] || 0)
       - (goz[mat] || 0) - (abo[mat] || 0) + (adj[mat] || 0);
   };
+  // vencimento: data de concessão calculada do período aquisitivo; se não houver
+  // nenhum período, cai para o vencimento definido à mão na aba Func (coluna J)
   const dueOf = function (mat) {
     const list = (conc[mat] || []).slice().sort(function (a, b) { return a - b; });
-    if (!list.length) return '';
+    if (!list.length) return (emp[mat] && emp[mat].vencManual) || '';
     const fut = list.filter(function (d) { return d >= today; });
     return formatDate(fut.length ? fut[0] : list[0]);
   };
@@ -294,6 +298,7 @@ function getVacationData() {
     const registrado = reg !== 'não' && reg !== 'nao';
     if (registrado) nReg++; else nNao++;
     const sit = String(r[F.SITUACAO] || '').trim();
+    const temCalc = ((conc[mat] || []).length > 0);
     employees.push({
       matricula: mat,
       nome: nome,
@@ -302,6 +307,8 @@ function getVacationData() {
       registrado: registrado,
       saldo: saldoOf(mat),
       vencimento: dueOf(mat),
+      vencManual: formatDate(r[F.VENC]),
+      vencCalc: temCalc,
       situacao: sit,
       ativo: sit.toLowerCase() !== 'inativo',
     });
@@ -357,7 +364,10 @@ function getEmployeeFicha(matricula) {
     const today = _midnight(new Date());
     const per = _rows(TAB.PERIODOS).filter(function (r) { return _mk(r[P.MAT]) === mat; });
     const lan = _rows(TAB.LANCAMENTOS).filter(function (r) { return _mk(r[L.MAT]) === mat; });
-    const aju = _rows(TAB.AJUSTES).filter(function (r) { return _mk(r[AJ.MAT]) === mat; });
+    const aju = [];
+    _rows(TAB.AJUSTES).forEach(function (r, i) {
+      if (_mk(r[AJ.MAT]) === mat) aju.push({ r: r, rowIndex: i + 2 });
+    });
 
     const inicial = Number(fr[F.SALDO_INI]) || 0;
     let creditados = 0, gozadas = 0, abono = 0, ajustes = 0, riscoBase = 0;
@@ -380,7 +390,7 @@ function getEmployeeFicha(matricula) {
       if (t === 'gozo') gozadas += d;
       if (t === 'abono') abono += d;
     });
-    aju.forEach(function (r) { ajustes += Number(r[AJ.DIAS]) || 0; });
+    aju.forEach(function (x) { ajustes += Number(x.r[AJ.DIAS]) || 0; });
 
     const risco = Math.max(0, riscoBase - gozadas - Math.max(0, -ajustes));
     const atual = inicial + creditados - gozadas - abono + ajustes;
@@ -390,6 +400,17 @@ function getEmployeeFicha(matricula) {
       return toDate(r[P.FIM_AQ]) || (iniAq ? _plusDays(_addMonths(iniAq, 12), -1) : null);
     }).filter(function (d) { return d && d > today; })
       .sort(function (a, b) { return a - b; });
+
+    // vencimento das férias: concessão calculada dos períodos; senão o manual (Func.J)
+    const concList = per.map(function (r) {
+      const iniAq = toDate(r[P.INI_AQ]);
+      const fimAq = toDate(r[P.FIM_AQ]) || (iniAq ? _plusDays(_addMonths(iniAq, 12), -1) : null);
+      return toDate(r[P.CONCESSAO]) || (fimAq ? _addMonths(fimAq, 12) : null);
+    }).filter(function (d) { return d; }).sort(function (a, b) { return a - b; });
+    const vencCalc = concList.length
+      ? formatDate(concList.filter(function (d) { return d >= today; })[0] || concList[0])
+      : '';
+    const vencManual = formatDate(fr[F.VENC]);
 
     const reg = String(fr[F.REGISTRADO] || '').trim().toLowerCase();
 
@@ -404,6 +425,9 @@ function getEmployeeFicha(matricula) {
         situacao: String(fr[F.SITUACAO] || '').trim(),
         ativo: String(fr[F.SITUACAO] || '').trim().toLowerCase() !== 'inativo',
         registrado: reg !== 'não' && reg !== 'nao',
+        vencimento: vencCalc || vencManual,
+        vencManual: vencManual,
+        temCalculo: !!vencCalc,
       },
       saldo: {
         atual: atual, inicial: inicial, creditados: creditados,
@@ -444,8 +468,11 @@ function getEmployeeFicha(matricula) {
           obs: String(r[L.OBS] || '').trim(),
         };
       }),
-      ajustes: aju.map(function (r) {
-        return { data: formatDate(r[AJ.DATA]), dias: r[AJ.DIAS], obs: String(r[AJ.OBS] || '').trim() };
+      ajustes: aju.map(function (x) {
+        return {
+          data: formatDate(x.r[AJ.DATA]), dias: x.r[AJ.DIAS],
+          obs: String(x.r[AJ.OBS] || '').trim(), rowIndex: x.rowIndex,
+        };
       }),
     });
   } catch (e) { return _err(e.message); }
@@ -923,7 +950,7 @@ function addEmployee(payload) {
 
     const sh = _sheet(TAB.FUNC);
     const nr = sh.getLastRow() + 1;
-    const width = F.CTPS + 1;                 // A..I (inclui CTPS)
+    const width = F.VENC + 1;                 // A..J (inclui CTPS e Vencimento)
     const rowVals = new Array(width).fill('');
     rowVals[F.MAT]        = matToWrite;
     rowVals[F.NOME]       = nome;
@@ -998,6 +1025,150 @@ function setEmployeeStatus(payload) {
     if (dv) cell.setDataValidation(dv);
 
     return JSON.stringify({ success: true, matricula: mat, situacao: situacao, ativo: situacao === 'Ativo' });
+  } catch (e) { return _err(e.message); }
+}
+
+// ============================================================
+// VENCIMENTO DAS FÉRIAS (manual) — grava a coluna J da aba Func (só RH)
+// payload = { matricula, vencimento }  vencimento = 'yyyy-mm' | 'yyyy-mm-dd' | '' (limpa)
+// Só é usado quando o funcionário NÃO tem período aquisitivo calculado.
+// ============================================================
+function setEmployeeVencimento(payload) {
+  try {
+    if (_scopeAtual().perfil !== 'rh')
+      return _err('Só o RH pode definir o vencimento das férias.');
+
+    payload = payload || {};
+    const mat = _mk(payload.matricula);
+    if (!mat) return _err('Matrícula não informada.');
+
+    const rows = _rows(TAB.FUNC);
+    let idx = -1;
+    for (var i = 0; i < rows.length; i++) {
+      if (_mk(rows[i][F.MAT]) === mat) { idx = i; break; }
+    }
+    if (idx < 0) return _err('Funcionário não encontrado na aba Func.');
+
+    const cell = _sheet(TAB.FUNC).getRange(idx + 2, F.VENC + 1);
+    const v = String(payload.vencimento || '').trim();
+    if (!v) { cell.clearContent(); return JSON.stringify({ success: true, vencimento: '' }); }
+
+    // pega ano/mês direto do texto (evita new Date(string), que parseia como UTC
+    // e desloca o mês ao ler getMonth() no fuso local)
+    const m = v.match(/^(\d{4})-(\d{2})/);
+    if (!m) return _err('Vencimento inválido (use mês/ano).');
+    const ano = Number(m[1]), mes = Number(m[2]);
+    if (mes < 1 || mes > 12) return _err('Vencimento inválido (mês fora de 1–12).');
+    const first = new Date(ano, mes - 1, 1);   // meia-noite local, 1º dia do mês
+    cell.setValue(first).setNumberFormat('mm/yyyy');
+
+    return JSON.stringify({ success: true, vencimento: m[1] + '-' + m[2] + '-01' });
+  } catch (e) { return _err(e.message); }
+}
+
+// ============================================================
+// AJUSTE MANUAL / OBSERVAÇÃO — grava uma linha na aba Ajustes (só RH)
+// payload = { matricula, data? (ISO, default hoje), dias? (+/-), obs }
+// dias vazio/0  => só observação (não altera o saldo)
+// dias com sinal => credita (+) ou desconta (−) do banco de dias
+// ============================================================
+function addAjuste(payload) {
+  try {
+    if (_scopeAtual().perfil !== 'rh')
+      return _err('Só o RH pode lançar ajuste ou observação.');
+
+    payload = payload || {};
+    const matIn = _mk(payload.matricula);
+    if (!matIn) return _err('Matrícula não informada.');
+
+    const obs = String(payload.obs || '').trim();
+    const diasRaw = payload.dias;
+    const dias = (diasRaw === '' || diasRaw == null) ? 0 : Number(diasRaw);
+    if (isNaN(dias)) return _err('Dias do ajuste inválido — use número (ex.: -2 ou 5).');
+    if (!dias && !obs) return _err('Informe os dias do ajuste e/ou uma observação.');
+
+    const data = toDate(payload.data) || _midnight(new Date());
+
+    const fr = _rows(TAB.FUNC).find(function (r) { return _mk(r[F.MAT]) === matIn; });
+    if (!fr) return _err('Funcionário não encontrado na aba Func.');
+    const matRaw = fr[F.MAT];
+
+    const sh = _sheet(TAB.AJUSTES);
+    const existing = sh.getLastRow() > 1
+      ? sh.getRange(2, 1, sh.getLastRow() - 1, 4).getValues() : [];
+    const seq = existing.filter(function (r) { return _mk(r[AJ.MAT]) === matIn; }).length + 1;
+    const chave = String(matRaw) + '-' + seq;
+    const nr = sh.getLastRow() + 1;
+
+    // grava só VALORES (sem fórmula — locale pt-BR)
+    sh.getRange(nr, 1, 1, 6).setDataValidation(null);
+    sh.getRange(nr, 1, 1, 6).setValues([[
+      matRaw, data, (dias || ''), obs, seq, chave
+    ]]);
+    sh.getRange(nr, AJ.DATA + 1).setNumberFormat('dd/mm/yyyy');
+    try {
+      const dv = sh.getRange(2, 1).getDataValidation();
+      if (dv) sh.getRange(nr, 1).setDataValidation(dv);
+    } catch (e) { /* sem validação na linha 2 */ }
+
+    return JSON.stringify({ success: true, dias: dias, data: formatDate(data), obs: obs });
+  } catch (e) { return _err(e.message); }
+}
+
+// ============================================================
+// EDITAR AJUSTE / OBSERVAÇÃO — reescreve a linha na aba Ajustes (só RH)
+// payload = { rowIndex, matricula (conferência), data?, dias?, obs }
+// ============================================================
+function updateAjuste(payload) {
+  try {
+    if (_scopeAtual().perfil !== 'rh')
+      return _err('Só o RH pode editar ajuste ou observação.');
+
+    payload = payload || {};
+    const row = Number(payload.rowIndex);
+    if (!row || row < 2) return _err('Linha inválida.');
+
+    const sh = _sheet(TAB.AJUSTES);
+    if (row > sh.getLastRow()) return _err('Essa linha não existe mais. Recarregue a ficha.');
+    const cur = sh.getRange(row, 1, 1, Math.max(4, sh.getLastColumn())).getValues()[0];
+    if (payload.matricula && _mk(cur[AJ.MAT]) !== _mk(payload.matricula))
+      return _err('A linha mudou de posição na planilha. Recarregue a ficha e tente de novo.');
+
+    const obs = String(payload.obs || '').trim();
+    const diasRaw = payload.dias;
+    const dias = (diasRaw === '' || diasRaw == null) ? 0 : Number(diasRaw);
+    if (isNaN(dias)) return _err('Dias do ajuste inválido — use número (ex.: -2 ou 5).');
+    if (!dias && !obs) return _err('Informe os dias do ajuste e/ou uma observação.');
+    const data = toDate(payload.data) || cur[AJ.DATA] || _midnight(new Date());
+
+    sh.getRange(row, AJ.DATA + 1).setValue(data).setNumberFormat('dd/mm/yyyy');
+    sh.getRange(row, AJ.DIAS + 1).setValue(dias || '');
+    sh.getRange(row, AJ.OBS + 1).setValue(obs);
+
+    return JSON.stringify({ success: true, dias: dias, data: formatDate(data), obs: obs });
+  } catch (e) { return _err(e.message); }
+}
+
+// ============================================================
+// EXCLUIR AJUSTE / OBSERVAÇÃO — apaga a linha na aba Ajustes (só RH)
+// payload = { rowIndex, matricula (conferência) }
+// ============================================================
+function deleteAjuste(payload) {
+  try {
+    if (_scopeAtual().perfil !== 'rh')
+      return _err('Só o RH pode apagar ajuste ou observação.');
+
+    const row = Number(payload && payload.rowIndex);
+    if (!row || row < 2) return _err('Linha inválida.');
+
+    const sh = _sheet(TAB.AJUSTES);
+    if (row > sh.getLastRow()) return _err('Essa linha não existe mais. Recarregue a ficha.');
+    const cur = sh.getRange(row, 1, 1, Math.max(4, sh.getLastColumn())).getValues()[0];
+    if (payload.matricula && _mk(cur[AJ.MAT]) !== _mk(payload.matricula))
+      return _err('A linha mudou de posição na planilha. Recarregue a ficha e tente de novo.');
+
+    sh.deleteRow(row);
+    return JSON.stringify({ success: true });
   } catch (e) { return _err(e.message); }
 }
 
