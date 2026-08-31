@@ -277,6 +277,36 @@
     .badge-active  { background: var(--success-light); color: var(--success); }
     .badge-future  { background: var(--primary-light); color: var(--primary); }
     .badge-done    { background: var(--gray-100);      color: var(--gray-500); }
+    /* GRUPO POR FUNCIONÁRIO (visão Tabela) */
+    tr.grp-row { cursor: pointer; }
+    tr.grp-row td { background: var(--gray-50); font-weight: 600; }
+    tr.grp-row:hover td { background: var(--gray-100); }
+    .grp-caret { display: inline-block; width: 12px; margin-right: 4px; color: var(--gray-500);
+                 font-size: 9px; transition: transform .12s; }
+    tr.grp-row.open .grp-caret { transform: rotate(90deg); }
+    .grp-count { display: inline-block; margin-left: 8px; padding: 1px 7px; border-radius: 999px;
+                 background: var(--gray-200); color: var(--gray-600); font-size: 10px; font-weight: 700;
+                 text-transform: uppercase; letter-spacing: .3px; }
+    tr.grp-child td:first-child { box-shadow: inset 3px 0 0 var(--gray-200); }
+    /* CARDS DE FILIAL (visão Tabela) */
+    .branch-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+                   gap: 14px; padding: 18px 20px; }
+    .branch-card { text-align: left; background: #fff; border: 1px solid var(--gray-200);
+                   border-left: 4px solid var(--primary); border-radius: 10px; padding: 16px;
+                   cursor: pointer; font: inherit; transition: box-shadow .12s, transform .12s; }
+    .branch-card:hover { box-shadow: 0 4px 14px rgba(0,0,0,.1); transform: translateY(-2px); }
+    .bc-name { font-size: 15px; font-weight: 700; color: var(--gray-900); margin-bottom: 8px; }
+    .bc-stats { display: flex; gap: 14px; font-size: 12px; color: var(--gray-700); }
+    .bc-stats strong { color: var(--gray-900); font-size: 14px; }
+    .bc-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; min-height: 4px; }
+    .bc-tag { font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 999px;
+              text-transform: uppercase; letter-spacing: .3px; }
+    .bc-tag.act  { background: var(--success-light); color: var(--success); }
+    .bc-tag.warn { background: var(--warning-light); color: var(--warning); }
+    .btn-back { border: 1px solid var(--gray-200); background: var(--gray-50); border-radius: 6px;
+                padding: 5px 12px; font-size: 13px; cursor: pointer; color: var(--gray-700); }
+    .btn-back:hover { background: var(--gray-100); }
+    body.perfil-gerente .rh-only { display: none !important; }
     /* CALENDAR GRID */
     .calendar-section { background: white; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); padding: 20px; }
     .calendar-nav { display: flex; align-items: center; gap: 16px; margin-bottom: 20px; }
@@ -521,6 +551,13 @@
     .emp-fbtn:last-child { border-right: 0; }
     .emp-fbtn:hover { background: var(--gray-50); }
     .emp-fbtn.active { background: var(--primary); color: #fff; }
+    .emp-fbtn2 { border: 0; background: white; padding: 6px 12px; font-size: 12px; cursor: pointer; color: var(--gray-700); border-right: 1px solid var(--gray-200); }
+    .emp-fbtn2:last-child { border-right: 0; }
+    .emp-fbtn2:hover { background: var(--gray-50); }
+    .emp-fbtn2.active { background: var(--primary); color: #fff; }
+    .badge-inativo { background: var(--danger-light); color: var(--danger); }
+    tr.row-inativo td { color: var(--gray-500); }
+    tr.row-inativo .emp-link { color: var(--gray-500); }
     .ficha-status { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 10.5px; font-weight: 600; }
     .fs-ok   { background: var(--success-light); color: var(--success); }
     .fs-warn { background: var(--warning-light); color: var(--warning); }
@@ -758,7 +795,10 @@
   <div id="view-table">
     <div class="table-wrap">
       <div class="table-header">
-        <h2>Registros de Férias</h2>
+        <div style="display:flex;align-items:center;gap:10px">
+          <button class="btn-back" id="table-back" style="display:none" onclick="clearTableBranch()">← Filiais</button>
+          <h2 id="table-title">Filiais</h2>
+        </div>
         <div style="display:flex;align-items:center;gap:12px">
           <span class="result-count" id="result-count"></span>
           <button class="btn-add-vacation" onclick="openAddModal()">+ Incluir Férias</button>
@@ -769,6 +809,7 @@
         Carregando dados das filiais...
       </div>
       <div id="table-error" class="error-banner" style="display:none;margin:16px"></div>
+      <div id="branch-cards" class="branch-grid" style="display:none"></div>
       <div id="table-container" style="overflow-x:auto; display:none">
         <table>
           <thead>
@@ -806,7 +847,13 @@
             <button class="emp-fbtn" id="empf-sim" onclick="setEmpFiltro('sim', this)">Registrados</button>
             <button class="emp-fbtn" id="empf-nao" onclick="setEmpFiltro('nao', this)">Sem registro</button>
           </div>
+          <div class="emp-fbtns">
+            <button class="emp-fbtn2 active" id="emps-ativos" onclick="setEmpStatusFiltro('ativos', this)">Ativos</button>
+            <button class="emp-fbtn2" id="emps-inativos" onclick="setEmpStatusFiltro('inativos', this)">Inativos</button>
+            <button class="emp-fbtn2" id="emps-todos" onclick="setEmpStatusFiltro('todos', this)">Todos</button>
+          </div>
           <span class="result-count" id="emp-count"></span>
+          <button class="btn-add-vacation rh-only" onclick="openEmpModal()">+ Cadastrar Funcionário</button>
         </div>
       </div>
       <div style="overflow-x:auto">
@@ -1027,6 +1074,7 @@
     <div class="modal-header">
       <h3 id="ficha-title">Ficha do Funcionário</h3>
       <div class="no-print" style="display:flex;gap:8px;align-items:center">
+        <button class="btn btn-secondary rh-only" id="ficha-status-btn" style="padding:6px 12px;font-size:12px;display:none" onclick="toggleEmpStatus()">Marcar inativo</button>
         <button class="btn btn-secondary" style="padding:6px 12px;font-size:12px" onclick="printFicha()">🖨 Imprimir</button>
         <button class="modal-close" onclick="closeFicha()" aria-label="Fechar">×</button>
       </div>
@@ -1078,6 +1126,77 @@
   </div>
 </div>
 
+<!-- MODAL CADASTRAR FUNCIONÁRIO -->
+<div class="modal-overlay" id="emp-overlay" onclick="if(event.target===this)closeEmpModal()">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="emp-title">
+    <div class="modal-header">
+      <h3 id="emp-title">Cadastrar Funcionário</h3>
+      <button class="modal-close" onclick="closeEmpModal()" aria-label="Fechar">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group full">
+          <label for="e-nome">Nome completo</label>
+          <input type="text" id="e-nome" autocomplete="off" oninput="clearFieldError('e-nome')" />
+          <span class="form-error" id="err-e-nome"></span>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="e-filial">Filial</label>
+          <input type="text" id="e-filial" list="e-filial-list" autocomplete="off" oninput="clearFieldError('e-filial')" />
+          <datalist id="e-filial-list"></datalist>
+          <span class="form-error" id="err-e-filial"></span>
+        </div>
+        <div class="form-group">
+          <label for="e-cargo">Cargo</label>
+          <input type="text" id="e-cargo" autocomplete="off" />
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="e-adm">Admissão</label>
+          <input type="date" id="e-adm" oninput="clearFieldError('e-adm')" />
+          <span class="form-error" id="err-e-adm"></span>
+        </div>
+        <div class="form-group">
+          <label for="e-mat">Matrícula</label>
+          <input type="text" id="e-mat" autocomplete="off" oninput="clearFieldError('e-mat')" />
+          <span class="calc-hint">Sugerida automaticamente — pode editar</span>
+          <span class="form-error" id="err-e-mat"></span>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="e-reg">Registrado (carteira)</label>
+          <select id="e-reg">
+            <option value="sim">Sim</option>
+            <option value="nao">Não</option>
+          </select>
+          <span class="calc-hint">"Sim" já cria o 1º período aquisitivo</span>
+        </div>
+        <div class="form-group">
+          <label for="e-saldo">Saldo inicial de férias</label>
+          <input type="number" id="e-saldo" value="0" step="0.5" oninput="clearFieldError('e-saldo')" />
+          <span class="calc-hint">Dias já acumulados antes deste controle</span>
+          <span class="form-error" id="err-e-saldo"></span>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group full">
+          <label for="e-ctps">CTPS (opcional)</label>
+          <input type="text" id="e-ctps" autocomplete="off" placeholder="Nº / série — deixe em branco se não tiver" />
+        </div>
+      </div>
+      <div id="emp-save-error" class="error-banner" style="display:none"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeEmpModal()">Cancelar</button>
+      <button class="btn btn-primary" id="btn-save-emp" onclick="submitAddEmployee()">Salvar Funcionário</button>
+    </div>
+  </div>
+</div>
+
 <script>
   let allData = [];
   let filteredData = [];
@@ -1091,6 +1210,9 @@
   function ehRH() { return !scope || scope.perfil !== 'gerente'; }
   let payFilter  = 'month';
   let sortCol = 'startDate';
+  let expandedGroups = new Set();   // chaves de funcionário com o grupo aberto na Tabela
+  let tableGroups = [];             // grupos renderizados (índice = ordem na tela)
+  let tableBranch = null;           // null = grade de cards de filial; string = tabela dessa filial
   let sortDir = 1;
   let calYear, calMonth;
 
@@ -1156,6 +1278,12 @@
       ['Filial 05','Camila Mendes',         ...d(-3,  30)],
       ['Filial 05','Diego Carvalho',        ...d( 7,  30)],
       ['Filial 06','Priscila Torres',       ...d(14,  15)],
+      // funcionário com vários períodos (testa o agrupamento por funcionário)
+      ['Filial 03','Jeovany Fossatti',      ...d(-400, 7)],
+      ['Filial 03','Jeovany Fossatti',      ...d(-250, 12)],
+      ['Filial 03','Jeovany Fossatti',      ...d(-90,  10)],
+      ['Filial 03','Jeovany Fossatti',      ...d(-30,  11)],
+      ['Filial 03','Jeovany Fossatti',      ...d(20,   7)],
     ];
     const retDate = (end, days) => {
       const r = new Date(end); r.setDate(r.getDate() + 1);
@@ -1165,12 +1293,17 @@
       const dd = new Date(t); dd.setMonth(dd.getMonth() + 1 + (i % 6)); dd.setDate(1);
       return dd.toISOString().split('T')[0];
     };
-    return rows.map(([branch, name, start, end, total], i) => ({
-      branch, name, startDate: start, endDate: end,
-      returnDate: retDate(end, total), total, rowIndex: i + 2,
-      availableDays: 30 - (total % 30) + (i % 10),
-      dueDate: dueDate(i),
-    }));
+    const matByName = {};
+    let mc = 0;
+    return rows.map(([branch, name, start, end, total], i) => {
+      if (!matByName[name]) matByName[name] = 'M' + (++mc);
+      return {
+        branch, name, matricula: matByName[name], startDate: start, endDate: end,
+        returnDate: retDate(end, total), total, rowIndex: i + 2,
+        availableDays: 30 - (total % 30) + (i % 10),
+        dueDate: dueDate(i),
+      };
+    });
   })();
 
   // ── DATA LOADING ──────────────────────────────────────────
@@ -1190,8 +1323,10 @@
         let mm = 0;
         regNames.forEach(nm => {
           const row = MOCK_DATA.find(r => r.name === nm) || {};
-          mockEmployees.push({ matricula: 'D' + (++mm), nome: nm, filial: row.branch || '',
-            cargo: 'Farmacêutico', registrado: true, saldo: row.availableDays || 0, vencimento: row.dueDate || '' });
+          mm++;
+          mockEmployees.push({ matricula: row.matricula || ('D' + mm), nome: nm, filial: row.branch || '',
+            cargo: 'Farmacêutico', registrado: true, saldo: row.availableDays || 0, vencimento: row.dueDate || '',
+            ativo: true });
         });
         MOCK_PAYMENT_DATA.forEach(p => mockEmployees.push({ matricula: 'D' + (++mm), nome: p.name,
           filial: p.branch || '', cargo: 'Auxiliar', registrado: false, saldo: 0, vencimento: '' }));
@@ -1437,10 +1572,17 @@
   }
 
   // ── VISÃO FUNCIONÁRIOS (cadastro completo) ────────────────
-  let empFiltroReg = 'todos';   // 'todos' | 'sim' | 'nao'
+  let empFiltroReg = 'todos';        // 'todos' | 'sim' | 'nao'
+  let empFiltroStatus = 'ativos';    // 'ativos' | 'inativos' | 'todos'
   function setEmpFiltro(v, btn) {
     empFiltroReg = v;
     document.querySelectorAll('.emp-fbtn').forEach(b => b.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+    renderEmployees();
+  }
+  function setEmpStatusFiltro(v, btn) {
+    empFiltroStatus = v;
+    document.querySelectorAll('.emp-fbtn2').forEach(b => b.classList.remove('active'));
     if (btn) btn.classList.add('active');
     renderEmployees();
   }
@@ -1456,6 +1598,8 @@
         if (name && !e.nome.toLowerCase().includes(name)) return false;
         if (empFiltroReg === 'sim' && !e.registrado) return false;
         if (empFiltroReg === 'nao' &&  e.registrado) return false;
+        if (empFiltroStatus === 'ativos'   && e.ativo === false) return false;
+        if (empFiltroStatus === 'inativos' && e.ativo !== false) return false;
         return true;
       })
       .sort((a, b) =>
@@ -1471,9 +1615,10 @@
         ? '<span class="badge badge-active">Sim</span>'
         : '<span class="badge badge-done">Não</span>';
       const saldo = (e.saldo === '' || e.saldo == null) ? '—' : e.saldo;
-      return `<tr>
+      const inativo = e.ativo === false ? ' <span class="badge badge-inativo">Inativo</span>' : '';
+      return `<tr class="${e.ativo === false ? 'row-inativo' : ''}">
         <td>${escHtml(e.filial || '—')}</td>
-        <td><a href="#" class="emp-link" onclick="openFichaFor('${mat}');return false">${escHtml(e.nome)}</a></td>
+        <td><a href="#" class="emp-link" onclick="openFichaFor('${mat}');return false">${escHtml(e.nome)}</a>${inativo}</td>
         <td>${escHtml(e.cargo || '—')}</td>
         <td>${reg}</td>
         <td style="text-align:center">${saldo}</td>
@@ -1537,30 +1682,106 @@
   }
 
   // ── RENDER TABLE ──────────────────────────────────────────
-  function renderTable() {
-    const tbody = document.getElementById('table-body');
-    document.getElementById('result-count').textContent = filteredData.length + ' registro(s)';
+  // chave de agrupamento por funcionário (matrícula quando existir; senão filial+nome)
+  function empKey(r) { return String(r.matricula || (r.branch + '|' + r.name)); }
 
-    if (!filteredData.length) {
-      document.getElementById('table-container').style.display = 'none';
+  // agrupa filteredData por funcionário, preservando a ordenação atual
+  // (quando uma filial está aberta, só entram os registros dela — idx original preservado)
+  function groupFiltered() {
+    const map = new Map();
+    filteredData.forEach((r, idx) => {
+      if (tableBranch && r.branch !== tableBranch) return;
+      const k = empKey(r);
+      if (!map.has(k)) map.set(k, { key: k, name: r.name, branch: r.branch, items: [] });
+      map.get(k).items.push({ r, idx });
+    });
+    return [...map.values()];
+  }
+
+  // ── GRADE DE CARDS DE FILIAL ──────────────────────────────
+  function branchList() {
+    return [...new Set(filteredData.map(r => r.branch).filter(Boolean))]
+      .sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  }
+
+  function renderBranchCards() {
+    const box = document.getElementById('branch-cards');
+    const branches = branchList();
+    document.getElementById('result-count').textContent = branches.length + ' filial(is)';
+
+    if (!branches.length) {
+      box.style.display = 'none';
       document.getElementById('table-empty').style.display = 'block';
       return;
     }
-
-    document.getElementById('table-container').style.display = 'block';
     document.getElementById('table-empty').style.display = 'none';
+    box.style.display = 'grid';
 
-    tbody.innerHTML = filteredData.map((r, idx) => {
-      const di = JSON.stringify({ branch: r.branch, rowIndex: r.rowIndex || 0 }).replace(/"/g, '&quot;');
-      const editCell = (field, val) => ehRH()
-        ? `<td class="editable-date" onclick="startEdit(this,'${field}',${r.rowIndex || 0},'${escHtml(r.branch)}',${idx})">`+
-          `<span class="cell-val">${fmtDateBR(val)}</span>`+
-          `<span class="edit-icon">✏</span></td>`
-        : `<td>${fmtDateBR(val)}</td>`;
+    box.innerHTML = branches.map(b => {
+      const rows = filteredData.filter(r => r.branch === b);
+      const nFunc = new Set(rows.map(empKey)).size;
+      const nReg  = rows.filter(r => r.startDate).length;
+      const nAtiv = rows.filter(r => getStatus(r) === 'active').length;
+      const nConf = conflicts.filter(c => c.branch === b).length;
+      const tags = [];
+      if (nAtiv) tags.push(`<span class="bc-tag act">${nAtiv} em férias</span>`);
+      if (nConf) tags.push(`<span class="bc-tag warn">${nConf} conflito${nConf > 1 ? 's' : ''}</span>`);
       return `
-      <tr data-idx="${idx}">
+      <button class="branch-card" onclick="setTableBranch('${escHtml(b).replace(/'/g, "\\'")}')">
+        <div class="bc-name">${escHtml(b)}</div>
+        <div class="bc-stats">
+          <span><strong>${nFunc}</strong> funcionário${nFunc === 1 ? '' : 's'}</span>
+          <span><strong>${nReg}</strong> registro${nReg === 1 ? '' : 's'}</span>
+        </div>
+        <div class="bc-tags">${tags.join('')}</div>
+      </button>`;
+    }).join('');
+  }
+
+  function setTableBranch(b) {
+    tableBranch = b;
+    expandedGroups.clear();
+    renderTable();
+    document.getElementById('view-table').scrollIntoView({ block: 'start' });
+  }
+
+  function clearTableBranch() {
+    tableBranch = null;
+    renderTable();
+  }
+
+  const STATUS_RANK = { active: 3, future: 2, done: 1, unknown: 0 };
+
+  // resumo de um grupo com 2+ períodos (linha "pai" recolhida)
+  function groupSummary(g) {
+    const recs = g.items.map(x => x.r);
+    const withDates = recs.filter(r => r.startDate);
+    const repr =
+         withDates.find(r => getStatus(r) === 'active')
+      || withDates.filter(r => getStatus(r) === 'future').sort((a, b) => (a.startDate < b.startDate ? -1 : 1))[0]
+      || withDates.slice().sort((a, b) => (a.startDate > b.startDate ? -1 : 1))[0]
+      || recs[0] || {};
+    const totalDias = recs.reduce((s, r) => s + (Number(r.total) || 0), 0);
+    const status = recs.reduce((best, r) => {
+      const s = getStatus(r);
+      return STATUS_RANK[s] > STATUS_RANK[best] ? s : best;
+    }, 'unknown');
+    const avail = recs.map(r => r.availableDays).find(v => v !== '' && v !== undefined && v !== null);
+    const due   = recs.map(r => r.dueDate).find(Boolean);
+    return { repr, totalDias, status, avail, due, count: recs.length };
+  }
+
+  function detailRow(r, idx, child) {
+    const editCell = (field, val) => ehRH()
+      ? `<td class="editable-date" onclick="startEdit(this,'${field}',${r.rowIndex || 0},'${escHtml(r.branch)}',${idx})">`+
+        `<span class="cell-val">${fmtDateBR(val)}</span>`+
+        `<span class="edit-icon">✏</span></td>`
+      : `<td>${fmtDateBR(val)}</td>`;
+    const selo = r.ativo === false ? ' <span class="badge badge-inativo">Inativo</span>' : '';
+    return `
+      <tr data-idx="${idx}"${child ? ' class="grp-child"' : ''}>
         <td>${escHtml(r.branch)}</td>
-        <td>${empLink(r)}</td>
+        <td>${empLink(r)}${selo}</td>
         ${editCell('startDate', r.startDate)}
         ${editCell('endDate',   r.endDate)}
         <td id="ret-${idx}">${fmtDateBR(r.returnDate)}</td>
@@ -1572,6 +1793,81 @@
           ? `<button class="del-btn" title="Apagar este período de férias" onclick="apagarFerias(${r._id})">🗑</button>`
           : ''}</td>
       </tr>`;
+  }
+
+  function toggleGroup(ev, gi) {
+    if (ev && ev.target.closest('a, button')) return;
+    const g = tableGroups[gi];
+    if (!g) return;
+    if (expandedGroups.has(g.key)) expandedGroups.delete(g.key);
+    else expandedGroups.add(g.key);
+    renderTable();
+  }
+
+  function renderTable() {
+    const tbody   = document.getElementById('table-body');
+    const backBtn = document.getElementById('table-back');
+    const title   = document.getElementById('table-title');
+    const cardsEl = document.getElementById('branch-cards');
+
+    // ---- modo grade de filiais ----
+    if (!tableBranch) {
+      backBtn.style.display = 'none';
+      title.textContent = 'Filiais';
+      document.getElementById('table-container').style.display = 'none';
+      renderBranchCards();
+      return;
+    }
+
+    // ---- modo tabela de uma filial ----
+    cardsEl.style.display = 'none';
+    backBtn.style.display = '';
+    title.textContent = tableBranch;
+
+    const groups = groupFiltered();
+    tableGroups  = groups;
+    const nReg = filteredData.filter(r => r.branch === tableBranch && r.startDate).length;
+    document.getElementById('result-count').textContent =
+      groups.length + ' funcionário(s) · ' + nReg + ' registro(s)';
+
+    if (!groups.length) {
+      document.getElementById('table-container').style.display = 'none';
+      document.getElementById('table-empty').style.display = 'block';
+      return;
+    }
+    document.getElementById('table-container').style.display = 'block';
+    document.getElementById('table-empty').style.display = 'none';
+
+    // descarta chaves de grupos que sumiram (filtro/exclusão)
+    const liveKeys = new Set(groups.map(g => g.key));
+    [...expandedGroups].forEach(k => { if (!liveKeys.has(k)) expandedGroups.delete(k); });
+
+    tbody.innerHTML = groups.map((g, gi) => {
+      if (g.items.length === 1) return detailRow(g.items[0].r, g.items[0].idx, false);
+
+      const open = expandedGroups.has(g.key);
+      const s    = groupSummary(g);
+      const rep  = s.repr || {};
+      const grpSelo = g.items[0].r.ativo === false ? ' <span class="badge badge-inativo">Inativo</span>' : '';
+      const summary = `
+      <tr class="grp-row${open ? ' open' : ''}" onclick="toggleGroup(event,${gi})">
+        <td>${escHtml(g.branch)}</td>
+        <td><span class="grp-caret">▶</span>${empLink(rep)}${grpSelo}<span class="grp-count">${s.count} períodos</span></td>
+        <td>${fmtDateBR(rep.startDate)}</td>
+        <td>${fmtDateBR(rep.endDate)}</td>
+        <td>${fmtDateBR(rep.returnDate)}</td>
+        <td style="text-align:center" title="Soma dos ${s.count} períodos">${s.totalDias || '—'}</td>
+        <td style="text-align:center">${s.avail !== undefined ? s.avail : '—'}</td>
+        <td>${fmtMonthYear(s.due)}</td>
+        <td>${statusBadge(s.status)}</td>
+        <td class="col-actions"></td>
+      </tr>`;
+      const children = open
+        ? g.items.slice()
+            .sort((a, b) => ((a.r.startDate || '') < (b.r.startDate || '') ? -1 : 1))
+            .map(x => detailRow(x.r, x.idx, true)).join('')
+        : '';
+      return summary + children;
     }).join('');
   }
 
@@ -1786,6 +2082,7 @@
     const map = new Map();
     allData.forEach(r => {
       if (!r.name) return;
+      if (r.ativo === false) return;   // desligado — não entra em novas férias
       const key = r.name + '|' + (r.branch || '');
       if (!map.has(key)) map.set(key, { name: r.name, branch: r.branch || '' });
     });
@@ -1858,8 +2155,148 @@
   }
 
   document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') { closeAddModal(); closeFicha(); fecharNovoPeriodo(); }
+    if (e.key === 'Escape') { closeAddModal(); closeFicha(); fecharNovoPeriodo(); closeEmpModal(); }
   });
+
+  // ── CADASTRAR FUNCIONÁRIO (só RH) ─────────────────────────
+  function nextMatriculaSuggestion() {
+    let max = 0;
+    (allEmployees || []).forEach(e => {
+      const n = parseInt(String(e.matricula).replace(/\D/g, ''), 10);
+      if (!isNaN(n) && n > max) max = n;
+    });
+    return String(max + 1);
+  }
+
+  function openEmpModal() {
+    if (!ehRH()) return;
+    const dl = document.getElementById('e-filial-list');
+    dl.innerHTML = '';
+    (allBranchNames || []).forEach(b => {
+      const o = document.createElement('option'); o.value = b; dl.appendChild(o);
+    });
+
+    document.getElementById('e-nome').value  = '';
+    document.getElementById('e-cargo').value = '';
+    document.getElementById('e-ctps').value  = '';
+    document.getElementById('e-adm').value   = '';
+    document.getElementById('e-saldo').value = '0';
+    document.getElementById('e-reg').value   = 'sim';
+    document.getElementById('e-filial').value =
+      (selectedBranches && selectedBranches.length === 1) ? selectedBranches[0] : '';
+    document.getElementById('e-mat').value   = nextMatriculaSuggestion();
+    document.getElementById('emp-save-error').style.display = 'none';
+    document.getElementById('btn-save-emp').disabled = false;
+    document.getElementById('btn-save-emp').textContent = 'Salvar Funcionário';
+    ['e-nome','e-filial','e-adm','e-mat','e-saldo'].forEach(clearFieldError);
+
+    document.getElementById('emp-overlay').classList.add('open');
+    document.getElementById('e-nome').focus();
+  }
+
+  function closeEmpModal() {
+    document.getElementById('emp-overlay').classList.remove('open');
+  }
+
+  function validateEmpModal() {
+    let ok = true;
+    const setErr = (id, msg) => {
+      const f = document.getElementById(id);
+      if (f) f.classList.add('error');
+      const el = document.getElementById('err-' + id);
+      if (el) el.textContent = msg;
+      ok = false;
+    };
+    const nome   = document.getElementById('e-nome').value.trim();
+    const filial = document.getElementById('e-filial').value.trim();
+    const adm    = document.getElementById('e-adm').value;
+    const mat    = document.getElementById('e-mat').value.trim();
+    const saldo  = document.getElementById('e-saldo').value;
+    if (!nome)   setErr('e-nome', 'Informe o nome');
+    if (!filial) setErr('e-filial', 'Informe a filial');
+    if (!adm)    setErr('e-adm', 'Informe a admissão');
+    if (!mat)    setErr('e-mat', 'Informe a matrícula');
+    else if (allEmployees.some(e => String(e.matricula).replace(/^0+/, '') === mat.replace(/^0+/, '')))
+      setErr('e-mat', 'Já existe funcionário com essa matrícula');
+    if (saldo !== '' && isNaN(Number(saldo))) setErr('e-saldo', 'Saldo inválido');
+    return ok;
+  }
+
+  function submitAddEmployee() {
+    if (!validateEmpModal()) return;
+
+    const payload = {
+      matricula:    document.getElementById('e-mat').value.trim(),
+      nome:         document.getElementById('e-nome').value.trim(),
+      filial:       document.getElementById('e-filial').value.trim(),
+      cargo:        document.getElementById('e-cargo').value.trim(),
+      admissao:     document.getElementById('e-adm').value,
+      registrado:   document.getElementById('e-reg').value === 'sim',
+      saldoInicial: Number(document.getElementById('e-saldo').value) || 0,
+      ctps:         document.getElementById('e-ctps').value.trim(),
+    };
+
+    const btn = document.getElementById('btn-save-emp');
+    btn.disabled = true;
+    btn.textContent = 'Salvando…';
+    document.getElementById('emp-save-error').style.display = 'none';
+
+    const onSuccess = jsonStr => {
+      let result;
+      try { result = JSON.parse(jsonStr); } catch (e) { result = { success: false, error: 'Resposta inválida.' }; }
+      if (result.success) {
+        closeEmpModal();
+        btn.disabled = false;
+        btn.textContent = 'Salvar Funcionário';
+        if (result.periodoAviso)
+          alert('Funcionário cadastrado, mas o período aquisitivo não foi criado:\n' + result.periodoAviso);
+        if (typeof google !== 'undefined' && google.script) {
+          loadData();
+        } else {
+          // demo: espelha o que o servidor faria (cadastro + linha placeholder)
+          allEmployees.push({
+            matricula: payload.matricula, nome: payload.nome, filial: payload.filial,
+            cargo: payload.cargo, registrado: payload.registrado,
+            saldo: payload.saldoInicial, vencimento: '',
+          });
+          if (payload.registrado) {
+            allData.push({
+              branch: payload.filial, name: payload.nome, matricula: payload.matricula,
+              startDate: '', endDate: '', returnDate: '', total: '',
+              availableDays: payload.saldoInicial, dueDate: '', rowIndex: 0,
+              _id: allData.length,
+            });
+          }
+          if (payload.filial && !allBranchNames.includes(payload.filial)) {
+            allBranchNames.push(payload.filial); allBranchNames.sort();
+          }
+          applyFilters();
+          renderEmployees();
+          populateEmployeeDatalist();
+        }
+      } else {
+        btn.disabled = false;
+        btn.textContent = 'Salvar Funcionário';
+        const el = document.getElementById('emp-save-error');
+        el.textContent = 'Erro: ' + (result.error || 'não foi possível cadastrar.');
+        el.style.display = 'block';
+      }
+    };
+
+    const onError = err => {
+      btn.disabled = false;
+      btn.textContent = 'Salvar Funcionário';
+      const el = document.getElementById('emp-save-error');
+      el.textContent = 'Erro de comunicação: ' + ((err && err.message) || err);
+      el.style.display = 'block';
+    };
+
+    if (typeof google !== 'undefined' && google.script) {
+      google.script.run.withSuccessHandler(onSuccess).withFailureHandler(onError).addEmployee(payload);
+    } else {
+      setTimeout(() => onSuccess(JSON.stringify({ success: true, matricula: payload.matricula })), 500);
+    }
+  }
 
   // ── FICHA DO FUNCIONÁRIO ──────────────────────────────────
   function empLink(r) {
@@ -1869,6 +2306,49 @@
 
   function closeFicha() {
     document.getElementById('ficha-overlay').classList.remove('open');
+  }
+
+  // ── ATIVAR / INATIVAR FUNCIONÁRIO (só RH) ─────────────────
+  function _mkFront(v) { return String(v == null ? '' : v).trim().replace(/^0+(?=\d)/, ''); }
+
+  function toggleEmpStatus() {
+    const mat = (fichaData && fichaData.func && fichaData.func.matricula) || fichaMat;
+    if (!ehRH() || !mat || String(mat) === '—') return;
+    const btn = document.getElementById('ficha-status-btn');
+    const inativar = btn.dataset.ativo === '1';
+    const quem = fichaNome || mat;
+    if (!confirm(inativar
+      ? 'Marcar ' + quem + ' como INATIVO (desligado da empresa)?\n\n'
+        + 'O histórico é mantido; ele deixa de aparecer na lista de "Incluir Férias".'
+      : 'Reativar ' + quem + '?')) return;
+
+    btn.disabled = true;
+    const orig = btn.textContent;
+    btn.textContent = '…';
+
+    if (typeof google === 'undefined' || !google.script) {
+      const val = inativar ? 'Inativo' : 'Ativo';
+      const key = _mkFront(mat);
+      allEmployees.forEach(e => { if (_mkFront(e.matricula) === key) { e.situacao = val; e.ativo = !inativar; } });
+      allData.forEach(r => { if (_mkFront(r.matricula) === key) r.ativo = !inativar; });
+      if (fichaData && fichaData.func) { fichaData.func.situacao = val; fichaData.func.ativo = !inativar; }
+      renderFicha(fichaData);
+      applyFilters();
+      return;
+    }
+
+    google.script.run
+      .withSuccessHandler(txt => {
+        let res;
+        try { res = JSON.parse(txt); } catch (e) { res = { success: false, error: 'Resposta inválida.' }; }
+        if (res.success) { openFichaFor(mat, fichaNome); loadData(); }
+        else { btn.disabled = false; btn.textContent = orig; alert('Não foi possível alterar: ' + (res.error || 'erro.')); }
+      })
+      .withFailureHandler(err => {
+        btn.disabled = false; btn.textContent = orig;
+        alert('Erro de comunicação: ' + ((err && err.message) || err));
+      })
+      .setEmployeeStatus({ matricula: mat, ativo: !inativar });
   }
 
   function printFicha() {
@@ -2058,10 +2538,13 @@
     const rows = allData.filter(x => x.name === r.name && x.startDate);
     const gozadas = rows.reduce((s, x) => s + (Number(x.total) || 0), 0);
     const atual = Number(r.availableDays) || 0;
+    const emp = allEmployees.find(e => _mkFront(e.matricula) === _mkFront(r.matricula))
+             || allData.find(x => x.name === r.name) || {};
+    const ativo = emp.ativo !== false;
     return {
       success: true,
       func: { matricula: r.matricula || '—', nome: r.name, filial: r.branch || '', cargo: '—',
-              admissao: '', situacao: 'Ativo', registrado: true },
+              admissao: '', situacao: ativo ? 'Ativo' : 'Inativo', ativo: ativo, registrado: true },
       saldo: { atual, inicial: 0, creditados: atual + gozadas, gozadas, abono: 0, ajustes: 0,
                risco: 0, proximoCredito: r.dueDate || '' },
       periodos: r.dueDate ? [{ periodo: '—', iniAq: '', fimAq: '', concessao: r.dueDate,
@@ -2075,7 +2558,18 @@
   function renderFicha(d) {
     fichaData = d;
     const f = d.func, s = d.saldo;
+    if (f.ativo === undefined) f.ativo = String(f.situacao || '').toLowerCase() !== 'inativo';
     const val = n => (n == null || n === '') ? '—' : n;
+
+    // botão ativar/inativar no cabeçalho (só RH, só com matrícula real)
+    const btnS = document.getElementById('ficha-status-btn');
+    if (btnS) {
+      const podeMexer = ehRH() && f.matricula && String(f.matricula) !== '—';
+      btnS.style.display = podeMexer ? '' : 'none';
+      btnS.disabled = false;
+      btnS.dataset.ativo = f.ativo === false ? '0' : '1';
+      btnS.textContent = f.ativo === false ? '✓ Reativar' : '⊘ Marcar inativo';
+    }
     const signed = n => { n = Number(n) || 0; return (n > 0 ? '+' : '') + n; };
 
     const warn = f.registrado ? '' :
@@ -2127,7 +2621,7 @@
           <span class="ficha-chip">${escHtml(f.filial || '—')}</span>
           <span class="ficha-chip">${escHtml(f.cargo || '—')}</span>
           <span class="ficha-chip">Admissão ${fmtDateBR(f.admissao)}</span>
-          <span class="ficha-chip">Situação: ${escHtml(f.situacao || '—')}</span>
+          <span class="ficha-chip"${f.ativo === false ? ' style="background:var(--danger-light);color:var(--danger)"' : ''}>Situação: ${escHtml(f.situacao || (f.ativo === false ? 'Inativo' : 'Ativo'))}</span>
           <span class="ficha-chip">Registrado: ${f.registrado ? 'Sim' : 'Não'}</span>
         </div>
       </div>
@@ -2249,6 +2743,9 @@
           rowIndex:      result.rowIndex || 0,
           _id:           allData.length,
         });
+        // abre a filial e o grupo do funcionário para a nova linha aparecer
+        tableBranch = payload.branch;
+        expandedGroups.add(String(base.matricula || (payload.branch + '|' + payload.name)));
         applyFilters();
         renderStats();
         const newIdx = filteredData.findIndex(r =>

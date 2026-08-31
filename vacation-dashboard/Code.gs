@@ -177,6 +177,7 @@ function getVacationData() {
     const mat = _mk(r[F.MAT]);
     if (!mat) return;
     const reg = String(r[F.REGISTRADO] || '').trim().toLowerCase();
+    const sit = String(r[F.SITUACAO] || '').trim();
     emp[mat] = {
       mat: mat,
       name: String(r[F.NOME] || '').trim(),
@@ -184,6 +185,8 @@ function getVacationData() {
       admissao: toDate(r[F.ADMISSAO]),
       saldoIni: Number(r[F.SALDO_INI]) || 0,
       registrado: reg !== 'não' && reg !== 'nao',
+      situacao: sit,
+      ativo: sit.toLowerCase() !== 'inativo',
     };
   });
 
@@ -262,6 +265,7 @@ function getVacationData() {
       total: total == null ? '' : total,
       availableDays: saldoOf(mat),
       dueDate: dueOf(mat),
+      ativo: e.ativo,
       rowIndex: i + 2,                 // linha na aba Lancamentos
     });
   });
@@ -271,7 +275,7 @@ function getVacationData() {
     allData.push({
       branch: e.branch, name: e.name, matricula: mat,
       startDate: '', endDate: '', returnDate: '', total: '',
-      availableDays: saldoOf(mat), dueDate: dueOf(mat), rowIndex: 0,
+      availableDays: saldoOf(mat), dueDate: dueOf(mat), ativo: e.ativo, rowIndex: 0,
     });
   });
 
@@ -289,6 +293,7 @@ function getVacationData() {
     const reg = String(r[F.REGISTRADO] || '').trim().toLowerCase();
     const registrado = reg !== 'não' && reg !== 'nao';
     if (registrado) nReg++; else nNao++;
+    const sit = String(r[F.SITUACAO] || '').trim();
     employees.push({
       matricula: mat,
       nome: nome,
@@ -297,6 +302,8 @@ function getVacationData() {
       registrado: registrado,
       saldo: saldoOf(mat),
       vencimento: dueOf(mat),
+      situacao: sit,
+      ativo: sit.toLowerCase() !== 'inativo',
     });
   });
 
@@ -395,6 +402,7 @@ function getEmployeeFicha(matricula) {
         cargo: String(fr[F.CARGO] || '').trim(),
         admissao: formatDate(fr[F.ADMISSAO]),
         situacao: String(fr[F.SITUACAO] || '').trim(),
+        ativo: String(fr[F.SITUACAO] || '').trim().toLowerCase() !== 'inativo',
         registrado: reg !== 'não' && reg !== 'nao',
       },
       saldo: {
@@ -867,6 +875,129 @@ function addPeriodoAquisitivo(payload) {
       success: true, periodo: label, direito: direito,
       fimAquisitivo: formatDate(fim), concessao: formatDate(conc),
     });
+  } catch (e) { return _err(e.message); }
+}
+
+// ============================================================
+// CADASTRO DE FUNCIONÁRIO — grava uma linha na aba Func (só RH)
+// payload = { matricula?, nome, filial, cargo?, admissao (ISO),
+//             registrado (bool), saldoInicial?, ctps?, situacao? }
+// Se registrado, cria também o 1º período aquisitivo (admissão, 0 faltas).
+// ============================================================
+function addEmployee(payload) {
+  try {
+    if (_scopeAtual().perfil !== 'rh')
+      return _err('Só o RH pode cadastrar funcionário.');
+
+    payload = payload || {};
+    const nome   = String(payload.nome   || '').trim();
+    const filial = String(payload.filial || '').trim();
+    if (!nome)   return _err('Nome é obrigatório.');
+    if (!filial) return _err('Filial é obrigatória.');
+    const adm = toDate(payload.admissao);
+    if (!adm) return _err('Data de admissão inválida.');
+
+    const cargo = String(payload.cargo || '').trim();
+    const ctps  = String(payload.ctps  || '').trim();
+    const regStr = String(payload.registrado).toLowerCase();
+    const registrado = payload.registrado !== false && regStr !== 'não' && regStr !== 'nao' && regStr !== 'false';
+    const saldoN = Number(payload.saldoInicial);
+    const saldoIni = isNaN(saldoN) ? 0 : saldoN;
+
+    const rows = _rows(TAB.FUNC);
+
+    // matrícula: usa a informada ou sugere (maior número existente + 1)
+    let maxNum = 0;
+    rows.forEach(function (r) {
+      const n = parseInt(String(r[F.MAT]).replace(/\D/g, ''), 10);
+      if (!isNaN(n) && n > maxNum) maxNum = n;
+    });
+    const matInput = String(payload.matricula || '').trim();
+    const matToWrite = matInput
+      ? (/^\d+$/.test(matInput) ? Number(matInput) : matInput)
+      : (maxNum + 1);
+    const matKey = _mk(matToWrite);
+    if (!matKey) return _err('Matrícula inválida.');
+    if (rows.some(function (r) { return _mk(r[F.MAT]) === matKey; }))
+      return _err('Já existe um funcionário com a matrícula ' + matKey + '.');
+
+    const sh = _sheet(TAB.FUNC);
+    const nr = sh.getLastRow() + 1;
+    const width = F.CTPS + 1;                 // A..I (inclui CTPS)
+    const rowVals = new Array(width).fill('');
+    rowVals[F.MAT]        = matToWrite;
+    rowVals[F.NOME]       = nome;
+    rowVals[F.FILIAL]     = filial;
+    rowVals[F.CARGO]      = cargo;
+    rowVals[F.ADMISSAO]   = adm;
+    rowVals[F.SITUACAO]   = String(payload.situacao || 'Ativo').trim();
+    rowVals[F.SALDO_INI]  = saldoIni;
+    rowVals[F.REGISTRADO] = registrado ? 'Sim' : 'Não';
+    if (ctps) rowVals[F.CTPS] = ctps;
+
+    // grava só VALORES; limpa a validação herdada para o setValues não ser recusado
+    sh.getRange(nr, 1, 1, width).setDataValidation(null);
+    sh.getRange(nr, 1, 1, width).setValues([rowVals]);
+    sh.getRange(nr, F.ADMISSAO + 1).setNumberFormat('dd/mm/yyyy');
+
+    // devolve os dropdowns (Filial / Situação / Registrado) copiando da linha 2
+    try {
+      [F.FILIAL + 1, F.SITUACAO + 1, F.REGISTRADO + 1].forEach(function (col) {
+        const dv = sh.getRange(2, col).getDataValidation();
+        if (dv) sh.getRange(nr, col).setDataValidation(dv);
+      });
+    } catch (e) { /* sem validação na linha 2 — ignora */ }
+
+    // 1º período aquisitivo (só se registrado)
+    let periodo = null, periodoAviso = null;
+    if (registrado) {
+      try {
+        const pr = JSON.parse(addPeriodoAquisitivo({
+          matricula: matKey,
+          inicioAquisitivo: formatDate(adm),
+          faltas: 0,
+        }));
+        if (pr && pr.success) periodo = pr.periodo;
+        else periodoAviso = (pr && pr.error) || 'não foi possível criar o período aquisitivo.';
+      } catch (e) { periodoAviso = e.message; }
+    }
+
+    return JSON.stringify({
+      success: true, matricula: matKey, rowIndex: nr,
+      periodo: periodo, periodoAviso: periodoAviso,
+    });
+  } catch (e) { return _err(e.message); }
+}
+
+// ============================================================
+// ATIVAR / INATIVAR FUNCIONÁRIO — grava a coluna Situação na aba Func (só RH)
+// payload = { matricula, ativo: bool }   ativo=false => "Inativo" (desligado)
+// ============================================================
+function setEmployeeStatus(payload) {
+  try {
+    if (_scopeAtual().perfil !== 'rh')
+      return _err('Só o RH pode ativar ou inativar funcionário.');
+
+    payload = payload || {};
+    const mat = _mk(payload.matricula);
+    if (!mat) return _err('Matrícula não informada.');
+
+    const rows = _rows(TAB.FUNC);
+    let idx = -1;
+    for (var i = 0; i < rows.length; i++) {
+      if (_mk(rows[i][F.MAT]) === mat) { idx = i; break; }
+    }
+    if (idx < 0) return _err('Funcionário não encontrado na aba Func.');
+
+    const situacao = (payload.ativo === false || String(payload.ativo).toLowerCase() === 'false')
+      ? 'Inativo' : 'Ativo';
+    const nr = idx + 2;                       // +1 cabeçalho, +1 base-1
+    const cell = _sheet(TAB.FUNC).getRange(nr, F.SITUACAO + 1);
+    const dv = cell.getDataValidation();
+    cell.setDataValidation(null).setValue(situacao);
+    if (dv) cell.setDataValidation(dv);
+
+    return JSON.stringify({ success: true, matricula: mat, situacao: situacao, ativo: situacao === 'Ativo' });
   } catch (e) { return _err(e.message); }
 }
 

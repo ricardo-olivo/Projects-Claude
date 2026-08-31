@@ -27,6 +27,8 @@ calcula um **"banco de dias"** por funcionário e gera o **Aviso de Férias em P
   histórico de gozo/abono, observações/ajustes.
 - Incluir / editar / apagar período de férias pelo painel.
 - Incluir período aquisitivo pelo painel (na ficha, só RH).
+- Cadastrar funcionário novo pelo painel (aba Funcionários, só RH).
+- Ativar / inativar funcionário (desligamento) pela ficha, só RH — grava `Func.Situação`.
 - Aviso de Férias em PDF (download).
 - Filtro por filial, status, mês, busca por nome; filtro Registrado/Sem registro
   na aba Funcionários.
@@ -176,6 +178,8 @@ vacation-dashboard/
 | `updateVacationRecord(payload)` | edita início/término (só RH) |
 | `deleteVacationRecord(payload)` | apaga a linha (só RH) |
 | `addPeriodoAquisitivo(payload)` | grava período na aba Periodos (só RH) |
+| `addEmployee(payload)` | cadastra funcionário na aba Func (só RH); matrícula sugerida/editável; se registrado, cria o 1º período aquisitivo |
+| `setEmployeeStatus(payload)` | grava `Func.Situação` = Ativo/Inativo (desligamento) — só RH. `getVacationData`/`getEmployeeFicha` devolvem `ativo` |
 | `getPaymentData(func, saldoOf)` | funcionários sem registro (aba Func + planilha legada opcional) |
 | `detectConflicts(data)` | 3+ sobreposições na mesma filial |
 | `_avisoHtml(d)` / `_dataExtenso` / `_periodoAquisitivo` / `_ctpsFake` | helpers do aviso |
@@ -186,9 +190,13 @@ vacation-dashboard/
 ### `Dashboard.html` — variáveis globais de estado
 
 `allData`, `filteredData`, `allEmployees`, `conflicts`, `paymentAll`, `paymentDue`,
-`totals`, `scope`, `selectedBranches`, `empFiltroReg`, `fichaMat` / `fichaNome` /
-`fichaData`, `calYear` / `calMonth` / `calView`, `sortCol` / `sortDir`.
-`ehRH()` = `scope.perfil !== 'gerente'`.
+`totals`, `scope`, `selectedBranches`, `empFiltroReg`, `empFiltroStatus`
+(`ativos`/`inativos`/`todos`), `fichaMat` / `fichaNome` / `fichaData`,
+`calYear` / `calMonth` / `calView`, `sortCol` / `sortDir`.
+Visão Tabela: `tableBranch` (null = grade de cards de filial; string = tabela da
+filial), `expandedGroups` (grupos de funcionário abertos), `tableGroups`.
+`ehRH()` = `scope.perfil !== 'gerente'`. Registros/funcionários trazem `ativo`
+(false = "Inativo"/desligado): some da lista de "Incluir Férias" e ganha selo.
 
 ### Abas da planilha (colunas base-0 no `Code.gs`)
 

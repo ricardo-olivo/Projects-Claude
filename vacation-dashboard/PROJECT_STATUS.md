@@ -1,15 +1,19 @@
 # STATUS DO PROJETO
 
 ## Data do checkpoint
-2026-08-31
+2026-08-31 (atualizado no mesmo dia: visão Tabela agrupada por funcionário)
 
 ## Branch atual
 `main` (repositório `Projects-Claude`, remote `https://github.com/ricardo-olivo/Projects-Claude.git`).
-`HEAD` == `origin/main` (sincronizado) no momento deste checkpoint, antes do commit da documentação.
+`main` está **1 commit à frente de `origin/main`** (`efd4be2`, checkpoint de docs, ainda
+não pusheado) **+ alterações não commitadas** no working tree (agrupamento da Tabela,
+ver "Arquivos modificados recentemente").
 
 ## Último commit
-`c93b28c` — "Rebuild vacation-dashboard on the single-spreadsheet \"banco de dias\" model"
-Data: 2026-08-29 12:21 -0300. Autor: ricardo.olivo <rfolivo@gmail.com>.
+`efd4be2` — "docs: add project checkpoint and development context" (2026-08-31 08:32 -0300).
+Último commit **de código**: `c93b28c` — "Rebuild vacation-dashboard on the
+single-spreadsheet \"banco de dias\" model" (2026-08-29 12:21 -0300).
+Autor: ricardo.olivo <rfolivo@gmail.com>.
 
 Commits recentes do repositório (multi-projeto):
 ```
@@ -39,8 +43,11 @@ segmentado por filial (RH x Gerente).
 - `getVacationData()`: consolida Func + Periodos + Lancamentos + Ajustes, calcula o
   banco de dias, monta `data[]` / `employees[]` / `conflicts[]` / `payment*` /
   `totals` e aplica o **escopo por filial no servidor**.
-- Visão **Tabela**: lista, ordenação por coluna, edição inline de datas (só RH),
-  apagar linha (🗑, só RH), badge de status.
+- Visão **Tabela**: abre numa **grade de cards por filial**; ao clicar num card,
+  mostra a tabela **agrupada por funcionário** daquela filial (1 linha por pessoa;
+  quem tem 2+ períodos vira uma linha-resumo recolhível que expande nas linhas de
+  cada período), com botão "← Filiais". Ordenação por coluna, edição inline de datas
+  (só RH), apagar linha (🗑, só RH), badge de status.
 - Visão **Funcionários**: cadastro completo (registrados + sem registro), filtro
   Todos / Registrados / Sem registro, botão "Ver ficha".
 - Visão **Calendário**: mensal, semestral e anual (timeline).
@@ -55,6 +62,13 @@ segmentado por filial (RH x Gerente).
 - **Apagar** período de férias com confirmação e checagem de matrícula/data no servidor.
 - **Incluir período aquisitivo** pela ficha: prévia (dias de direito, fim, concessão),
   grava valores na aba `Periodos` (só RH).
+- **Cadastrar funcionário** pela aba Funcionários (só RH): grava na aba `Func`;
+  matrícula sugerida (maior nº + 1) e editável; se "Registrado", já cria o 1º
+  período aquisitivo a partir da admissão.
+- **Ativar / inativar funcionário** (desligamento) pela ficha (só RH): grava
+  `Func.Situação` = Ativo/Inativo. Inativo continua na Tabela/cards/ficha com selo
+  "Inativo", some da lista de "Incluir Férias"; aba Funcionários tem filtro
+  Ativos/Inativos/Todos (padrão Ativos).
 - **Aviso de Férias em PDF**: HTML → PDF via `Utilities.getAs('application/pdf')`,
   entregue como download base64. CNPJ/Razão Social por `Lojas` ou `EMPRESA_PADRAO`;
   período aquisitivo da aba `Periodos` ou calculado da admissão; CTPS real ou
@@ -87,7 +101,8 @@ segmentado por filial (RH x Gerente).
    saldo separado (aprovado x pendente); `getAprovacoesPendentes()` + tela/aba
    "Aprovações"; `aprovarFerias(linha, "aprovar"|"recusar", motivo)`; Aviso PDF só
    para Aprovado; (opcional) e-mails via `MailApp` (limite 100/dia Gmail).
-2. **Cadastrar funcionário (aba `Func`) pelo dashboard.** Hoje é manual na planilha.
+2. ~~Cadastrar funcionário (aba `Func`) pelo dashboard.~~ **Feito** (só RH) — falta
+   commit + deploy do `Code.gs`.
 3. **Lançar ajuste manual (aba `Ajustes`) pelo dashboard.** Hoje é manual.
 4. **Reescrever o `README.md`** — está descrevendo a arquitetura antiga (28 planilhas).
 5. **Trocar o logo recriado pelo PNG oficial** (`LOGO_DATA_URI` na `Home.html`).
@@ -147,7 +162,67 @@ segmentado por filial (RH x Gerente).
 No commit `c93b28c` (2026-08-29): `vacation-dashboard/Code.gs`,
 `vacation-dashboard/Dashboard.html`, `vacation-dashboard/README.md` alterados;
 `vacation-dashboard/Home.html` criado (4 arquivos, +1966 / −284).
-Desde então, **nenhuma alteração de código** (só este checkpoint de documentação).
+
+**Não commitado (working tree):** `vacation-dashboard/Dashboard.html` — visão Tabela
+agrupada por funcionário. Só front (nada no `Code.gs`):
+- `renderTable()` reescrito: agrupa `filteredData` por funcionário
+  (`empKey` = matrícula, ou `filial|nome`). 1 período → linha normal; 2+ → linha-resumo
+  `grp-row` recolhível + linhas-filhas `grp-child` (mantêm `data-idx` real, então
+  edição inline / 🗑 / `flashRow` / ficha continuam funcionando).
+- Novos helpers: `empKey`, `groupFiltered`, `groupSummary`, `detailRow`, `toggleGroup`.
+- Novo estado: `expandedGroups` (Set de chaves abertas, persiste entre ordenações) e
+  `tableGroups`.
+- Resumo mostra: filial, nome + "N períodos", período representativo (em férias →
+  próximo agendado → mais recente), **soma dos dias**, dias disponíveis, vencimento,
+  status mais relevante. Grupos começam recolhidos; incluir férias abre o grupo.
+- Contador virou `N funcionário(s) · M registro(s)`.
+- CSS: `.grp-row` / `.grp-caret` / `.grp-count` / `.grp-child`.
+- `MOCK_DATA`: adicionado "Jeovany Fossatti" com 5 períodos só para testar o
+  agrupamento no preview local (não roda no Apps Script).
+
+**Cadastrar funcionário pelo dashboard** (backend + front):
+- `Code.gs`: nova função `addEmployee(payload)` — grava uma linha na aba `Func`
+  (só VALORES), **só RH** (`_scopeAtual().perfil !== 'rh'` recusa). Matrícula: usa a
+  informada ou sugere "maior número + 1"; valida unicidade com `_mk()`. Se
+  `registrado`, chama `addPeriodoAquisitivo` para criar o 1º período aquisitivo a
+  partir da admissão (0 faltas); se isso falhar, o funcionário é salvo mesmo assim
+  e volta `periodoAviso`.
+- `Dashboard.html`: botão "+ Cadastrar Funcionário" no cabeçalho da aba Funcionários
+  (classe `rh-only` → escondido para Gerente via `body.perfil-gerente`), modal
+  `#emp-overlay` (nome, filial c/ datalist, cargo, admissão, matrícula sugerida
+  editável, registrado Sim/Não, saldo inicial, CTPS opcional), funções
+  `openEmpModal` / `closeEmpModal` / `validateEmpModal` / `submitAddEmployee` /
+  `nextMatriculaSuggestion`. Sucesso → `loadData()` (no preview, espelha o
+  cadastro + linha placeholder localmente). CSS `body.perfil-gerente .rh-only`.
+
+E também: **visão Tabela agora abre numa grade de cards de filial**. Só front:
+- Novo estado `tableBranch` (`null` = grade de cards; string = tabela daquela filial).
+- `renderTable()` bifurca: sem filial → `renderBranchCards()` (esconde a `<table>`);
+  com filial → tabela agrupada só com os registros dessa filial
+  (`groupFiltered()` filtra por `tableBranch` preservando o `idx` original).
+- Novos: `branchList()`, `renderBranchCards()`, `setTableBranch()`, `clearTableBranch()`.
+- Card por filial: nome, nº de funcionários, nº de registros, tags "N em férias" /
+  "N conflitos". Cabeçalho da visão troca entre "Filiais" e o nome da filial, com
+  botão "← Filiais". Contador vira "N filial(is)".
+- Cards e drilldown respeitam os filtros do topo (status / mês / nome / multiselect).
+- Incluir Férias leva direto para a filial do lançamento (`tableBranch = payload.branch`).
+- CSS: `.branch-grid` / `.branch-card` / `.bc-name` / `.bc-stats` / `.bc-tag` / `.btn-back`.
+
+**Ativar / inativar funcionário** (backend + front):
+- `Code.gs`: nova `setEmployeeStatus({matricula, ativo})` — grava `Func.Situação`
+  ("Ativo"/"Inativo"), **só RH**. `getVacationData` passou a devolver `ativo` em
+  `data[]` e `employees[]`; `getEmployeeFicha` devolve `func.ativo`.
+- `Dashboard.html`: botão "⊘ Marcar inativo / ✓ Reativar" no cabeçalho da ficha
+  (`#ficha-status-btn`, `rh-only`), `toggleEmpStatus()`, `_mkFront()`. Aba
+  Funcionários: 2º grupo de pills Ativos/Inativos/Todos (`empFiltroStatus`, padrão
+  `ativos`), selo "Inativo" + `row-inativo` na tabela e na visão Tabela;
+  `currentEmployees()` (lista de Incluir Férias) exclui inativos. CSS `.emp-fbtn2`,
+  `.badge-inativo`, `.row-inativo`. MOCK_DATA ganhou `matricula` por funcionário
+  para o toggle funcionar no preview.
+
+Arquivos com alteração não commitada: `vacation-dashboard/Dashboard.html` e
+`vacation-dashboard/Code.gs`. Ainda **não commitado** e **não redeployado** no
+Apps Script (deploy do `Code.gs` também é necessário agora).
 
 ## Banco de dados
 "Banco" = uma planilha Google Sheets (`MODEL_SHEET_ID = 1wLN9oZji-Uk6prHMcvav0CNg1u-tFMz_`),
