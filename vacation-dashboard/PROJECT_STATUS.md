@@ -6,17 +6,18 @@ cadastro/inativação de funcionário, cards de resumo clicáveis)
 
 ## Branch atual
 `main` (repositório `Projects-Claude`, remote `https://github.com/ricardo-olivo/Projects-Claude.git`).
-`main` está **2 commits à frente de `origin/main`** (`efd4be2` docs + `2beccb8`
-features do vacation-dashboard, nenhum pusheado) **+ alteração não commitada** no
-working tree (`Dashboard.html`: cards de resumo clicáveis — ver "Arquivos
+`main` está **3 commits à frente de `origin/main`** (`efd4be2`, `2beccb8`,
+`bcb0c82` — nenhum pusheado) **+ alteração não commitada** no working tree
+(`Code.gs` + `Dashboard.html`: editar/excluir período aquisitivo — ver "Arquivos
 modificados recentemente").
 
 ## Último commit
-`2beccb8` — "vacation-dashboard: group Tabela by employee/branch, add employee CRUD
-and active/inactive" (2026-08-31). Autor: ricardo.olivo <rfolivo@gmail.com>.
+`bcb0c82` — "vacation-dashboard: clickable summary cards, ficha adjustments
+edit/delete, manual vacation due date" (2026-08-31). Autor: ricardo.olivo <rfolivo@gmail.com>.
 
 Commits recentes do repositório (multi-projeto):
 ```
+bcb0c82 vacation-dashboard: clickable summary cards, ficha adjustments edit/delete, manual due date  <-- este projeto
 2beccb8 vacation-dashboard: group Tabela by employee/branch, add employee CRUD and active/inactive  <-- este projeto
 efd4be2 docs: add project checkpoint and development context                          (este projeto)
 c93b28c Rebuild vacation-dashboard on the single-spreadsheet "banco de dias" model   <-- este projeto
@@ -207,7 +208,7 @@ segmentado por filial (RH x Gerente).
   selo "Inativo" na aba e na Tabela; `currentEmployees()` (Incluir Férias) exclui
   inativos. CSS `.emp-fbtn2`, `.badge-inativo`, `.row-inativo`.
 
-### Não commitado (working tree) — `Dashboard.html` + `Code.gs`
+### Commitado em `bcb0c82` (2026-08-31) — `Code.gs` + `Dashboard.html` + docs
 
 **a) Cards de resumo (KPIs) clicáveis** (só `Dashboard.html`): os 4 cards do topo
 viraram botões; clicar abre o modal `#kpi-overlay` com a lista correspondente
@@ -244,11 +245,36 @@ certos. CSS novo: `.card-click`, `.card-cta`, `.kpi-count`.
   `ajEditIdx` / `ajEditOldDias`, prévia do novo saldo. CSS `.form-group textarea`.
   Preview: `demoAjustes` guarda os ajustes por matrícula no modo mock.
 
+### Não commitado (working tree) — `Code.gs` + `Dashboard.html`
+
+**Editar / excluir período aquisitivo pela ficha** (só RH):
+- `Code.gs`: `getEmployeeFicha` passou a devolver `rowIndex` e `faltas` em cada
+  período. `updatePeriodoAquisitivo({rowIndex, matricula, inicioAquisitivo, faltas})`
+  recalcula fim/concessão/direito/situação e reescreve as colunas B..I (mantém
+  Matrícula e `_seq`/`_chave`); confere a matrícula da linha e a colisão de data
+  com **outro** período. `deletePeriodoAquisitivo({rowIndex, matricula})` apaga.
+- `Dashboard.html`: tabela "Períodos aquisitivos" ganhou **✏ / 🗑 por linha**
+  (`rh-only`); o modal `#periodo-overlay` é compartilhado incluir/editar
+  (`editarPeriodo` / `excluirPeriodo`, estado `perEditRow` / `perEditIdx`,
+  `salvarNovoPeriodo` bifurca). `_calcPeriodo()` (prévia + preview), `demoPeriodos`
+  por matrícula (agora add/editar/excluir período funcionam no preview local).
+
+**Vencimento Mensal considera todos os períodos** (era só o "próximo"):
+- `Code.gs`: `getVacationData.employees[]` ganhou `vencimentos` = **todas** as datas
+  de concessão do funcionário (ISO, ordenadas), ou `[vencManual]` se não houver
+  período. Antes o relatório usava `dueOf()`, que devolve só a próxima concessão
+  futura — concessões já vencidas (mesmo neste mês) sumiam do relatório.
+- `Dashboard.html`: `renderDueView()` reescrito — itera `allEmployees` e emite uma
+  linha por (funcionário × concessão) que cai no mês; coluna "Situação" mostra
+  "Vencido — risco de dobro" / "Vence em N d"; "Vencimento" agora é data cheia;
+  contador em "vencimento(s)".
+
 Ainda **não commitado**.
 
 ### Deploy
-`efd4be2` e `2beccb8` **não pusheados**; nada redeployado no Apps Script — o
-próximo deploy precisa de **`Code.gs` + `Dashboard.html`** (nova versão).
+`efd4be2`, `2beccb8` e `bcb0c82` **não pusheados**; nada redeployado no Apps
+Script — o próximo deploy precisa de **`Code.gs` + `Dashboard.html`** (nova versão)
+e do cabeçalho da coluna **J ("Vencimento")** na aba `Func`.
 
 ## Banco de dados
 "Banco" = uma planilha Google Sheets (`MODEL_SHEET_ID = 1wLN9oZji-Uk6prHMcvav0CNg1u-tFMz_`),

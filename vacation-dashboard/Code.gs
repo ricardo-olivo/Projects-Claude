@@ -298,7 +298,9 @@ function getVacationData() {
     const registrado = reg !== 'não' && reg !== 'nao';
     if (registrado) nReg++; else nNao++;
     const sit = String(r[F.SITUACAO] || '').trim();
-    const temCalc = ((conc[mat] || []).length > 0);
+    const concISO = (conc[mat] || []).map(formatDate).filter(function (x) { return x; }).sort();
+    const temCalc = concISO.length > 0;
+    const vencManual = formatDate(r[F.VENC]);
     employees.push({
       matricula: mat,
       nome: nome,
@@ -307,7 +309,8 @@ function getVacationData() {
       registrado: registrado,
       saldo: saldoOf(mat),
       vencimento: dueOf(mat),
-      vencManual: formatDate(r[F.VENC]),
+      vencimentos: temCalc ? concISO : (vencManual ? [vencManual] : []),
+      vencManual: vencManual,
       vencCalc: temCalc,
       situacao: sit,
       ativo: sit.toLowerCase() !== 'inativo',
@@ -362,7 +365,10 @@ function getEmployeeFicha(matricula) {
       return _err('Você não tem acesso à ficha deste funcionário.');
 
     const today = _midnight(new Date());
-    const per = _rows(TAB.PERIODOS).filter(function (r) { return _mk(r[P.MAT]) === mat; });
+    const per = [];
+    _rows(TAB.PERIODOS).forEach(function (r, i) {
+      if (_mk(r[P.MAT]) === mat) { r._ri = i + 2; per.push(r); }   // _ri = linha na aba Periodos
+    });
     const lan = _rows(TAB.LANCAMENTOS).filter(function (r) { return _mk(r[L.MAT]) === mat; });
     const aju = [];
     _rows(TAB.AJUSTES).forEach(function (r, i) {
@@ -447,8 +453,10 @@ function getEmployeeFicha(matricula) {
           fimAq: formatDate(fimAq),
           concessao: formatDate(concD),
           direito: dir,
+          faltas: (typeof r[P.FALTAS] === 'number') ? r[P.FALTAS] : (Number(r[P.FALTAS]) || 0),
           creditado: (fimAq && fimAq <= today) ? 'Sim' : 'Não',
           situacao: _periodoSituacao(fimAq, concD, today),
+          rowIndex: r._ri,
         };
       }),
       lancamentos: lan.map(function (r) {
@@ -902,6 +910,85 @@ function addPeriodoAquisitivo(payload) {
       success: true, periodo: label, direito: direito,
       fimAquisitivo: formatDate(fim), concessao: formatDate(conc),
     });
+  } catch (e) { return _err(e.message); }
+}
+
+// ============================================================
+// EDITAR PERÍODO AQUISITIVO — recalcula e reescreve a linha na aba Periodos
+// payload = { rowIndex, matricula (conferência), inicioAquisitivo, faltas }
+// ============================================================
+function updatePeriodoAquisitivo(payload) {
+  try {
+    if (_scopeAtual().perfil === 'gerente')
+      return _err('Só o RH pode editar período aquisitivo.');
+
+    payload = payload || {};
+    const row = Number(payload.rowIndex);
+    if (!row || row < 2) return _err('Linha inválida.');
+    const matIn = _mk(payload.matricula);
+    const ini = toDate(payload.inicioAquisitivo);
+    if (!ini) return _err('Data de início do período inválida.');
+    const faltas = Number(payload.faltas) || 0;
+
+    const sh = _sheet(TAB.PERIODOS);
+    if (row > sh.getLastRow()) return _err('Essa linha não existe mais. Recarregue a ficha.');
+    const cur = sh.getRange(row, 1, 1, Math.max(9, sh.getLastColumn())).getValues()[0];
+    if (matIn && _mk(cur[P.MAT]) !== matIn)
+      return _err('A linha mudou de posição na planilha. Recarregue a ficha e tente de novo.');
+
+    // não pode colidir com OUTRO período do mesmo funcionário
+    const matRow = _mk(cur[P.MAT]);
+    const rows = _rows(TAB.PERIODOS);
+    for (var i = 0; i < rows.length; i++) {
+      if ((i + 2) === row) continue;
+      if (_mk(rows[i][P.MAT]) === matRow
+        && formatDate(rows[i][P.INI_AQ]) === formatDate(ini))
+        return _err('Já existe outro período aquisitivo iniciando em ' + formatDate(ini) + '.');
+    }
+
+    const today = _midnight(new Date());
+    const fim  = _plusDays(_addMonths(ini, 12), -1);
+    const conc = _addMonths(fim, 12);
+    const label = ini.getFullYear() + '/' + fim.getFullYear();
+    const direito = _diasDireito(faltas);
+    const creditado = (fim <= today) ? 'Sim' : 'Não';
+    const situacao = _periodoSituacao(fim, conc, today);
+
+    // reescreve as colunas B..I (mantém Matrícula e _seq/_chave)
+    sh.getRange(row, P.PERIODO + 1, 1, 8).setValues([[
+      label, ini, fim, faltas, direito, conc, creditado, situacao
+    ]]);
+    sh.getRange(row, P.INI_AQ + 1).setNumberFormat('dd/mm/yyyy');
+    sh.getRange(row, P.FIM_AQ + 1).setNumberFormat('dd/mm/yyyy');
+    sh.getRange(row, P.CONCESSAO + 1).setNumberFormat('dd/mm/yyyy');
+
+    return JSON.stringify({
+      success: true, periodo: label, direito: direito,
+      fimAquisitivo: formatDate(fim), concessao: formatDate(conc),
+    });
+  } catch (e) { return _err(e.message); }
+}
+
+// ============================================================
+// EXCLUIR PERÍODO AQUISITIVO — apaga a linha na aba Periodos (só RH)
+// payload = { rowIndex, matricula (conferência) }
+// ============================================================
+function deletePeriodoAquisitivo(payload) {
+  try {
+    if (_scopeAtual().perfil === 'gerente')
+      return _err('Só o RH pode apagar período aquisitivo.');
+
+    const row = Number(payload && payload.rowIndex);
+    if (!row || row < 2) return _err('Linha inválida.');
+
+    const sh = _sheet(TAB.PERIODOS);
+    if (row > sh.getLastRow()) return _err('Essa linha não existe mais. Recarregue a ficha.');
+    const cur = sh.getRange(row, 1, 1, Math.max(9, sh.getLastColumn())).getValues()[0];
+    if (payload.matricula && _mk(cur[P.MAT]) !== _mk(payload.matricula))
+      return _err('A linha mudou de posição na planilha. Recarregue a ficha e tente de novo.');
+
+    sh.deleteRow(row);
+    return JSON.stringify({ success: true });
   } catch (e) { return _err(e.message); }
 }
 

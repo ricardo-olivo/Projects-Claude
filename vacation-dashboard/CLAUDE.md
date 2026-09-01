@@ -26,7 +26,7 @@ calcula um **"banco de dias"** por funcionário e gera o **Aviso de Férias em P
 - Ficha individual (modal): identificação, quebra do saldo, períodos aquisitivos,
   histórico de gozo/abono, observações/ajustes.
 - Incluir / editar / apagar período de férias pelo painel.
-- Incluir período aquisitivo pelo painel (na ficha, só RH).
+- Incluir / editar / excluir período aquisitivo pelo painel (na ficha, só RH).
 - Cadastrar funcionário novo pelo painel (aba Funcionários, só RH).
 - Ativar / inativar funcionário (desligamento) pela ficha, só RH — grava `Func.Situação`.
 - Lançar / **editar** / **excluir** ajuste manual de saldo e observação/justificativa
@@ -182,6 +182,7 @@ vacation-dashboard/
 | `updateVacationRecord(payload)` | edita início/término (só RH) |
 | `deleteVacationRecord(payload)` | apaga a linha (só RH) |
 | `addPeriodoAquisitivo(payload)` | grava período na aba Periodos (só RH) |
+| `updatePeriodoAquisitivo(payload)` / `deletePeriodoAquisitivo(payload)` | edita / apaga uma linha da aba Periodos pelo `rowIndex` (confere a matrícula, recalcula fim/concessão/direito/situação) — só RH. `getEmployeeFicha` devolve `rowIndex` e `faltas` em cada período |
 | `addEmployee(payload)` | cadastra funcionário na aba Func (só RH); matrícula sugerida/editável; se registrado, cria o 1º período aquisitivo |
 | `setEmployeeStatus(payload)` | grava `Func.Situação` = Ativo/Inativo (desligamento) — só RH. `getVacationData`/`getEmployeeFicha` devolvem `ativo` |
 | `addAjuste(payload)` | grava linha na aba `Ajustes` (Data · Dias ± · Observação) — só RH. Dias vazio/0 = só observação (não mexe no saldo) |

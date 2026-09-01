@@ -1008,7 +1008,7 @@
               <th>Funcionário</th>
               <th>Vencimento</th>
               <th>Dias Disponíveis</th>
-              <th>Status Férias</th>
+              <th>Situação</th>
             </tr>
           </thead>
           <tbody id="due-body"></tbody>
@@ -1425,10 +1425,13 @@
           mm++;
           mockEmployees.push({ matricula: row.matricula || ('D' + mm), nome: nm, filial: row.branch || '',
             cargo: 'Farmacêutico', registrado: true, saldo: row.availableDays || 0, vencimento: row.dueDate || '',
-            ativo: true });
+            vencimentos: row.dueDate ? [row.dueDate] : [], vencCalc: !!row.dueDate, ativo: true });
         });
         MOCK_PAYMENT_DATA.forEach(p => mockEmployees.push({ matricula: 'D' + (++mm), nome: p.name,
-          filial: p.branch || '', cargo: 'Auxiliar', registrado: false, saldo: 0, vencimento: '' }));
+          filial: p.branch || '', cargo: 'Auxiliar', registrado: false, saldo: 0, vencimento: '', vencimentos: [] }));
+        // preview: um funcionário com vários vencimentos (testa o relatório mensal)
+        const _mrob = mockEmployees.find(e => e.nome === 'Roberto Silva');
+        if (_mrob) { _mrob.vencimentos = ['2026-08-09', '2027-08-09']; _mrob.vencCalc = true; }
         onDataLoaded(JSON.stringify({
           data: MOCK_DATA,
           conflicts,
@@ -2644,8 +2647,31 @@
       + fmtDateBR(conc.toISOString().slice(0, 10));
   }
 
+  // calcula fim/concessão/direito/situação de um período (mesma regra do servidor)
+  function _calcPeriodo(iniISO, faltas) {
+    const d = new Date(iniISO);
+    const fim = new Date(d); fim.setMonth(fim.getMonth() + 12); fim.setDate(fim.getDate() - 1);
+    const conc = new Date(fim); conc.setMonth(conc.getMonth() + 12);
+    const iso = x => x.toISOString().slice(0, 10);
+    const now = new Date(); now.setHours(0, 0, 0, 0);
+    const diasConc = Math.round((conc - now) / 864e5);
+    let sit;
+    if (fim > now) sit = 'Em formação';
+    else if (now > conc) sit = 'Vencido — risco de dobro';
+    else if (diasConc <= 90) sit = 'Vence em ' + diasConc + ' d';
+    else sit = 'Em dia — vence em ' + diasConc + ' d';
+    return {
+      periodo: d.getFullYear() + '/' + fim.getFullYear(),
+      iniAq: iniISO, fimAq: iso(fim), concessao: iso(conc),
+      direito: pFaixaDireito(faltas), faltas: Number(faltas) || 0,
+      creditado: fim <= now ? 'Sim' : 'Não', situacao: sit,
+    };
+  }
+
   function abrirNovoPeriodo() {
     if (!fichaMat && !fichaNome) { alert('Abra a ficha de um funcionário primeiro.'); return; }
+    perEditRow = null; perEditIdx = null;
+    document.getElementById('periodo-title').textContent = 'Incluir Período Aquisitivo';
     document.getElementById('p-emp').value = fichaNome || fichaMat;
     document.getElementById('p-faltas').value = '0';
     document.getElementById('periodo-error').style.display = 'none';
@@ -2665,8 +2691,25 @@
     document.getElementById('periodo-overlay').classList.add('open');
   }
 
+  function editarPeriodo(idx) {
+    const p = fichaData && fichaData.periodos && fichaData.periodos[idx];
+    if (!p || !ehRH() || !fichaMat) return;
+    perEditRow = (p.rowIndex != null) ? p.rowIndex : 'demo';
+    perEditIdx = idx;
+    document.getElementById('periodo-title').textContent = 'Editar Período Aquisitivo';
+    document.getElementById('p-emp').value = fichaNome || fichaMat;
+    document.getElementById('p-ini').value = p.iniAq || '';
+    document.getElementById('p-faltas').value = (p.faltas == null || p.faltas === '') ? '0' : p.faltas;
+    document.getElementById('periodo-error').style.display = 'none';
+    const btn = document.getElementById('p-save');
+    btn.disabled = false; btn.textContent = 'Salvar Período';
+    pAtualizaPreview();
+    document.getElementById('periodo-overlay').classList.add('open');
+  }
+
   function fecharNovoPeriodo() {
     document.getElementById('periodo-overlay').classList.remove('open');
+    perEditRow = null; perEditIdx = null;
   }
 
   function salvarNovoPeriodo() {
@@ -2675,16 +2718,26 @@
     const err = document.getElementById('periodo-error');
     if (!ini) { err.textContent = 'Informe a data de início do período aquisitivo.'; err.style.display = 'block'; return; }
 
+    const isEdit = perEditRow != null;
     const btn = document.getElementById('p-save');
     btn.disabled = true; btn.textContent = 'Salvando…';
     err.style.display = 'none';
 
     if (typeof google === 'undefined' || !google.script) {
-      alert('A inclusão de período só funciona no dashboard publicado.');
-      btn.disabled = false; btn.textContent = 'Salvar Período';
+      const key = _mkFront(fichaMat);
+      const novo = _calcPeriodo(ini, faltas);
+      const list = demoPeriodos[key] || (fichaData && fichaData.periodos ? fichaData.periodos.map(x => ({ ...x })) : []);
+      if (isEdit && list[perEditIdx]) list[perEditIdx] = novo;
+      else list.push(novo);
+      list.sort((a, b) => (a.iniAq || '').localeCompare(b.iniAq || ''));
+      demoPeriodos[key] = list;
+      if (fichaData) fichaData.periodos = list.map(x => ({ ...x }));
+      fecharNovoPeriodo();
+      renderFicha(fichaData);
       return;
     }
-    google.script.run
+
+    const runner = google.script.run
       .withSuccessHandler(txt => {
         let res;
         try { res = JSON.parse(txt); } catch (e) { res = { success: false, error: 'Resposta inválida.' }; }
@@ -2700,16 +2753,48 @@
       .withFailureHandler(e => {
         btn.disabled = false; btn.textContent = 'Salvar Período';
         err.textContent = 'Erro: ' + ((e && e.message) || e); err.style.display = 'block';
+      });
+
+    if (isEdit) runner.updatePeriodoAquisitivo({ rowIndex: perEditRow, matricula: fichaMat, inicioAquisitivo: ini, faltas: faltas });
+    else        runner.addPeriodoAquisitivo({ matricula: fichaMat, inicioAquisitivo: ini, faltas: faltas });
+  }
+
+  function excluirPeriodo(idx) {
+    const p = fichaData && fichaData.periodos && fichaData.periodos[idx];
+    if (!p || !ehRH() || !fichaMat) return;
+    if (!confirm('Apagar o período aquisitivo ' + (p.periodo || fmtDateBR(p.iniAq)) + '?\n\n'
+      + 'Isso recalcula o saldo (dias creditados) do funcionário. Não dá para desfazer.')) return;
+
+    if (typeof google === 'undefined' || !google.script) {
+      const key = _mkFront(fichaMat);
+      const list = (demoPeriodos[key] || fichaData.periodos.map(x => ({ ...x })));
+      list.splice(idx, 1);
+      demoPeriodos[key] = list;
+      fichaData.periodos = list.map(x => ({ ...x }));
+      renderFicha(fichaData);
+      return;
+    }
+
+    google.script.run
+      .withSuccessHandler(txt => {
+        let res;
+        try { res = JSON.parse(txt); } catch (e) { res = { success: false, error: 'Resposta inválida.' }; }
+        if (res.success) { openFichaFor(fichaMat, fichaNome); setTimeout(loadData, 300); }
+        else alert('Não foi possível apagar: ' + (res.error || 'erro desconhecido.'));
       })
-      .addPeriodoAquisitivo({ matricula: fichaMat, inicioAquisitivo: ini, faltas: faltas });
+      .withFailureHandler(err => alert('Erro ao apagar: ' + ((err && err.message) || err)))
+      .deletePeriodoAquisitivo({ rowIndex: p.rowIndex, matricula: fichaMat });
   }
 
   // ── AJUSTE MANUAL / OBSERVAÇÃO (ficha, só RH) ─────────────
   let ajEditRow = null;    // rowIndex na aba Ajustes (edição); null = inclusão
   let ajEditIdx = null;    // índice em fichaData.ajustes (para o modo demo)
   let ajEditOldDias = 0;   // dias que a linha já contribuía p/ o saldo (edição)
-  const demoAjustes = {};  // preview: ajustes por matrícula (não roda no Apps Script)
-  const demoVenc = {};     // preview: vencimento manual por matrícula
+  const demoAjustes = {};   // preview: ajustes por matrícula (não roda no Apps Script)
+  const demoVenc = {};      // preview: vencimento manual por matrícula
+  const demoPeriodos = {};  // preview: períodos aquisitivos por matrícula
+  let perEditRow = null;    // rowIndex na aba Periodos (edição); null = inclusão
+  let perEditIdx = null;    // índice em fichaData.periodos (modo demo)
 
   function abrirAjuste(modo) {
     const mat = (fichaData && fichaData.func && fichaData.func.matricula) || fichaMat;
@@ -2929,7 +3014,12 @@
       if (iso) demoVenc[key] = iso; else delete demoVenc[key];
       if (!isCalc) {
         if (fichaData && fichaData.func) { fichaData.func.vencManual = iso; fichaData.func.vencimento = iso; }
-        allEmployees.forEach(e => { if (_mkFront(e.matricula) === key) { e.vencManual = iso; e.vencimento = iso; } });
+        allEmployees.forEach(e => {
+          if (_mkFront(e.matricula) === key) {
+            e.vencManual = iso; e.vencimento = iso;
+            e.vencimentos = iso ? [iso] : [];
+          }
+        });
         allData.forEach(r => { if (_mkFront(r.matricula) === key) r.dueDate = iso; });
       } else if (fichaData && fichaData.func) {
         fichaData.func.vencManual = iso;
@@ -3005,8 +3095,7 @@
               vencimento: r.dueDate || vm, vencManual: vm, temCalculo: temCalc },
       saldo: { atual, inicial: 0, creditados: atual + gozadas - ajSum, gozadas, abono: 0, ajustes: ajSum,
                risco: 0, proximoCredito: r.dueDate || '' },
-      periodos: r.dueDate ? [{ periodo: '—', iniAq: '', fimAq: '', concessao: r.dueDate,
-               direito: '', creditado: 'Sim', situacao: '' }] : [],
+      periodos: (demoPeriodos[_mkFront(r.matricula)] || []).map(p => ({ ...p })),
       lancamentos: rows.map(x => ({ periodo: '', parcela: 1, inicio: x.startDate, termino: x.endDate,
                retorno: x.returnDate, dias: x.total, tipo: 'Gozo', obs: '' })),
       ajustes: ajList.map(a => ({ ...a })),
@@ -3033,9 +3122,10 @@
     const warn = f.registrado ? '' :
       '<div class="ficha-warn">Funcionário <strong>SEM registro</strong> — férias pagas; períodos aquisitivos não se aplicam. Controle pelo saldo inicial e pelos ajustes.</div>';
 
+    const podePeriodo = ehRH() && f.matricula && String(f.matricula) !== '—';
     const perTbl = d.periodos.length ? `<div class="ficha-tbl-wrap"><table class="ficha-tbl">
-        <thead><tr><th>Período</th><th>Início aq.</th><th>Fim aq.</th><th>Concessão até</th><th>Direito</th><th>Creditado</th><th>Situação</th></tr></thead>
-        <tbody>${d.periodos.map(p => `<tr>
+        <thead><tr><th>Período</th><th>Início aq.</th><th>Fim aq.</th><th>Concessão até</th><th>Direito</th><th>Creditado</th><th>Situação</th>${podePeriodo ? '<th class="no-print"></th>' : ''}</tr></thead>
+        <tbody>${d.periodos.map((p, i) => `<tr>
           <td>${escHtml(p.periodo || '—')}</td>
           <td>${fmtDateBR(p.iniAq)}</td>
           <td>${fmtDateBR(p.fimAq)}</td>
@@ -3043,6 +3133,9 @@
           <td style="text-align:center">${val(p.direito)}</td>
           <td style="text-align:center">${escHtml(p.creditado || '—')}</td>
           <td><span class="ficha-status ${fichaStatusClass(p.situacao)}">${escHtml(p.situacao || '—')}</span></td>
+          ${podePeriodo ? `<td class="no-print" style="white-space:nowrap;text-align:right">
+            <button class="mini-btn" title="Editar" onclick="editarPeriodo(${i})">✏</button>
+            <button class="del-btn" title="Apagar" onclick="excluirPeriodo(${i})">🗑</button></td>` : ''}
         </tr>`).join('')}</tbody></table></div>`
       : '<div class="ficha-empty">Sem períodos aquisitivos cadastrados.</div>';
 
@@ -3596,25 +3689,31 @@
       monthInput.value = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
     }
     const monthISO = monthInput.value;
+    const todayISO = today.toISOString().slice(0, 10);
 
-    // 1) registrados: linhas de allData com vencimento (concessão calculada) no mês
-    const fromData = allData.filter(r => r.dueDate && r.dueDate.substring(0, 7) === monthISO);
-    const seen = new Set(fromData.map(r => _mkFront(r.matricula || (r.branch + '|' + r.name))));
+    // Uma linha por (funcionário × concessão) que vence no mês — considera TODOS os
+    // períodos aquisitivos (não só o próximo), mais o vencimento manual dos sem período.
+    const relevant = [];
+    (allEmployees || []).forEach(e => {
+      const list = (e.vencimentos && e.vencimentos.length)
+        ? e.vencimentos
+        : (e.vencimento ? [e.vencimento] : []);
+      const vistos = new Set();
+      list.forEach(v => {
+        if (!v || v.substring(0, 7) !== monthISO || vistos.has(v)) return;
+        vistos.add(v);
+        relevant.push({
+          branch: e.filial || '', name: e.nome, matricula: e.matricula,
+          dueDate: v, availableDays: e.saldo, vencido: v < todayISO,
+        });
+      });
+    });
+    relevant.sort((a, b) =>
+      (a.branch || '').localeCompare(b.branch || '') ||
+      a.name.localeCompare(b.name) ||
+      a.dueDate.localeCompare(b.dueDate));
 
-    // 2) não registrados: vencimento manual (aba Func col. J) no mês — não estão em allData
-    const fromEmp = allEmployees
-      .filter(e => !e.registrado && e.vencimento && e.vencimento.substring(0, 7) === monthISO)
-      .filter(e => !seen.has(_mkFront(e.matricula || (e.filial + '|' + e.nome))))
-      .map(e => ({
-        branch: e.filial || '', name: e.nome, matricula: e.matricula,
-        dueDate: e.vencimento, availableDays: e.saldo,
-        startDate: '', endDate: '',           // sem status de férias
-      }));
-
-    const relevant = fromData.concat(fromEmp)
-      .sort((a, b) => (a.branch || '').localeCompare(b.branch || '') || a.name.localeCompare(b.name));
-
-    document.getElementById('due-count').textContent = relevant.length + ' funcionário(s)';
+    document.getElementById('due-count').textContent = relevant.length + ' vencimento(s)';
 
     const container = document.getElementById('due-container');
     const empty     = document.getElementById('due-empty');
@@ -3634,20 +3733,27 @@
       groups[groups.length - 1].rows.push(r);
     }
 
+    const sitBadge = r => {
+      if (r.vencido) return '<span class="badge badge-inativo">Vencido — risco de dobro</span>';
+      const dias = Math.round((new Date(r.dueDate) - today) / 864e5);
+      const cls = dias <= 90 ? 'badge-future' : 'badge-done';
+      return `<span class="badge ${cls}">Vence em ${dias} d</span>`;
+    };
+
     document.getElementById('due-body').innerHTML = groups.map(g => {
       const rows = g.rows.map(r => `
         <tr>
           <td>${escHtml(r.branch)}</td>
-          <td>${(r._id == null && r.matricula)
+          <td>${r.matricula
             ? `<a href="#" class="emp-link" onclick="openFichaFor('${escHtml(String(r.matricula))}');return false">${escHtml(r.name)}</a>`
-            : empLink(r)}</td>
-          <td>${fmtMonthYear(r.dueDate)}</td>
+            : `<strong>${escHtml(r.name)}</strong>`}</td>
+          <td>${fmtDateBR(r.dueDate)}</td>
           <td style="text-align:center">${r.availableDays !== '' && r.availableDays !== undefined ? r.availableDays : '—'}</td>
-          <td>${statusBadge(getStatus(r))}</td>
+          <td>${sitBadge(r)}</td>
         </tr>`).join('');
       return `
         <tr class="month-group-header">
-          <td colspan="5">${escHtml(g.branch)} <span style="font-weight:400;opacity:.7">(${g.rows.length} funcionário${g.rows.length > 1 ? 's' : ''})</span></td>
+          <td colspan="5">${escHtml(g.branch)} <span style="font-weight:400;opacity:.7">(${g.rows.length} vencimento${g.rows.length > 1 ? 's' : ''})</span></td>
         </tr>
         ${rows}`;
     }).join('');
