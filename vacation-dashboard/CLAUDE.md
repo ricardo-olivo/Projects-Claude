@@ -115,8 +115,8 @@ SALDO ATUAL = Saldo inicial (Func.G)
 
 ### Férias gozadas
 - Dias corridos = término − início + 1.
-- Retorno = término + 1; **Retorno útil** = próximo dia útil (pula fim de semana e
-  a aba `Feriados`).
+- Retorno = término + 1; **Retorno útil** = próximo dia útil (sábado conta como
+  dia trabalhado; só pula domingo e a aba `Feriados`).
 - `addVacationRecord` grava **valores** (nunca fórmulas) — planilha em pt-BR
   rejeita fórmula com vírgula e vira `#ERROR!`.
 
@@ -238,6 +238,11 @@ Colunas `_seq` / `_chave` (cinza) ligam as abas e **não devem ser apagadas**.
 - Datas ISO `yyyy-mm-dd` entre servidor↔cliente; `dd/mm/yyyy` na tela; formato de
   número de data na planilha = `dd/mm/aaaa` (não `dd/mm/yyyy` — no Sheets pt-BR o
   token de ano é `a`).
+- **Nunca `new Date("yyyy-mm-dd")` nem `.toISOString()` para datas de calendário**
+  no `Code.gs` (roda em fuso −03): string ISO só com data é parseada como UTC e
+  "escorrega" 1 dia. Use `toDate()` (tem ramo `yyyy-mm-dd` → meia-noite local) e
+  `formatDate()` (monta pelos componentes locais). Foi o que fazia o "Retorno ao
+  trabalho" sair +1 dia; mesmo motivo do fix em `setEmployeeVencimento`.
 - `google.script.run` retorna **string JSON**; o front dá `JSON.parse` com try/catch.
 - Preview local: `powershell -ExecutionPolicy Bypass -File vacation-dashboard/serve.ps1`
   → `http://localhost:8765/Home.html` ou `/Dashboard.html`. Usa `MOCK_DATA`

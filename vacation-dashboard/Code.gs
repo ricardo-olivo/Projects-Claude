@@ -1386,30 +1386,39 @@ function _addWorkingDays(date, n) {
   while (left > 0) {
     x = _plusDays(x, 1);
     const wd = x.getDay();
-    if (wd === 0 || wd === 6) continue;
+    if (wd === 0) continue;
     if (hol[formatDate(x)]) continue;
     left--;
   }
   return x;
 }
 
-// Date | ISO | dd/mm/yyyy  ->  Date | null
+// Date | ISO yyyy-mm-dd | dd/mm/yyyy  ->  Date | null
 function toDate(value) {
   if (!value || value === '') return null;
   if (value instanceof Date) return isNaN(value.getTime()) ? null : value;
   const s = String(value).trim();
   const br = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
   if (br) return new Date(+br[3], +br[2] - 1, +br[1]);
+  // yyyy-mm-dd puro: monta meia-noite LOCAL. new Date("yyyy-mm-dd") parseia como
+  // UTC e, no fuso -03, a data "escorrega" para as 21h do dia anterior — o que
+  // depois desloca o retorno / o dia útil em 1 dia.
+  const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (iso) return new Date(+iso[1], +iso[2] - 1, +iso[3]);
   const d = new Date(s);
   return isNaN(d.getTime()) ? null : d;
 }
 
+function _pad2(n) { return (n < 10 ? '0' : '') + n; }
+
+// -> 'yyyy-mm-dd' pelos componentes de data LOCAIS (fuso do script).
+// Nunca usar toISOString aqui: converte para UTC e, se a data carregar qualquer
+// hora != 00:00 local, adianta o dia (era a causa do "retorno" sair +1 dia).
 function formatDate(value) {
   if (!value) return '';
-  if (value instanceof Date) return value.toISOString().split('T')[0];
-  const d = new Date(value);
-  if (!isNaN(d.getTime())) return d.toISOString().split('T')[0];
-  return String(value);
+  const d = (value instanceof Date) ? value : toDate(value);
+  if (!d || isNaN(d.getTime())) return String(value);
+  return d.getFullYear() + '-' + _pad2(d.getMonth() + 1) + '-' + _pad2(d.getDate());
 }
 
 function formatDateBR(isoDate) {

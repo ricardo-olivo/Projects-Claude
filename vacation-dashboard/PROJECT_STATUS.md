@@ -1,19 +1,22 @@
 # STATUS DO PROJETO
 
 ## Data do checkpoint
-2026-08-31 (atualizado no mesmo dia: agrupamento da Tabela, cards de filial,
-cadastro/inativação de funcionário, cards de resumo clicáveis)
+2026-09-10 (correção de fuso no cálculo de datas — "Retorno ao trabalho" saía
++1 dia; sábado passa a contar como dia trabalhado)
 
 ## Branch atual
 `main` (repositório `Projects-Claude`, remote `https://github.com/ricardo-olivo/Projects-Claude.git`).
-`main` está **3 commits à frente de `origin/main`** (`efd4be2`, `2beccb8`,
-`bcb0c82` — nenhum pusheado) **+ alteração não commitada** no working tree
-(`Code.gs` + `Dashboard.html`: editar/excluir período aquisitivo — ver "Arquivos
-modificados recentemente").
+`main` está **5 commits à frente de `origin/main`** (`efd4be2`, `2beccb8`,
+`bcb0c82`, `836c247` + o commit desta correção de fuso — nenhum pusheado).
+Working tree limpo.
 
 ## Último commit
-`bcb0c82` — "vacation-dashboard: clickable summary cards, ficha adjustments
-edit/delete, manual vacation due date" (2026-08-31). Autor: ricardo.olivo <rfolivo@gmail.com>.
+Commit desta correção (HEAD de `main`) — "vacation-dashboard: fix calendar dates
+parsed as UTC (return date was +1 day); Saturday counts as a workday"
+(2026-09-10). Autor: ricardo.olivo <rfolivo@gmail.com>.
+
+Commit anterior: `836c247` — "edit/delete aquisitivo periods from the ficha;
+monthly-due report covers all concessions" (2026-09-01).
 
 Commits recentes do repositório (multi-projeto):
 ```
@@ -126,6 +129,12 @@ segmentado por filial (RH x Gerente).
    aniversário de admissão, pagar 30 = saldo ≥ 30) — precisa de validação do RH.
 
 ## Bugs conhecidos
+- ~~**Retorno ao trabalho saía +1 dia.**~~ **Corrigido e commitado** (HEAD de
+  `main`, 2026-09-10), **falta deploy**. `toDate`/`formatDate` no `Code.gs` tratavam `yyyy-mm-dd` como
+  UTC (`new Date(s)` / `toISOString()`); no fuso −03 o retorno pulava um dia
+  (gozo até 13/09/2026 → retorno 15/09 em vez de 14/09). Agora parseiam/formatam
+  em horário **local**. Precisa de deploy; linhas antigas já exibem certo, mas
+  convém reeditar as datas p/ limpar a fração de hora gravada na célula.
 - **`README.md` desatualizado** (arquitetura antiga). Enganoso para quem ler primeiro.
 - **Login vazio se o deploy estiver errado.** `Session.getActiveUser().getEmail()`
   retorna `''` se o Web App não estiver como "Executar como: Eu" + "Acesso: qualquer
@@ -245,7 +254,7 @@ certos. CSS novo: `.card-click`, `.card-cta`, `.kpi-count`.
   `ajEditIdx` / `ajEditOldDias`, prévia do novo saldo. CSS `.form-group textarea`.
   Preview: `demoAjustes` guarda os ajustes por matrícula no modo mock.
 
-### Não commitado (working tree) — `Code.gs` + `Dashboard.html`
+### Commitado em `836c247` (2026-09-01) — `Code.gs` + `Dashboard.html` + docs
 
 **Editar / excluir período aquisitivo pela ficha** (só RH):
 - `Code.gs`: `getEmployeeFicha` passou a devolver `rowIndex` e `faltas` em cada
@@ -269,12 +278,29 @@ certos. CSS novo: `.card-click`, `.card-cta`, `.kpi-count`.
   "Vencido — risco de dobro" / "Vence em N d"; "Vencimento" agora é data cheia;
   contador em "vencimento(s)".
 
-Ainda **não commitado**.
+### Commitado em 2026-09-10 (HEAD de `main`) — `Code.gs` + docs
+
+**Fuso horário no cálculo de datas** (`Code.gs`, só backend):
+- `toDate()` ganhou um ramo para `yyyy-mm-dd` puro → `new Date(ano, mês-1, dia)`
+  (meia-noite **local**). Antes caía em `new Date(s)`, que parseia string ISO só
+  com data como **UTC**; no fuso −03 a data virava 21h do dia anterior.
+- `formatDate()` não usa mais `toISOString()` (UTC) — monta `yyyy-mm-dd` pelos
+  componentes **locais** (`getFullYear`/`getMonth`/`getDate`), com `_pad2()`.
+- Efeito: o "Retorno ao trabalho" saía +1 dia (ex.: gozo até domingo 13/09/2026
+  mostrava retorno 15/09 em vez de **14/09**). Vale para retorno simples, retorno
+  útil (`_addWorkingDays`), chaves de `_feriadosSet`, datas gravadas na aba
+  `Lancamentos` e o aviso em PDF. Linhas já gravadas com o valor errado passam a
+  **exibir certo** (a célula arredonda p/ o dia local); para limpar a fração de
+  hora, reeditar as datas pela ficha depois do deploy.
+- `_addWorkingDays()` deixou de pular sábado — só domingo + aba `Feriados`
+  contam como folga (sábado é dia trabalhado na rede).
 
 ### Deploy
-`efd4be2`, `2beccb8` e `bcb0c82` **não pusheados**; nada redeployado no Apps
-Script — o próximo deploy precisa de **`Code.gs` + `Dashboard.html`** (nova versão)
-e do cabeçalho da coluna **J ("Vencimento")** na aba `Func`.
+`efd4be2`, `2beccb8`, `bcb0c82`, `836c247` e a correção de fuso (HEAD)
+**não pusheados**; nada redeployado no Apps Script — o próximo deploy precisa de **`Code.gs` +
+`Dashboard.html`** (nova versão) e do cabeçalho da coluna **J ("Vencimento")** na
+aba `Func`. Inclui também a correção de fuso em `toDate` / `formatDate` (retorno
+saía +1 dia) e o sábado como dia útil em `_addWorkingDays`.
 
 ## Banco de dados
 "Banco" = uma planilha Google Sheets (`MODEL_SHEET_ID = 1wLN9oZji-Uk6prHMcvav0CNg1u-tFMz_`),
