@@ -1129,7 +1129,9 @@
     renderTable(filtered);
   }
 
-  loadData().catch(function (err) { showToast("Não consegui carregar os dados: " + err.message, true); });
+  loadData()
+    .catch(function (err) { showToast("Não consegui carregar os dados: " + err.message, true); })
+    .then(function () { doRefresh(); });
 })();
 </script>
 </body>
