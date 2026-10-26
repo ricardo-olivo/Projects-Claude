@@ -282,6 +282,24 @@
     .badge-active  { background: var(--success-light); color: var(--success); }
     .badge-future  { background: var(--primary-light); color: var(--primary); }
     .badge-done    { background: var(--gray-100);      color: var(--gray-500); }
+    /* FASE 3 — aprovação */
+    .badge-pending { background: var(--warning-light); color: var(--warning); }
+    .badge-recusado { background: var(--danger-light); color: var(--danger); }
+    .badge-aprovado { background: var(--success-light); color: var(--success); }
+    .tab-count { display: inline-block; min-width: 18px; margin-left: 6px; padding: 0 5px; border-radius: 999px;
+      background: var(--warning); color: white; font-size: 11px; font-weight: 700; line-height: 18px; text-align: center; }
+    .tab.active .tab-count { background: white; color: var(--primary); }
+    .apr-sec { padding: 14px 20px 6px; font-size: 12px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .5px; color: var(--gray-500); }
+    .apr-actions { white-space: nowrap; text-align: right; }
+    .apr-actions .btn { padding: 5px 12px; font-size: 12px; }
+    .btn-ok { background: var(--success); color: white; border: none; border-radius: 6px; cursor: pointer; }
+    .btn-ok:hover { filter: brightness(.95); }
+    .btn-no { background: white; color: var(--danger); border: 1px solid var(--danger); border-radius: 6px; cursor: pointer; }
+    .btn-no:hover { background: var(--danger-light); }
+    .apr-warn { color: var(--danger); font-weight: 600; }
+    .apr-sub { font-size: 11px; color: var(--gray-500); }
+    tr.row-pending td { background: #fffdf2; }
     /* GRUPO POR FUNCIONÁRIO (visão Tabela) */
     tr.grp-row { cursor: pointer; }
     tr.grp-row td { background: var(--gray-50); font-weight: 600; }
@@ -402,6 +420,8 @@
     .mm-bar.active  { background: var(--success); opacity: .9; }
     .mm-bar.future  { background: var(--primary); opacity: .75; }
     .mm-bar.done    { background: var(--gray-400, #9ca3af); opacity: .6; }
+    .mm-bar.pending { background: repeating-linear-gradient(45deg, #e3a008, #e3a008 4px, #fbd38d 4px, #fbd38d 8px); opacity: .85; }
+    .vacation-bar.pending { background: repeating-linear-gradient(45deg, #e3a008, #e3a008 4px, #fbd38d 4px, #fbd38d 8px); }
     .mm-bar-label {
       position: absolute; top: 11px; left: 0; right: 0;
       font-size: 9px; font-weight: 600; color: white;
@@ -779,6 +799,7 @@
         <option value="active">Em férias agora</option>
         <option value="future">Agendadas</option>
         <option value="done">Concluídas</option>
+        <option value="pending">Aguardando aprovação</option>
       </select>
     </div>
     <div class="filter-group">
@@ -800,6 +821,21 @@
     <button class="tab" onclick="showTab('payment', this)">Pagamentos do Mês</button>
     <button class="tab" onclick="showTab('report', this)">Relatório Mensal</button>
     <button class="tab" onclick="showTab('due', this)">Vencimento Mensal</button>
+    <button class="tab" id="tab-approvals" onclick="showTab('approvals', this)">Aprovações<span class="tab-count" id="apr-count" style="display:none"></span></button>
+  </div>
+
+  <!-- VISÃO APROVAÇÕES (fase 3) -->
+  <div id="view-approvals" style="display:none">
+    <div class="table-wrap">
+      <div class="table-header">
+        <h2 id="apr-title">Aprovações de férias</h2>
+        <div style="display:flex;align-items:center;gap:12px">
+          <span class="result-count" id="apr-info"></span>
+          <button class="btn btn-secondary" style="padding:6px 12px;font-size:12px" onclick="loadAprovacoes()">↻ Atualizar</button>
+        </div>
+      </div>
+      <div id="apr-body"><div class="loading"><div class="spinner"></div>Carregando…</div></div>
+    </div>
   </div>
 
   <!-- VISÃO TABELA -->
@@ -1225,6 +1261,28 @@
   </div>
 </div>
 
+<!-- MODAL RECUSAR FÉRIAS (fase 3, só RH) -->
+<div class="modal-overlay" id="recusa-overlay" onclick="if(event.target===this)fecharRecusa()">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="recusa-title">
+    <div class="modal-header">
+      <h3 id="recusa-title">Recusar férias</h3>
+      <button class="modal-close" onclick="fecharRecusa()" aria-label="Fechar">×</button>
+    </div>
+    <div class="modal-body">
+      <p id="recusa-desc" style="font-size:13px;color:var(--gray-700);margin-bottom:12px"></p>
+      <div class="form-group">
+        <label for="recusa-motivo">Motivo da recusa (o gerente verá este texto)</label>
+        <textarea id="recusa-motivo" rows="3" placeholder="Ex.: conflito com outras férias na filial; sugerir outra data…"></textarea>
+      </div>
+      <div id="recusa-error" class="error-banner" style="display:none"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="fecharRecusa()">Cancelar</button>
+      <button class="btn btn-no" id="recusa-save" style="padding:8px 16px" onclick="confirmarRecusa()">Recusar</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL AJUSTE / OBSERVAÇÃO (ficha) -->
 <div class="modal-overlay" id="ajuste-overlay" onclick="if(event.target===this)fecharAjuste()">
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="ajuste-title">
@@ -1394,13 +1452,19 @@
     };
     const matByName = {};
     let mc = 0;
+    // preview da fase 3: estas férias foram pedidas por gerente e aguardam o RH
+    const PENDENTES = ['Diego Carvalho', 'Priscila Torres'];
     return rows.map(([branch, name, start, end, total], i) => {
       if (!matByName[name]) matByName[name] = 'M' + (++mc);
+      const pend = PENDENTES.includes(name);
       return {
         branch, name, matricula: matByName[name], startDate: start, endDate: end,
         returnDate: retDate(end, total), total, rowIndex: i + 2,
         availableDays: 30 - (total % 30) + (i % 10),
         dueDate: dueDate(i),
+        status: pend ? 'Pendente' : 'Aprovado',
+        pendingDays: pend ? total : 0,
+        solicitadoPor: pend ? 'gerente.' + branch.replace(/\D/g, '') + '@liderfarma.com.br' : '',
       };
     });
   })();
@@ -1432,8 +1496,15 @@
         // preview: um funcionário com vários vencimentos (testa o relatório mensal)
         const _mrob = mockEmployees.find(e => e.nome === 'Roberto Silva');
         if (_mrob) { _mrob.vencimentos = ['2026-08-09', '2027-08-09']; _mrob.vencCalc = true; }
+        // preview: ?perfil=gerente&filial=Filial 05 simula o portal do gerente
+        const qs = new URLSearchParams(location.search);
+        const mockScope = qs.get('perfil') === 'gerente'
+          ? { perfil: 'gerente', filiais: [qs.get('filial') || 'Filial 05'], email: 'gerente@preview' }
+          : { perfil: 'rh', filiais: null, email: 'rh@preview' };
+        const inMock = b => !mockScope.filiais || mockScope.filiais.includes(b);
         onDataLoaded(JSON.stringify({
-          data: MOCK_DATA,
+          scope: mockScope,
+          data: MOCK_DATA.filter(r => inMock(r.branch)),
           conflicts,
           errors: [],
           paymentDue: MOCK_PAYMENT_DATA.filter(r => r.monthNum === curMon),
@@ -1444,7 +1515,7 @@
             registrados: regNames.size,
             naoRegistrados: MOCK_PAYMENT_DATA.length,
           },
-          employees: mockEmployees,
+          employees: mockEmployees.filter(e => inMock(e.filial)),
         }));
       }, 600);
       return;
@@ -1510,6 +1581,8 @@
     applyFilters();
     renderPaymentBadge();
     renderPaymentTable();
+    atualizaContadorAprov();
+    if (document.getElementById('view-approvals').style.display !== 'none') loadAprovacoes();
   }
 
   // ── ESCOPO DE ACESSO (RH / Gerente / sem acesso) ──────────
@@ -1741,6 +1814,7 @@
   // ── STATUS ────────────────────────────────────────────────
   function getStatus(r) {
     if (!r.startDate || !r.endDate) return 'unknown';
+    if (r.status === 'Pendente') return 'pending';   // fase 3: ainda não aprovada pelo RH
     const start = new Date(r.startDate);
     const end   = new Date(r.endDate);
     start.setHours(0,0,0,0); end.setHours(23,59,59,999);
@@ -1754,6 +1828,7 @@
       active:  ['badge-active',  'Em férias'],
       future:  ['badge-future',  'Agendado'],
       done:    ['badge-done',    'Concluído'],
+      pending: ['badge-pending', 'Aguardando aprovação'],
       unknown: ['badge-done',    '—'],
     };
     const [cls, lbl] = map[status] || map.unknown;
@@ -1852,7 +1927,7 @@
     renderTable();
   }
 
-  const STATUS_RANK = { active: 3, future: 2, done: 1, unknown: 0 };
+  const STATUS_RANK = { active: 3, future: 2, done: 1, pending: 0, unknown: 0 };
 
   // resumo de um grupo com 2+ períodos (linha "pai" recolhida)
   function groupSummary(g) {
@@ -1864,13 +1939,16 @@
       || withDates.slice().sort((a, b) => (a.startDate > b.startDate ? -1 : 1))[0]
       || recs[0] || {};
     const totalDias = recs.reduce((s, r) => s + (Number(r.total) || 0), 0);
-    const status = recs.reduce((best, r) => {
+    // status do grupo vem das férias confirmadas; pedidos pendentes só viram o status se forem tudo o que há
+    const nPend = recs.filter(r => r.status === 'Pendente').length;
+    const conf  = recs.filter(r => r.status !== 'Pendente');
+    const status = conf.length ? conf.reduce((best, r) => {
       const s = getStatus(r);
       return STATUS_RANK[s] > STATUS_RANK[best] ? s : best;
-    }, 'unknown');
+    }, 'unknown') : 'pending';
     const avail = recs.map(r => r.availableDays).find(v => v !== '' && v !== undefined && v !== null);
     const due   = recs.map(r => r.dueDate).find(Boolean);
-    return { repr, totalDias, status, avail, due, count: recs.length };
+    return { repr, totalDias, status, avail, due, count: recs.length, nPend };
   }
 
   function detailRow(r, idx, child) {
@@ -1880,20 +1958,23 @@
         `<span class="edit-icon">✏</span></td>`
       : `<td>${fmtDateBR(val)}</td>`;
     const selo = r.ativo === false ? ' <span class="badge badge-inativo">Inativo</span>' : '';
+    const pend = r.status === 'Pendente';
+    // RH apaga qualquer linha; gerente só cancela a própria solicitação pendente
+    const delBtn = (r.rowIndex && (ehRH() || pend))
+      ? `<button class="del-btn" title="${pend && !ehRH() ? 'Cancelar esta solicitação' : 'Apagar este período de férias'}" onclick="apagarFerias(${r._id})">🗑</button>`
+      : '';
     return `
-      <tr data-idx="${idx}"${child ? ' class="grp-child"' : ''}>
+      <tr data-idx="${idx}" class="${child ? 'grp-child' : ''}${pend ? ' row-pending' : ''}">
         <td>${escHtml(r.branch)}</td>
         <td>${empLink(r)}${selo}</td>
         ${editCell('startDate', r.startDate)}
         ${editCell('endDate',   r.endDate)}
         <td id="ret-${idx}">${fmtDateBR(r.returnDate)}</td>
         <td id="tot-${idx}" style="text-align:center">${r.total || '—'}</td>
-        <td style="text-align:center">${r.availableDays !== '' && r.availableDays !== undefined ? r.availableDays : '—'}</td>
+        <td style="text-align:center">${r.availableDays !== '' && r.availableDays !== undefined ? r.availableDays : '—'}${r.pendingDays ? `<div class="apr-sub" title="Dias em solicitações aguardando o RH">−${r.pendingDays} pend.</div>` : ''}</td>
         <td>${fmtMonthYear(r.dueDate)}</td>
         <td>${statusBadge(getStatus(r))}</td>
-        <td class="col-actions">${(r.rowIndex && ehRH())
-          ? `<button class="del-btn" title="Apagar este período de férias" onclick="apagarFerias(${r._id})">🗑</button>`
-          : ''}</td>
+        <td class="col-actions">${delBtn}</td>
       </tr>`;
   }
 
@@ -1961,7 +2042,7 @@
         <td style="text-align:center" title="Soma dos ${s.count} períodos">${s.totalDias || '—'}</td>
         <td style="text-align:center">${s.avail !== undefined ? s.avail : '—'}</td>
         <td>${fmtMonthYear(s.due)}</td>
-        <td>${statusBadge(s.status)}</td>
+        <td>${statusBadge(s.status)}${s.nPend && s.status !== 'pending' ? ` <span class="badge badge-pending" title="Pedidos aguardando o RH">+${s.nPend} pend.</span>` : ''}</td>
         <td class="col-actions"></td>
       </tr>`;
       const children = open
@@ -1979,7 +2060,7 @@
     const active = source.filter(r => getStatus(r) === 'active').length;
 
     const curKey = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0');
-    const paidMonth = source.filter(r => r.startDate && r.startDate.substring(0, 7) === curKey).length;
+    const paidMonth = source.filter(r => r.startDate && r.startDate.substring(0, 7) === curKey && r.status !== 'Pendente').length;
 
     const employees = (totals.funcionarios != null)
       ? totals.funcionarios
@@ -2072,7 +2153,8 @@
         const s  = new Date(r.startDate); s.setHours(0,0,0,0);
         const e  = new Date(r.endDate);   e.setHours(23,59,59,0);
         const on = cd >= s && cd <= e;
-        return `<div class="day-cell">${on ? `<div class="vacation-bar${getStatus(r)==='active'?' active':''}" style="left:1px;right:1px;"></div>` : ''}</div>`;
+        const st = getStatus(r);
+        return `<div class="day-cell">${on ? `<div class="vacation-bar${st==='active'?' active':st==='pending'?' pending':''}" style="left:1px;right:1px;"></div>` : ''}</div>`;
       }).join('');
       return `<div class="timeline-row">
         <div class="employee-label">
@@ -2147,7 +2229,7 @@
 
         const pctLeft  = ((overlapS.getDate() - 1) / daysInM * 100).toFixed(1);
         const pctWidth = ((overlapE.getDate() - overlapS.getDate() + 1) / daysInM * 100).toFixed(1);
-        const tipText  = `${fmtDateBR(r.startDate)} – ${fmtDateBR(r.endDate)} (${r.total||'?'} dias)`;
+        const tipText  = `${fmtDateBR(r.startDate)} – ${fmtDateBR(r.endDate)} (${r.total||'?'} dias)${status === 'pending' ? ' — aguardando aprovação' : ''}`;
         const barLabel = Number(pctWidth) > 35 ? `${r.total||''}d` : '';
 
         return `<div class="mm-cell">
@@ -2241,6 +2323,9 @@
     document.getElementById('m-total').value  = '';
     document.getElementById('modal-save-error').style.display = 'none';
     document.getElementById('btn-save-vacation').disabled = false;
+    // fase 3: gerente solicita (vai para a fila do RH); RH lança já aprovado
+    document.getElementById('btn-save-vacation').textContent = ehRH() ? 'Salvar Férias' : 'Enviar para aprovação';
+    document.getElementById('modal-title').textContent = ehRH() ? 'Incluir Férias' : 'Solicitar Férias';
     document.querySelectorAll('.form-error').forEach(el => el.textContent = '');
 
     populateEmployeeDatalist();
@@ -2257,7 +2342,7 @@
   }
 
   document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') { closeAddModal(); closeFicha(); fecharNovoPeriodo(); closeEmpModal(); closeKpi(); fecharAjuste(); fecharVenc(); }
+    if (e.key === 'Escape') { closeAddModal(); closeFicha(); fecharNovoPeriodo(); closeEmpModal(); closeKpi(); fecharAjuste(); fecharVenc(); fecharRecusa(); }
   });
 
   // ── DETALHE DOS CARDS DE RESUMO (KPIs) ───────────────────
@@ -2294,7 +2379,7 @@
     else if (which === 'pagas') {
       title = 'Férias com início neste mês';
       gotoLabel = 'Ver na Tabela (filtro do mês)';
-      const list = source.filter(r => r.startDate && r.startDate.substring(0, 7) === curKey)
+      const list = source.filter(r => r.startDate && r.startDate.substring(0, 7) === curKey && r.status !== 'Pendente')
         .sort((a, b) => (a.startDate < b.startDate ? -1 : 1));
       html = `<p class="kpi-count">${list.length} registro(s)</p>` + tbl(
         ['Filial', 'Funcionário', 'Início', 'Fim', 'Retorno', 'Dias'],
@@ -2793,6 +2878,7 @@
   const demoAjustes = {};   // preview: ajustes por matrícula (não roda no Apps Script)
   const demoVenc = {};      // preview: vencimento manual por matrícula
   const demoPeriodos = {};  // preview: períodos aquisitivos por matrícula
+  const demoDecididas = []; // preview: solicitações já aprovadas/recusadas (aba Aprovações)
   let perEditRow = null;    // rowIndex na aba Periodos (edição); null = inclusão
   let perEditIdx = null;    // índice em fichaData.periodos (modo demo)
 
@@ -3048,13 +3134,16 @@
     const r = allData[id];
     if (!r || !r.rowIndex) return;
     const per = (r.startDate ? fmtDateBR(r.startDate) : '?') + ' a ' + (r.endDate ? fmtDateBR(r.endDate) : '?');
-    if (!confirm('Apagar o período de férias de ' + r.name + '\n(' + per + ')?\n\n'
+    const cancelar = r.status === 'Pendente';
+    if (!confirm((cancelar ? 'Cancelar a solicitação de férias de ' : 'Apagar o período de férias de ')
+      + r.name + '\n(' + per + ')?\n\n'
       + 'A linha é removida da planilha e não dá para desfazer.')) return;
 
     if (typeof google === 'undefined' || !google.script) {
       allData = allData.filter(x => x !== r);
       allData.forEach((x, i) => { x._id = i; });
-      applyFilters(); renderStats();
+      applyFilters(); renderStats(); atualizaContadorAprov();
+      if (document.getElementById('view-approvals').style.display !== 'none') { aprData = mockAprovacoes(); renderAprovacoes(); }
       return;
     }
     google.script.run
@@ -3078,7 +3167,9 @@
   }
 
   function mockFicha(r) {
-    const rows = allData.filter(x => x.name === r.name && x.startDate);
+    const all = allData.filter(x => x.name === r.name && x.startDate);
+    const rows = all.filter(x => x.status !== 'Pendente');
+    const pendente = all.filter(x => x.status === 'Pendente').reduce((s, x) => s + (Number(x.total) || 0), 0);
     const gozadas = rows.reduce((s, x) => s + (Number(x.total) || 0), 0);
     const atual = Number(r.availableDays) || 0;
     const emp = allEmployees.find(e => _mkFront(e.matricula) === _mkFront(r.matricula))
@@ -3094,10 +3185,13 @@
               admissao: '', situacao: ativo ? 'Ativo' : 'Inativo', ativo: ativo, registrado: true,
               vencimento: r.dueDate || vm, vencManual: vm, temCalculo: temCalc },
       saldo: { atual, inicial: 0, creditados: atual + gozadas - ajSum, gozadas, abono: 0, ajustes: ajSum,
-               risco: 0, proximoCredito: r.dueDate || '' },
+               pendente, risco: 0, proximoCredito: r.dueDate || '' },
       periodos: (demoPeriodos[_mkFront(r.matricula)] || []).map(p => ({ ...p })),
-      lancamentos: rows.map(x => ({ periodo: '', parcela: 1, inicio: x.startDate, termino: x.endDate,
-               retorno: x.returnDate, dias: x.total, tipo: 'Gozo', obs: '' })),
+      lancamentos: all.map(x => ({ periodo: '', parcela: 1, inicio: x.startDate, termino: x.endDate,
+               retorno: x.returnDate, dias: x.total, tipo: 'Gozo', obs: '', status: x.status || 'Aprovado', rowIndex: x.rowIndex }))
+        .concat(demoDecididas.filter(x => x.status === 'Recusado' && _mkFront(x.matricula) === _mkFront(r.matricula))
+          .map(x => ({ periodo: '', parcela: '', inicio: x.inicio, termino: x.termino, retorno: '', dias: x.dias,
+            tipo: 'Gozo', obs: '', status: 'Recusado', motivo: x.motivo }))),
       ajustes: ajList.map(a => ({ ...a })),
     };
   }
@@ -3139,9 +3233,16 @@
         </tr>`).join('')}</tbody></table></div>`
       : '<div class="ficha-empty">Sem períodos aquisitivos cadastrados.</div>';
 
+    const lanStatus = l => {
+      const st = l.status || 'Aprovado';
+      const cls = st === 'Pendente' ? 'badge-pending' : st === 'Recusado' ? 'badge-recusado' : 'badge-aprovado';
+      const lbl = st === 'Pendente' ? 'Aguardando RH' : st;
+      return `<span class="badge ${cls}">${lbl}</span>`
+        + (l.motivo ? `<div class="apr-sub wrap" title="Motivo">${escHtml(l.motivo)}</div>` : '');
+    };
     const lanTbl = d.lancamentos.length ? `<div class="ficha-tbl-wrap"><table class="ficha-tbl">
-        <thead><tr><th>Período</th><th>Parc.</th><th>Início</th><th>Término</th><th>Retorno útil</th><th>Dias</th><th>Tipo</th><th class="no-print">Aviso</th></tr></thead>
-        <tbody>${d.lancamentos.map(l => `<tr>
+        <thead><tr><th>Período</th><th>Parc.</th><th>Início</th><th>Término</th><th>Retorno útil</th><th>Dias</th><th>Tipo</th><th>Status</th><th class="no-print">Aviso</th></tr></thead>
+        <tbody>${d.lancamentos.map(l => `<tr${l.status === 'Recusado' ? ' style="opacity:.6"' : ''}>
           <td>${escHtml(l.periodo || '—')}</td>
           <td style="text-align:center">${val(l.parcela)}</td>
           <td>${fmtDateBR(l.inicio)}</td>
@@ -3149,7 +3250,8 @@
           <td>${fmtDateBR(l.retorno)}</td>
           <td style="text-align:center"><strong>${val(l.dias)}</strong></td>
           <td>${escHtml(l.tipo || '—')}</td>
-          <td class="no-print">${(l.tipo || '').toLowerCase() === 'gozo'
+          <td>${lanStatus(l)}</td>
+          <td class="no-print">${(l.tipo || '').toLowerCase() === 'gozo' && (l.status || 'Aprovado') === 'Aprovado'
             ? `<button class="mini-btn" onclick="baixarAviso('${escHtml(String(f.matricula))}','${escHtml(String(l.inicio))}',this)">📄 PDF</button>`
             : '—'}</td>
         </tr>`).join('')}</tbody></table></div>`
@@ -3199,6 +3301,7 @@
             <div class="row"><span>(−) Férias já gozadas</span><b>${val(s.gozadas)}</b></div>
             <div class="row"><span>(−) Abono pecuniário</span><b>${val(s.abono)}</b></div>
             <div class="row"><span>(±) Ajustes manuais</span><b>${s.ajustes ? signed(s.ajustes) : '—'}</b></div>
+            ${s.pendente ? `<div class="row"><span>Solicitado, aguardando aprovação do RH</span><b style="color:var(--warning)">${s.pendente} → sobram ${(Number(s.atual) || 0) - s.pendente}</b></div>` : ''}
             <div class="row"><span>Dias vencidos — risco de dobro</span><b class="${s.risco > 0 ? 'neg' : ''}">${val(s.risco)}</b></div>
             <div class="row"><span>Próximo crédito de dias em</span><b>${s.proximoCredito ? fmtDateBR(s.proximoCredito) : '—'}</b></div>
           </div>
@@ -3303,7 +3406,11 @@
         // linha completa (com matrícula e _id) para a tabela atualizar na hora
         const base = allData.find(r =>
           r.name === payload.name && r.branch === payload.branch) || {};
+        if (result.status === 'Pendente')
+          alert('Solicitação enviada ao RH.\n\nAs férias de ' + payload.name + ' ficam como "Aguardando aprovação" '
+            + 'e só descontam do saldo depois que o RH aprovar.');
         allData.push({
+          status:        result.status || 'Aprovado',
           branch:        payload.branch,
           name:          payload.name,
           matricula:     base.matricula || '',
@@ -3321,6 +3428,7 @@
         expandedGroups.add(String(base.matricula || (payload.branch + '|' + payload.name)));
         applyFilters();
         renderStats();
+        atualizaContadorAprov();
         const newIdx = filteredData.findIndex(r =>
           r.name === payload.name && r.branch === payload.branch &&
           r.startDate === payload.startDate
@@ -3361,6 +3469,7 @@
           rowIndex: allData.length + 2,
           returnDate: ret.toISOString().split('T')[0],
           total: tot,
+          status: ehRH() ? 'Aprovado' : 'Pendente',
         }));
       }, 700);
     }
@@ -3605,6 +3714,194 @@
     }).join('');
   }
 
+  // ── APROVAÇÕES (fase 3) ───────────────────────────────────
+  // RH: fila de pendentes com Aprovar / Recusar. Gerente: acompanha as próprias
+  // solicitações (pendentes podem ser canceladas pelo 🗑 na Tabela ou aqui).
+  let aprData = null;        // { pendentes:[], decididas:[] }
+  let aprRecusa = null;      // item sendo recusado
+
+  function atualizaContadorAprov() {
+    const n = allData.filter(r => r.status === 'Pendente').length;
+    const el = document.getElementById('apr-count');
+    el.textContent = n;
+    el.style.display = n ? '' : 'none';
+    const tab = document.getElementById('tab-approvals');
+    tab.firstChild.textContent = ehRH() ? 'Aprovações' : 'Minhas solicitações';
+    tab.style.display = (scope && scope.perfil === 'nenhum') ? 'none' : '';
+  }
+
+  // monta a fila a partir dos dados já carregados (modo preview, sem Apps Script)
+  function mockAprovacoes() {
+    const pend = allData.filter(r => r.status === 'Pendente').map(r => {
+      const sobrepoe = allData.filter(o => o !== r && o.branch === r.branch && o.startDate && o.endDate
+        && r.startDate <= o.endDate && r.endDate >= o.startDate).map(o => o.name);
+      return { rowIndex: r.rowIndex, matricula: r.matricula, nome: r.name, filial: r.branch,
+        inicio: r.startDate, termino: r.endDate, dias: Number(r.total) || 0, status: 'Pendente',
+        solicitadoPor: r.solicitadoPor || 'gerente@preview', solicitadoEm: '', decididoPor: '', decididoEm: '',
+        motivo: '', saldo: Number(r.availableDays) || 0, pendenteTotal: r.pendingDays || 0, sobrepoe };
+    });
+    return { success: true, pendentes: pend,
+      decididas: demoDecididas.filter(d => !scope.filiais || scope.filiais.includes(d.filial)), janela: 90 };
+  }
+
+  function loadAprovacoes() {
+    const body = document.getElementById('apr-body');
+    body.innerHTML = '<div class="loading"><div class="spinner"></div>Carregando…</div>';
+    if (typeof google === 'undefined' || !google.script) {
+      setTimeout(() => { aprData = mockAprovacoes(); renderAprovacoes(); }, 200);
+      return;
+    }
+    google.script.run
+      .withSuccessHandler(txt => {
+        let res;
+        try { res = JSON.parse(txt); } catch (e) { res = { success: false, error: 'Resposta inválida.' }; }
+        if (!res.success) { body.innerHTML = `<div class="error-banner" style="margin:16px">${escHtml(res.error)}</div>`; return; }
+        aprData = res; renderAprovacoes();
+      })
+      .withFailureHandler(err => {
+        body.innerHTML = `<div class="error-banner" style="margin:16px">Erro ao carregar: ${escHtml((err && err.message) || err)}</div>`;
+      })
+      .getAprovacoes(90);
+  }
+
+  function _fmtDH(s) {   // 'yyyy-mm-dd HH:mm' -> 'dd/mm/yyyy HH:mm'
+    if (!s) return '—';
+    const [d, h] = String(s).split(' ');
+    return fmtDateBR(d) + (h ? ' ' + h : '');
+  }
+
+  function renderAprovacoes() {
+    const rh = ehRH();
+    const d = aprData || { pendentes: [], decididas: [] };
+    document.getElementById('apr-title').textContent = rh ? 'Aprovações de férias' : 'Minhas solicitações de férias';
+    document.getElementById('apr-info').textContent =
+      d.pendentes.length + ' pendente(s) · ' + d.decididas.length + ' decidida(s) nos últimos ' + (d.janela || 90) + ' dias';
+
+    const pendRows = d.pendentes.map((p, i) => {
+      const sobra = p.saldo - p.dias;
+      const saldoTxt = `${p.saldo} disp.${p.pendenteTotal > p.dias ? ` <span class="apr-sub">(+${p.pendenteTotal - p.dias} em outros pedidos)</span>` : ''}`
+        + (sobra < 0 ? `<div class="apr-warn">Fica ${sobra} — saldo insuficiente</div>` : `<div class="apr-sub">sobram ${sobra}</div>`);
+      const conf = p.sobrepoe.length
+        ? `<span class="${p.sobrepoe.length >= 2 ? 'apr-warn' : ''}" title="${escHtml(p.sobrepoe.join(', '))}">${p.sobrepoe.length} na filial</span><div class="apr-sub">${escHtml(p.sobrepoe.slice(0, 3).join(', '))}${p.sobrepoe.length > 3 ? '…' : ''}</div>`
+        : '<span class="apr-sub">nenhuma</span>';
+      const acoes = rh
+        ? `<button class="btn btn-ok" onclick="aprovarFerias(${i})">✓ Aprovar</button>
+           <button class="btn btn-no" onclick="abrirRecusa(${i})">✕ Recusar</button>`
+        : `<button class="btn btn-no" onclick="cancelarSolicitacao(${i})">Cancelar pedido</button>`;
+      return `<tr class="row-pending">
+        <td>${escHtml(p.filial)}</td>
+        <td><a href="#" class="emp-link" onclick="openFichaFor('${escHtml(String(p.matricula))}');return false">${escHtml(p.nome)}</a></td>
+        <td>${fmtDateBR(p.inicio)} a ${fmtDateBR(p.termino)}</td>
+        <td style="text-align:center"><strong>${p.dias}</strong></td>
+        <td>${saldoTxt}</td>
+        <td>${conf}</td>
+        <td><div>${escHtml(p.solicitadoPor || '—')}</div><div class="apr-sub">${_fmtDH(p.solicitadoEm)}</div></td>
+        <td class="apr-actions">${acoes}</td>
+      </tr>`;
+    }).join('');
+
+    const decRows = d.decididas.map(p => `<tr>
+        <td>${escHtml(p.filial)}</td>
+        <td><a href="#" class="emp-link" onclick="openFichaFor('${escHtml(String(p.matricula))}');return false">${escHtml(p.nome)}</a></td>
+        <td>${fmtDateBR(p.inicio)} a ${fmtDateBR(p.termino)}</td>
+        <td style="text-align:center">${p.dias}</td>
+        <td><span class="badge ${p.status === 'Recusado' ? 'badge-recusado' : 'badge-aprovado'}">${escHtml(p.status)}</span></td>
+        <td class="wrap">${escHtml(p.motivo || '—')}</td>
+        <td><div>${escHtml(p.decididoPor || '—')}</div><div class="apr-sub">${_fmtDH(p.decididoEm)}</div></td>
+        <td><div>${escHtml(p.solicitadoPor || '—')}</div></td>
+      </tr>`).join('');
+
+    const empty = (n, txt) => `<tr><td colspan="${n}" style="text-align:center;color:var(--gray-500);padding:20px">${txt}</td></tr>`;
+    document.getElementById('apr-body').innerHTML = `
+      <div class="apr-sec">Aguardando aprovação</div>
+      <div style="overflow-x:auto"><table>
+        <thead><tr><th>Filial</th><th>Funcionário</th><th>Período</th><th>Dias</th><th>Saldo</th><th>Férias sobrepostas</th><th>Solicitado por</th><th></th></tr></thead>
+        <tbody>${pendRows || empty(8, rh ? 'Nenhuma solicitação aguardando — tudo em dia. ✓' : 'Você não tem solicitações aguardando o RH.')}</tbody>
+      </table></div>
+      <div class="apr-sec" style="margin-top:10px">Decididas recentemente</div>
+      <div style="overflow-x:auto"><table>
+        <thead><tr><th>Filial</th><th>Funcionário</th><th>Período</th><th>Dias</th><th>Decisão</th><th>Motivo</th><th>Decidido por</th><th>Solicitado por</th></tr></thead>
+        <tbody>${decRows || empty(8, 'Nenhuma decisão no período.')}</tbody>
+      </table></div>
+      <div class="edit-row-hint">${rh
+        ? 'Férias lançadas pelo RH já entram aprovadas e não passam por esta fila. Pedidos de gerente só descontam do saldo e liberam o Aviso em PDF depois de aprovados.'
+        : 'Seus pedidos só descontam do saldo e liberam o Aviso em PDF depois que o RH aprovar.'}</div>`;
+  }
+
+  // aplica a decisão (servidor ou preview) e recarrega
+  function _enviarDecisao(p, decisao, motivo, onErr) {
+    const fim = () => { loadData(); };
+    if (typeof google === 'undefined' || !google.script) {
+      const r = allData.find(x => x.rowIndex === p.rowIndex);
+      if (decisao === 'aprovar' && r) { r.status = 'Aprovado'; r.pendingDays = 0; r.availableDays = (Number(r.availableDays) || 0) - p.dias; }
+      if (decisao === 'recusar' && r) { allData = allData.filter(x => x !== r); allData.forEach((x, i) => { x._id = i; }); }
+      demoDecididas.unshift({ ...p, status: decisao === 'aprovar' ? 'Aprovado' : 'Recusado', motivo: motivo || '',
+        decididoPor: 'rh@preview', decididoEm: new Date().toISOString().slice(0, 16).replace('T', ' ') });
+      applyFilters(); renderStats(); atualizaContadorAprov(); renderAlerts();
+      aprData = mockAprovacoes(); renderAprovacoes();
+      return true;
+    }
+    google.script.run
+      .withSuccessHandler(txt => {
+        let res;
+        try { res = JSON.parse(txt); } catch (e) { res = { success: false, error: 'Resposta inválida.' }; }
+        if (res.success) { fecharRecusa(); fim(); loadAprovacoes(); }
+        else onErr(res.error || 'erro desconhecido.');
+      })
+      .withFailureHandler(err => onErr((err && err.message) || err))
+      .decidirFerias({ rowIndex: p.rowIndex, matricula: p.matricula, inicio: p.inicio, decisao, motivo: motivo || '' });
+    return false;
+  }
+
+  function aprovarFerias(i) {
+    const p = aprData && aprData.pendentes[i];
+    if (!p) return;
+    let msg = 'Aprovar as férias de ' + p.nome + '\n' + fmtDateBR(p.inicio) + ' a ' + fmtDateBR(p.termino) + ' (' + p.dias + ' dias)?';
+    if (p.saldo - p.dias < 0) msg += '\n\n⚠ O saldo ficará negativo (' + (p.saldo - p.dias) + ').';
+    if (p.sobrepoe.length >= 2) msg += '\n\n⚠ ' + p.sobrepoe.length + ' outras pessoas da filial estarão de férias no período.';
+    if (!confirm(msg)) return;
+    _enviarDecisao(p, 'aprovar', '', e => alert('Não foi possível aprovar: ' + e));
+  }
+
+  function abrirRecusa(i) {
+    const p = aprData && aprData.pendentes[i];
+    if (!p) return;
+    aprRecusa = p;
+    document.getElementById('recusa-desc').textContent =
+      p.nome + ' — ' + fmtDateBR(p.inicio) + ' a ' + fmtDateBR(p.termino) + ' (' + p.dias + ' dias), pedido por ' + (p.solicitadoPor || '—') + '.';
+    document.getElementById('recusa-motivo').value = '';
+    document.getElementById('recusa-error').style.display = 'none';
+    const b = document.getElementById('recusa-save'); b.disabled = false; b.textContent = 'Recusar';
+    document.getElementById('recusa-overlay').classList.add('open');
+    document.getElementById('recusa-motivo').focus();
+  }
+
+  function fecharRecusa() {
+    document.getElementById('recusa-overlay').classList.remove('open');
+    aprRecusa = null;
+  }
+
+  function confirmarRecusa() {
+    const p = aprRecusa;
+    if (!p) return;
+    const motivo = document.getElementById('recusa-motivo').value.trim();
+    const err = document.getElementById('recusa-error');
+    if (!motivo) { err.textContent = 'Informe o motivo — o gerente vai ver este texto.'; err.style.display = 'block'; return; }
+    const b = document.getElementById('recusa-save'); b.disabled = true; b.textContent = 'Salvando…';
+    const done = _enviarDecisao(p, 'recusar', motivo, e => {
+      b.disabled = false; b.textContent = 'Recusar';
+      err.textContent = 'Erro: ' + e; err.style.display = 'block';
+    });
+    if (done) fecharRecusa();
+  }
+
+  function cancelarSolicitacao(i) {
+    const p = aprData && aprData.pendentes[i];
+    if (!p) return;
+    const r = allData.find(x => x.rowIndex === p.rowIndex && x.status === 'Pendente');
+    if (r) apagarFerias(r._id);
+  }
+
   // ── TABS ──────────────────────────────────────────────────
   function showTab(tab, btn) {
     document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -3615,6 +3912,8 @@
     document.getElementById('view-payment').style.display   = tab === 'payment'   ? 'block' : 'none';
     document.getElementById('view-report').style.display    = tab === 'report'    ? 'block' : 'none';
     document.getElementById('view-due').style.display       = tab === 'due'       ? 'block' : 'none';
+    document.getElementById('view-approvals').style.display = tab === 'approvals' ? 'block' : 'none';
+    if (tab === 'approvals') loadAprovacoes();
     if (tab === 'calendar') { calView = document.querySelector('.cal-view-btn.active')?.id?.replace('cvbtn-','') || 'month'; renderCalendar(); }
     if (tab === 'payment')   renderPaymentTable();
     if (tab === 'report')    renderReportView();

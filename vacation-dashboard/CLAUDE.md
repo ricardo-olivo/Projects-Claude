@@ -1,7 +1,7 @@
 # CLAUDE.md — Dashboard de Férias (Líderfarma)
 
 > Contexto para retomar o desenvolvimento em uma nova conversa.
-> Última atualização: 2026-08-31.
+> Última atualização: 2026-10-26 (fase 3 — fluxo de aprovação).
 
 ---
 
@@ -16,12 +16,15 @@ calcula um **"banco de dias"** por funcionário e gera o **Aviso de Férias em P
 - **RH** — acesso total, todas as filiais, todas as ações.
 - **Gerente de filial** — só a(s) filial(is) dele; pode marcar férias, ver fichas
   e gerar avisos; NÃO edita datas, não apaga, não inclui período aquisitivo.
-- (No futuro, fase 3) fluxo de aprovação: gerente solicita, RH aprova.
+- **Fase 3 (fluxo de aprovação)**: o gerente SOLICITA férias (ficam "Pendente"); o RH
+  aprova ou recusa (com motivo) na aba "Aprovações". Férias lançadas pelo RH já
+  entram aprovadas.
 
 **Principais funcionalidades já implementadas.**
 - Página inicial (`Home.html`) com logo, resumo e botão para o painel.
-- Painel (`Dashboard.html`) com 6 visões: Tabela, Funcionários, Calendário
-  (mensal/semestral/anual), Pagamentos do Mês, Relatório Mensal, Vencimento Mensal.
+- Painel (`Dashboard.html`) com 7 visões: Tabela, Funcionários, Calendário
+  (mensal/semestral/anual), Pagamentos do Mês, Relatório Mensal, Vencimento Mensal,
+  Aprovações (fase 3).
 - Saldo de férias por funcionário (banco de dias).
 - Ficha individual (modal): identificação, quebra do saldo, períodos aquisitivos,
   histórico de gozo/abono, observações/ajustes.
@@ -38,6 +41,9 @@ calcula um **"banco de dias"** por funcionário e gera o **Aviso de Férias em P
   na aba Funcionários.
 - Detecção de conflitos (3+ pessoas da mesma filial com férias sobrepostas).
 - Acesso por filial (fase 2) — implementado no código, ainda não testado em produção.
+- Fluxo de aprovação (fase 3) — aba "Aprovações" (RH) / "Minhas solicitações" (gerente),
+  status Pendente/Aprovado/Recusado na aba `Lancamentos`, e-mails opcionais
+  (`NOTIFICAR_EMAIL`). Testado só no preview local.
 
 ---
 
@@ -148,6 +154,23 @@ max(0,  Σ direito dos períodos com concessão já vencida
 - `RH` = filiais `null` (todas). `Gerente` = lista de filiais das linhas dele.
 - Filtro por filial é aplicado **no servidor** (nunca confiar no navegador).
 
+### Fluxo de aprovação (fase 3)
+- `addVacationRecord`: perfil **Gerente** grava `Status = Pendente`; **RH** grava `Aprovado`
+  (com Decidido por/em = ele mesmo — não passa pela fila).
+- **Status vazio = Aprovado** (linhas anteriores à fase 3 continuam valendo).
+- **Só Aprovado desconta do saldo**, conta em "Em férias agora"/"Pagas este mês" e libera
+  o Aviso em PDF. Pendente aparece na Tabela/Calendário (listrado amarelo) e no saldo
+  como "solicitado, aguardando" (`pendingDays` / `saldo.pendente`), mas não desconta.
+  **Recusado** some de `data[]` (Tabela, calendário, conflitos) e fica só na ficha e
+  na aba Aprovações, com o motivo.
+- Conflitos (`detectConflicts`) consideram pendentes + aprovadas.
+- Não deixa lançar férias sobrepostas a outra (pendente ou aprovada) da mesma pessoa.
+- Gerente pode **cancelar** (apagar) uma solicitação **ainda Pendente** da filial dele;
+  aprovada/recusada só o RH apaga.
+- Recusar exige motivo. Decisão só sobre linha Pendente (confere matrícula + início).
+- E-mails (`_notificar`) só se `NOTIFICAR_EMAIL = true`: pedido → e-mails RH da aba
+  `Acessos`; decisão → e-mail de quem pediu. Falha de e-mail nunca derruba a operação.
+
 ---
 
 ## Estrutura do projeto
@@ -157,8 +180,8 @@ Repositório: `Projects-Claude` (contém vários projetos). Este projeto vive em
 
 ```
 vacation-dashboard/
-├── Code.gs          Backend Apps Script (1030 linhas). TODA a lógica de negócio.
-├── Dashboard.html   Painel (2694 linhas): HTML + CSS + JS. 6 visões + modais.
+├── Code.gs          Backend Apps Script (~1690 linhas). TODA a lógica de negócio.
+├── Dashboard.html   Painel (~4090 linhas): HTML + CSS + JS. 7 visões + modais.
 ├── Home.html        Página inicial (170 linhas): logo, resumo, botão.
 ├── serve.ps1        Servidor estático local (porta 8765) p/ preview com MOCK.
 ├── README.md        ⚠️ DESATUALIZADO — descreve a arquitetura ANTIGA (28 planilhas).
@@ -178,9 +201,12 @@ vacation-dashboard/
 | `getVacationData()` | **principal** — consolida tudo, filtra por escopo, devolve JSON |
 | `getEmployeeFicha(matricula)` | dados completos de 1 funcionário (ficha) |
 | `getAvisoFeriasPdf(matricula, gozoInicioISO)` | gera o PDF, devolve base64 |
-| `addVacationRecord(payload)` | grava férias na aba Lancamentos |
+| `addVacationRecord(payload)` | grava férias na aba Lancamentos (Gerente → Pendente, RH → Aprovado); recusa sobreposição com outras férias da pessoa |
 | `updateVacationRecord(payload)` | edita início/término (só RH) |
-| `deleteVacationRecord(payload)` | apaga a linha (só RH) |
+| `deleteVacationRecord(payload)` | apaga a linha (RH; gerente só cancela pedido Pendente da filial dele) |
+| `getAprovacoes(dias)` | fase 3 — pendentes + decididas nos últimos `dias` (90), com saldo, dias pendentes e quem mais da filial estará fora; escopo por filial |
+| `decidirFerias(payload)` | fase 3 — `{rowIndex, matricula, inicio, decisao:'aprovar'\|'recusar', motivo}`; só RH, só linha Pendente |
+| `_statusLanc(r)` / `_ensureLancCols(sh)` / `_notificar` / `_emailsRH` | helpers da fase 3 (status normalizado; cria colunas M..R com cabeçalho; e-mail opcional) |
 | `addPeriodoAquisitivo(payload)` | grava período na aba Periodos (só RH) |
 | `updatePeriodoAquisitivo(payload)` / `deletePeriodoAquisitivo(payload)` | edita / apaga uma linha da aba Periodos pelo `rowIndex` (confere a matrícula, recalcula fim/concessão/direito/situação) — só RH. `getEmployeeFicha` devolve `rowIndex` e `faltas` em cada período |
 | `addEmployee(payload)` | cadastra funcionário na aba Func (só RH); matrícula sugerida/editável; se registrado, cria o 1º período aquisitivo |
@@ -215,7 +241,9 @@ filial), `expandedGroups` (grupos de funcionário abertos), `tableGroups`.
   Dias de direito · Concessão até · Creditado ao banco · Situação do prazo ·
   _seq · _chave
 - **Lancamentos**: Matrícula · Período · Parcela nº · Início · Término · Dias ·
-  Tipo (Gozo/Abono) · Retorno · Retorno (dia útil) · Observação · _seq · _chave
+  Tipo (Gozo/Abono) · Retorno · Retorno (dia útil) · Observação · _seq · _chave ·
+  **Status · Solicitado por · Solicitado em · Decidido por · Decidido em · Motivo**
+  (M..R, fase 3 — criadas automaticamente por `_ensureLancCols` na 1ª gravação)
 - **Ajustes**: Matrícula · Data · Dias (+/−) · Observação · _seq · _chave
 - **Feriados**: Data · Descrição
 - **Lojas** (opcional): Filial · Razão Social · CNPJ · Cidade
@@ -246,7 +274,11 @@ Colunas `_seq` / `_chave` (cinza) ligam as abas e **não devem ser apagadas**.
 - `google.script.run` retorna **string JSON**; o front dá `JSON.parse` com try/catch.
 - Preview local: `powershell -ExecutionPolicy Bypass -File vacation-dashboard/serve.ps1`
   → `http://localhost:8765/Home.html` ou `/Dashboard.html`. Usa `MOCK_DATA`
-  (sem Apps Script). `Code.gs` **não roda localmente**.
+  (sem Apps Script). `Code.gs` **não roda localmente**. Simular gerente:
+  `/Dashboard.html?perfil=gerente&filial=Filial%2005`. No mock, Diego Carvalho e
+  Priscila Torres vêm como pedidos Pendentes.
+- Checar sintaxe do `Code.gs` sem Node: com o preview aberto,
+  `new Function(await (await fetch('/Code.gs')).text())` no console do navegador.
 - Toda alteração de `Code.gs` / `Dashboard.html` / `Home.html` exige **novo deploy**
   no Apps Script (colar o arquivo → Implantar → Gerenciar implantações → Nova versão).
 - **`Home.html` é um arquivo HTML separado no projeto Apps Script, com o nome `Home`.**
@@ -264,6 +296,9 @@ Colunas `_seq` / `_chave` (cinza) ligam as abas e **não devem ser apagadas**.
 - **Não confiar no filtro de filial do front** — a segurança está no `_scopeAtual`
   do servidor. Manter os `_noEscopo(...)` nas funções.
 - **Não apagar as colunas `_seq` / `_chave`** das abas da planilha.
+- **Colunas novas em `Lancamentos` vão DEPOIS de R (Motivo)** — os índices `L.*` são fixos.
+- **Somar dias de `Lancamentos` sempre filtrando por `_statusLanc`** (só Aprovado
+  desconta) — vale para qualquer cálculo novo de saldo.
 - **Contrato JSON do `getVacationData`** (nomes dos campos) — o `Dashboard.html`
   inteiro depende deles.
 - **`setXFrameOptionsMode(ALLOWALL)`** nos dois ramos do `doGet` — necessário para

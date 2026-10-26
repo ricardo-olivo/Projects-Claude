@@ -1,22 +1,22 @@
 # STATUS DO PROJETO
 
 ## Data do checkpoint
-2026-09-10 (correção de fuso no cálculo de datas — "Retorno ao trabalho" saía
-+1 dia; sábado passa a contar como dia trabalhado)
+2026-10-26 (fase 3 — fluxo de aprovação gerente → RH implementado; testado só no
+preview local)
 
 ## Branch atual
 `main` (repositório `Projects-Claude`, remote `https://github.com/ricardo-olivo/Projects-Claude.git`).
-`main` está **5 commits à frente de `origin/main`** (`efd4be2`, `2beccb8`,
-`bcb0c82`, `836c247` + o commit desta correção de fuso — nenhum pusheado).
-Working tree limpo.
+Os commits de setembro (até `fed02fe`, correção de fuso) **já foram pusheados**.
+Locais, ainda **não pusheados**: `e3bf56c` (comparativo-vendas — contém
+`data.json` com faturamento/custo real, conferir se o repo é público antes do push)
+e o commit da fase 3.
 
 ## Último commit
-Commit desta correção (HEAD de `main`) — "vacation-dashboard: fix calendar dates
-parsed as UTC (return date was +1 day); Saturday counts as a workday"
-(2026-09-10). Autor: ricardo.olivo <rfolivo@gmail.com>.
+Commit da fase 3 (HEAD de `main`) — "vacation-dashboard: phase 3 approval flow
+(manager requests, HR approves/rejects)" (2026-10-26).
 
-Commit anterior: `836c247` — "edit/delete aquisitivo periods from the ficha;
-monthly-due report covers all concessions" (2026-09-01).
+Commit anterior deste projeto: `fed02fe` — correção de fuso (retorno saía +1 dia;
+sábado conta como dia útil) (2026-09-10).
 
 Commits recentes do repositório (multi-projeto):
 ```
@@ -40,7 +40,10 @@ segmentado por filial (RH x Gerente).
 - **Fase 1 (página inicial + roteador `doGet`)** — concluída no código.
 - **Fase 2 (acesso por filial)** — concluída no **código**; falta configurar
   deploy + criar a aba `Acessos` e testar com login real (tarefa do usuário).
-- **Fase 3 (fluxo de aprovação gerente→RH)** — **não iniciada** (só desenhada).
+- **Fase 3 (fluxo de aprovação gerente→RH)** — **concluída no código** (2026-10-26),
+  testada no preview local (RH e gerente simulados). Depende do deploy + da fase 2
+  em produção para ter efeito (sem aba `Acessos`, todo mundo é RH → tudo entra
+  aprovado direto e a fila fica vazia).
 
 ## Funcionalidades concluídas
 - `doGet` roteador: `.../exec` → `Home.html`; `.../exec?page=painel` → `Dashboard.html`.
@@ -111,16 +114,12 @@ segmentado por filial (RH x Gerente).
   `<base target="_top">`); a página do Sites ainda não foi criada.
 
 ## Funcionalidades pendentes
-1. **Fase 3 — fluxo de aprovação (gerente marca → RH aprova).** Não iniciada.
-   Precisa: coluna `Status` (Pendente/Aprovado/Recusado) + colunas de auditoria na
-   aba `Lancamentos`; `addVacationRecord` ciente do perfil (Gerente → Pendente);
-   saldo separado (aprovado x pendente); `getAprovacoesPendentes()` + tela/aba
-   "Aprovações"; `aprovarFerias(linha, "aprovar"|"recusar", motivo)`; Aviso PDF só
-   para Aprovado; (opcional) e-mails via `MailApp` (limite 100/dia Gmail).
-2. ~~Cadastrar funcionário (aba `Func`) pelo dashboard.~~ **Feito** (só RH) — falta
-   commit + deploy do `Code.gs`.
+1. ~~Fase 3 — fluxo de aprovação.~~ **Feito no código** (2026-10-26) — falta deploy
+   + teste real. Opcional depois: ligar `NOTIFICAR_EMAIL`; RH editar datas de um
+   pedido pendente antes de aprovar já funciona pela edição inline.
+2. ~~Cadastrar funcionário (aba `Func`) pelo dashboard.~~ **Feito** (só RH) — falta deploy.
 3. ~~Lançar ajuste manual (aba `Ajustes`) pelo dashboard.~~ **Feito** (pela ficha,
-   só RH) — falta commit + deploy do `Code.gs`.
+   só RH) — falta deploy.
 4. **Reescrever o `README.md`** — está descrevendo a arquitetura antiga (28 planilhas).
 5. **Trocar o logo recriado pelo PNG oficial** (`LOGO_DATA_URI` na `Home.html`).
 6. Preencher `EMPRESA_PADRAO` / criar aba `Lojas` com CNPJ correto por filial
@@ -295,12 +294,33 @@ certos. CSS novo: `.card-click`, `.card-cta`, `.kpi-count`.
 - `_addWorkingDays()` deixou de pular sábado — só domingo + aba `Feriados`
   contam como folga (sábado é dia trabalhado na rede).
 
+### Commit da fase 3 (2026-10-26, HEAD de `main`) — `Code.gs` + `Dashboard.html` + docs
+
+**Fluxo de aprovação gerente → RH** (regras completas no `CLAUDE.md`, seção
+"Fluxo de aprovação (fase 3)"):
+- `Code.gs`: `L.STATUS..L.MOTIVO` (colunas M..R de `Lancamentos`), `LANC_COLS`,
+  `ST`, `NOTIFICAR_EMAIL`; helpers `_statusLanc`, `_ensureLancCols` (cria as colunas e
+  o cabeçalho sozinho), `_notificar`, `_emailsRH`. `addVacationRecord` grava status
+  pelo perfil + auditoria e bloqueia sobreposição com outras férias da pessoa.
+  `getVacationData` / `getEmployeeFicha` / `getResumoHome` só descontam Aprovado;
+  devolvem `status`, `pendingDays`, `employees[].pendente`, `totals.pendentes`,
+  `saldo.pendente`, `lancamentos[].status/motivo/rowIndex`. Recusadas saem de `data[]`.
+  `getAvisoFeriasPdf` só para Aprovado. `deleteVacationRecord` deixa gerente cancelar
+  pedido Pendente. Novas: `getAprovacoes(dias)` e `decidirFerias(payload)`.
+- `Dashboard.html`: aba **Aprovações** (RH: Aprovar / Recusar com modal de motivo,
+  saldo restante e quem mais da filial estará fora; gerente: "Minhas solicitações"
+  + Cancelar pedido) com contador; status `pending` em `getStatus` (badge "Aguardando
+  aprovação", barra listrada no calendário, filtro de status, fora dos KPIs);
+  linha-resumo do grupo mostra "+N pend."; ficha com coluna Status/motivo, PDF só
+  para aprovada e linha "Solicitado, aguardando"; modal vira "Solicitar Férias /
+  Enviar para aprovação" para gerente. Preview: `?perfil=gerente&filial=...`,
+  pedidos pendentes de exemplo, `demoDecididas`.
+
 ### Deploy
-`efd4be2`, `2beccb8`, `bcb0c82`, `836c247` e a correção de fuso (HEAD)
-**não pusheados**; nada redeployado no Apps Script — o próximo deploy precisa de **`Code.gs` +
-`Dashboard.html`** (nova versão) e do cabeçalho da coluna **J ("Vencimento")** na
-aba `Func`. Inclui também a correção de fuso em `toDate` / `formatDate` (retorno
-saía +1 dia) e o sábado como dia útil em `_addWorkingDays`.
+Nada redeployado no Apps Script desde agosto — o próximo deploy precisa de
+**`Code.gs` + `Dashboard.html`** (nova versão) e do cabeçalho da coluna **J
+("Vencimento")** na aba `Func`. Inclui a correção de fuso, o sábado como dia útil e
+toda a fase 3 (as colunas M..R de `Lancamentos` são criadas sozinhas na 1ª gravação).
 
 ## Banco de dados
 "Banco" = uma planilha Google Sheets (`MODEL_SHEET_ID = 1wLN9oZji-Uk6prHMcvav0CNg1u-tFMz_`),
@@ -308,9 +328,9 @@ importada de um `.xlsx`. Abas usadas: `Func`, `Periodos`, `Lancamentos`, `Ajuste
 `Feriados`, `Lojas` (opcional), `Acessos` (opcional). Colunas descritas no `CLAUDE.md`.
 
 Alterações de schema pendentes:
-- **Fase 3**: adicionar em `Lancamentos` as colunas `Status`, `Solicitado por`,
-  `Aprovado por`, `Data solicitação`, `Data decisão` (após a coluna `_chave`, para
-  não deslocar os índices `L.*` do `Code.gs`).
+- **Fase 3**: colunas M..R de `Lancamentos` (Status · Solicitado por · Solicitado em ·
+  Decidido por · Decidido em · Motivo) — **automáticas** (`_ensureLancCols` na 1ª
+  inclusão/decisão). Se a aba tiver validação/formatação nessas colunas, conferir.
 - Criar a aba **`Acessos`** (E-mail | Filial | Perfil) para ligar a fase 2.
 - Opcional: aba **`Lojas`** (Filial | Razão Social | CNPJ | Cidade) para o aviso.
 - Opcional: coluna **I (CTPS)** na aba `Func`.
@@ -326,12 +346,16 @@ Sem migrations formais — as abas/colunas são editadas manualmente na planilha
   - Preview local (`serve.ps1` → `http://localhost:8765`) com `MOCK_DATA`;
   - Inspeção do DOM no navegador (contagem de linhas, botões, filtros, abertura de modais);
   - Geração de PDF de prova pela build da planilha (fluxo separado, não faz parte do app).
+- Fase 3 (2026-10-26): `Code.gs` validado só por sintaxe (`new Function` no navegador);
+  fluxo testado no preview local — RH aprova (saldo desconta) e recusa (motivo
+  obrigatório, some da Tabela); gerente solicita (vira Pendente, sem PDF), vê
+  "Minhas solicitações" e cancela pedido; resumo do grupo "Em férias +1 pend.".
 - **Não executados / não confirmados:** qualquer teste com a planilha real via
   `google.script.run`; login real de RH/Gerente; embed no Google Sites; download do
   PDF a partir do dashboard publicado.
 
 ## Próxima tarefa recomendada
-**Colocar a Fase 2 em produção e validar** (antes de escrever a Fase 3):
+**Colocar Fases 2 + 3 em produção e validar** (tarefa do usuário):
 1. No Apps Script: adicionar o arquivo `Home` (HTML), colar `Code.gs` e `Dashboard.html`
    atuais, criar **nova versão** de implantação com "Executar como: Eu" e
    "Acesso: qualquer pessoa da [organização]".
@@ -339,19 +363,19 @@ Sem migrations formais — as abas/colunas são editadas manualmente na planilha
    de Gerente (e-mail | filial | Gerente).
 3. Abrir `.../exec` logado como RH e como Gerente; conferir que o Gerente só vê a
    filial dele e que os botões RH somem.
-4. Só depois disso, iniciar a **Fase 3 (aprovação)**.
+4. Como Gerente: "Solicitar Férias" → conferir linha Pendente na planilha (colunas
+   M..R criadas). Como RH: aba Aprovações → aprovar uma, recusar outra; conferir
+   saldo e Aviso PDF.
 
 ## Próximos passos (ordem de prioridade)
-1. Deploy + aba `Acessos` + teste da Fase 2 (acima).
+1. Deploy + aba `Acessos` + teste das Fases 2 e 3 (acima).
 2. Reescrever o `README.md` para a arquitetura atual (instalação: planilha única,
-   `MODEL_SHEET_ID`, arquivo `Home`, deploy, aba `Acessos`).
-3. **Fase 3 — fluxo de aprovação** (coluna `Status`, fila "Aprovações",
-   `aprovarFerias`, saldo aprovado x pendente, aviso só para aprovado, e-mails opcionais).
-4. Cadastrar funcionário (`Func`) e lançar ajuste (`Ajustes`) pelo dashboard.
-5. Trocar o logo pelo PNG oficial (`LOGO_DATA_URI`); preencher `Lojas` / `EMPRESA_PADRAO`
+   `MODEL_SHEET_ID`, arquivo `Home`, deploy, aba `Acessos`, fluxo de aprovação).
+3. (Opcional) ligar `NOTIFICAR_EMAIL` depois do teste — exige autorizar `MailApp`.
+4. Trocar o logo pelo PNG oficial (`LOGO_DATA_URI`); preencher `Lojas` / `EMPRESA_PADRAO`
    com CNPJ correto por filial; opcional coluna CTPS em `Func`.
-6. Página no Google Sites embutindo `.../exec` (iframe) + domínio próprio (opcional).
-7. Limpeza: padronizar a coluna Matrícula como Texto nas abas; trocar a validação de
+5. Página no Google Sites embutindo `.../exec` (iframe) + domínio próprio (opcional).
+6. Limpeza: padronizar a coluna Matrícula como Texto nas abas; trocar a validação de
    `Lancamentos!A` para "Mostrar aviso"; apagar/refazer a linha quebrada da Suele.
 
 ## Como continuar

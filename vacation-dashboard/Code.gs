@@ -26,7 +26,18 @@ const AC = { EMAIL:0, FILIAL:1, PERFIL:2 };
 // das férias definido à mão (só usado quando não há período aquisitivo calculado)
 const F  = { MAT:0, NOME:1, FILIAL:2, CARGO:3, ADMISSAO:4, SITUACAO:5, SALDO_INI:6, REGISTRADO:7, CTPS:8, VENC:9 };
 const P  = { MAT:0, PERIODO:1, INI_AQ:2, FIM_AQ:3, FALTAS:4, DIREITO:5, CONCESSAO:6, CREDITADO:7, SITUACAO:8 };
-const L  = { MAT:0, PERIODO:1, PARCELA:2, INICIO:3, TERMINO:4, DIAS:5, TIPO:6, RETORNO:7, RETORNO_UTIL:8, OBS:9 };
+// Lancamentos: colunas M..R (fase 3 — fluxo de aprovação) ficam DEPOIS de _seq/_chave
+// (K/L) para não deslocar nada. São criadas sozinhas na 1ª gravação (_ensureLancCols).
+// Status vazio = linha antiga, conta como Aprovado.
+const L  = { MAT:0, PERIODO:1, PARCELA:2, INICIO:3, TERMINO:4, DIAS:5, TIPO:6, RETORNO:7, RETORNO_UTIL:8, OBS:9,
+             STATUS:12, SOLIC_POR:13, SOLIC_EM:14, DECID_POR:15, DECID_EM:16, MOTIVO:17 };
+const LANC_COLS = 18;
+const LANC_HEADERS_FASE3 = ['Status', 'Solicitado por', 'Solicitado em', 'Decidido por', 'Decidido em', 'Motivo'];
+const ST = { PEND: 'Pendente', APROV: 'Aprovado', RECUS: 'Recusado' };
+
+// E-mails do fluxo de aprovação (gerente pede → RH recebe; RH decide → gerente recebe).
+// Desligado por padrão: conta Gmail comum tem limite de 100 e-mails/dia.
+const NOTIFICAR_EMAIL = false;
 const AJ = { MAT:0, DATA:1, DIAS:2, OBS:3 };
 const LO = { FILIAL:0, RAZAO:1, CNPJ:2, CIDADE:3 };
 
@@ -126,13 +137,15 @@ function getResumoHome() {
       if (scope.filiais && scope.filiais.indexOf(fil) < 0) return;
       nFunc++; if (fil) fils[fil] = 1;
     });
-    let emFerias = 0;
+    let emFerias = 0, pendentes = 0;
     _rows(TAB.LANCAMENTOS).forEach(function (r) {
       const s = toDate(r[L.INICIO]), e = toDate(r[L.TERMINO]);
       if (!s || !e) return;
       const fil = funcFil[_mk(r[L.MAT])];
       if (scope.filiais && scope.filiais.indexOf(fil) < 0) return;
-      if (s <= hoje && hoje <= e) emFerias++;
+      const st = _statusLanc(r);
+      if (st === ST.PEND) pendentes++;
+      if (st === ST.APROV && s <= hoje && hoje <= e) emFerias++;
     });
     return JSON.stringify({
       ok: true,
@@ -142,6 +155,7 @@ function getResumoHome() {
       funcionarios: nFunc,
       filiais: Object.keys(fils).length,
       emFerias: emFerias,
+      pendentes: pendentes,
     });
   } catch (err) {
     return JSON.stringify({ ok: false, erro: String(err.message || err) });
@@ -207,18 +221,22 @@ function getVacationData() {
     if (c) (conc[mat] = conc[mat] || []).push(c);
   });
 
-  // gozo / abono / ajustes
-  const goz = {}, abo = {}, adj = {};
+  // gozo / abono / ajustes — só lançamentos APROVADOS descontam do saldo;
+  // os pendentes (fase 3) ficam separados em pend[], recusados não contam
+  const goz = {}, abo = {}, adj = {}, pend = {};
   lan.forEach(r => {
     const mat = _mk(r[L.MAT]);
     if (!mat) return;
     const tipo = String(r[L.TIPO] || '').trim().toLowerCase();
+    const st = _statusLanc(r);
+    if (st === ST.RECUS) return;
     // dias: usa a célula se for número; senão calcula pelas datas (linha com fórmula quebrada)
     let d = (typeof r[L.DIAS] === 'number') ? r[L.DIAS] : 0;
     if (!d) {
       const s = toDate(r[L.INICIO]), en = toDate(r[L.TERMINO]);
       if (s && en) d = Math.round((en - s) / 864e5) + 1;
     }
+    if (st === ST.PEND) { pend[mat] = (pend[mat] || 0) + d; return; }
     if (tipo === 'gozo')  goz[mat] = (goz[mat] || 0) + d;
     if (tipo === 'abono') abo[mat] = (abo[mat] || 0) + d;
   });
@@ -248,6 +266,8 @@ function getVacationData() {
     const mat = _mk(r[L.MAT]);
     const e = emp[mat];
     if (!e) return;
+    const status = _statusLanc(r);
+    if (status === ST.RECUS) return;   // recusadas só aparecem na ficha e em Aprovações
     seen[mat] = true;
     const start = toDate(r[L.INICIO]);
     const end   = toDate(r[L.TERMINO]);
@@ -271,6 +291,8 @@ function getVacationData() {
       dueDate: dueOf(mat),
       ativo: e.ativo,
       rowIndex: i + 2,                 // linha na aba Lancamentos
+      status: status,                  // Aprovado | Pendente
+      pendingDays: pend[mat] || 0,
     });
   });
   Object.keys(emp).forEach(function (mat) {
@@ -280,6 +302,7 @@ function getVacationData() {
       branch: e.branch, name: e.name, matricula: mat,
       startDate: '', endDate: '', returnDate: '', total: '',
       availableDays: saldoOf(mat), dueDate: dueOf(mat), ativo: e.ativo, rowIndex: 0,
+      status: '', pendingDays: pend[mat] || 0,
     });
   });
 
@@ -308,6 +331,7 @@ function getVacationData() {
       cargo: String(r[F.CARGO] || '').trim(),
       registrado: registrado,
       saldo: saldoOf(mat),
+      pendente: pend[mat] || 0,
       vencimento: dueOf(mat),
       vencimentos: temCalc ? concISO : (vencManual ? [vencManual] : []),
       vencManual: vencManual,
@@ -333,6 +357,7 @@ function getVacationData() {
       naoRegistrados: outEmp.filter(function (e) { return !e.registrado; }).length,
     };
   }
+  tot.pendentes = outData.filter(function (r) { return r.status === ST.PEND; }).length;
 
   return JSON.stringify({
     data: outData,
@@ -369,7 +394,10 @@ function getEmployeeFicha(matricula) {
     _rows(TAB.PERIODOS).forEach(function (r, i) {
       if (_mk(r[P.MAT]) === mat) { r._ri = i + 2; per.push(r); }   // _ri = linha na aba Periodos
     });
-    const lan = _rows(TAB.LANCAMENTOS).filter(function (r) { return _mk(r[L.MAT]) === mat; });
+    const lan = [];
+    _rows(TAB.LANCAMENTOS).forEach(function (r, i) {
+      if (_mk(r[L.MAT]) === mat) { r._ri = i + 2; lan.push(r); }   // _ri = linha na aba Lancamentos
+    });
     const aju = [];
     _rows(TAB.AJUSTES).forEach(function (r, i) {
       if (_mk(r[AJ.MAT]) === mat) aju.push({ r: r, rowIndex: i + 2 });
@@ -386,13 +414,17 @@ function getEmployeeFicha(matricula) {
       if (fimAq && fimAq <= today) creditados += dir;
       if (concD && concD < today && dir > 0) riscoBase += dir;
     });
+    let pendente = 0;
     lan.forEach(function (r) {
       const t = String(r[L.TIPO] || '').trim().toLowerCase();
+      const st = _statusLanc(r);
+      if (st === ST.RECUS) return;
       let d = (typeof r[L.DIAS] === 'number') ? r[L.DIAS] : 0;
       if (!d) {
         const s = toDate(r[L.INICIO]), en = toDate(r[L.TERMINO]);
         if (s && en) d = Math.round((en - s) / 864e5) + 1;
       }
+      if (st === ST.PEND) { pendente += d; return; }
       if (t === 'gozo') gozadas += d;
       if (t === 'abono') abono += d;
     });
@@ -437,7 +469,7 @@ function getEmployeeFicha(matricula) {
       },
       saldo: {
         atual: atual, inicial: inicial, creditados: creditados,
-        gozadas: gozadas, abono: abono, ajustes: ajustes,
+        gozadas: gozadas, abono: abono, ajustes: ajustes, pendente: pendente,
         risco: risco, proximoCredito: fut.length ? formatDate(fut[0]) : '',
       },
       periodos: per.map(function (r) {
@@ -474,6 +506,10 @@ function getEmployeeFicha(matricula) {
           dias: dias,
           tipo: String(r[L.TIPO] || '').trim(),
           obs: String(r[L.OBS] || '').trim(),
+          status: _statusLanc(r),
+          motivo: String(r[L.MOTIVO] || '').trim(),
+          solicitadoPor: String(r[L.SOLIC_POR] || '').trim(),
+          rowIndex: r._ri,
         };
       }),
       ajustes: aju.map(function (x) {
@@ -504,12 +540,17 @@ function getAvisoFeriasPdf(matricula, gozoInicioISO) {
     if (scope.perfil === 'nenhum' || !_noEscopo(scope, fr[F.FILIAL]))
       return _err('Você não tem acesso a este funcionário.');
 
-    const lr = _rows(TAB.LANCAMENTOS).find(function (r) {
+    const cand = _rows(TAB.LANCAMENTOS).filter(function (r) {
       return _mk(r[L.MAT]) === mat
         && formatDate(r[L.INICIO]) === gi
         && String(r[L.TIPO] || '').trim().toLowerCase() === 'gozo';
     });
-    if (!lr) return _err('Período de férias não encontrado (início ' + gi + ').');
+    if (!cand.length) return _err('Período de férias não encontrado (início ' + gi + ').');
+    // aviso só sai para férias aprovadas (fase 3)
+    const lr = cand.find(function (r) { return _statusLanc(r) === ST.APROV; });
+    if (!lr) return _err(_statusLanc(cand[0]) === ST.PEND
+      ? 'Estas férias ainda aguardam aprovação do RH — o aviso só pode ser emitido depois de aprovadas.'
+      : 'Estas férias foram recusadas pelo RH — não há aviso a emitir.');
 
     const admissao   = toDate(fr[F.ADMISSAO]);
     const gozoIniDt  = toDate(lr[L.INICIO]);
@@ -783,31 +824,58 @@ function addVacationRecord(payload) {
     }
 
     const sh = _sheet(TAB.LANCAMENTOS);
+    _ensureLancCols(sh);
     const existing = sh.getLastRow() > 1
-      ? sh.getRange(2, 1, sh.getLastRow() - 1, 7).getValues() : [];
-    const parcela = existing.filter(function (r) {
-      return _mk(r[L.MAT]) === mat
-        && String(r[L.TIPO] || '').trim().toLowerCase() === 'gozo';
+      ? sh.getRange(2, 1, sh.getLastRow() - 1, LANC_COLS).getValues() : [];
+    const doFunc = existing.filter(function (r) { return _mk(r[L.MAT]) === mat; });
+
+    // não deixa marcar por cima de outras férias (aprovadas ou pendentes) da mesma pessoa
+    const choque = doFunc.find(function (r) {
+      if (_statusLanc(r) === ST.RECUS) return false;
+      const s = toDate(r[L.INICIO]), e = toDate(r[L.TERMINO]);
+      return s && e && start <= e && end >= s;
+    });
+    if (choque) return _err('Já existe férias de ' + name + ' de ' + formatDateBR(formatDate(choque[L.INICIO]))
+      + ' a ' + formatDateBR(formatDate(choque[L.TERMINO])) + ' (' + _statusLanc(choque).toLowerCase()
+      + ') que se sobrepõe a este período.');
+
+    const parcela = doFunc.filter(function (r) {
+      return String(r[L.TIPO] || '').trim().toLowerCase() === 'gozo' && _statusLanc(r) !== ST.RECUS;
     }).length + 1;
 
     const total = Math.round((end - start) / 864e5) + 1;
     const retSimples = _plusDays(end, 1);
     const retUtil = _addWorkingDays(end, 1);
-    const seq = existing.filter(function (r) { return _mk(r[L.MAT]) === mat; }).length + 1;
+    const seq = doFunc.length + 1;
     const chave = String(matRaw) + '-' + seq;
     const nr = sh.getLastRow() + 1;
 
+    // fase 3: gerente SOLICITA (Pendente, não desconta saldo); RH já lança aprovado
+    const agora = new Date();
+    const status = scope.perfil === 'gerente' ? ST.PEND : ST.APROV;
+    const quem = scope.email || (scope.perfil === 'gerente' ? 'gerente' : 'RH');
+
     // grava só VALORES (nada de fórmula — evita erro de separador/locale no Sheets).
     // limpa a validação herdada antes, para o setValues não ser recusado.
-    sh.getRange(nr, 1, 1, 12).setDataValidation(null);
-    sh.getRange(nr, 1, 1, 12).setValues([[
+    sh.getRange(nr, 1, 1, LANC_COLS).setDataValidation(null);
+    sh.getRange(nr, 1, 1, LANC_COLS).setValues([[
       matRaw, periodoRaw, parcela, start, end,
-      total, 'Gozo', retSimples, retUtil, '', seq, chave
+      total, 'Gozo', retSimples, retUtil, '', seq, chave,
+      status, quem, agora,
+      status === ST.APROV ? quem : '', status === ST.APROV ? agora : '', ''
     ]]);
     sh.getRange(nr, L.INICIO + 1).setNumberFormat('dd/mm/yyyy');
     sh.getRange(nr, L.TERMINO + 1).setNumberFormat('dd/mm/yyyy');
     sh.getRange(nr, L.RETORNO + 1).setNumberFormat('dd/mm/yyyy');
     sh.getRange(nr, L.RETORNO_UTIL + 1).setNumberFormat('dd/mm/yyyy');
+    sh.getRange(nr, L.SOLIC_EM + 1).setNumberFormat('dd/mm/yyyy hh:mm');
+    sh.getRange(nr, L.DECID_EM + 1).setNumberFormat('dd/mm/yyyy hh:mm');
+
+    if (status === ST.PEND) {
+      _notificar(_emailsRH(), 'Nova solicitação — ' + name + ' (' + String(match[F.FILIAL] || '').trim() + ')',
+        quem + ' solicitou férias para ' + name + ' de ' + formatDateBR(formatDate(start))
+        + ' a ' + formatDateBR(formatDate(end)) + ' (' + total + ' dias).\nAbra a aba "Aprovações" do painel para aprovar ou recusar.');
+    }
 
     // devolve os dropdowns (Matrícula / Período / Tipo) copiando da linha 2
     try {
@@ -819,7 +887,7 @@ function addVacationRecord(payload) {
 
     return JSON.stringify({
       success: true, rowIndex: nr,
-      returnDate: formatDate(retUtil), total: total,
+      returnDate: formatDate(retUtil), total: total, status: status,
     });
   } catch (e) { return _err(e.message); }
 }
@@ -1265,23 +1333,174 @@ function deleteAjuste(payload) {
 // ============================================================
 function deleteVacationRecord(payload) {
   try {
-    if (_scopeAtual().perfil === 'gerente')
-      return _err('Só o RH pode apagar um período de férias.');
+    const scope = _scopeAtual();
+    if (scope.perfil === 'nenhum') return _err('Acesso não liberado.');
     const row = Number(payload && payload.rowIndex);
     if (!row || row < 2) return _err('Linha inválida.');
 
     const sh = _sheet(TAB.LANCAMENTOS);
     if (row > sh.getLastRow()) return _err('Essa linha não existe mais. Recarregue o painel.');
 
-    const cur = sh.getRange(row, 1, 1, Math.max(9, sh.getLastColumn())).getValues()[0];
+    const cur = sh.getRange(row, 1, 1, Math.max(LANC_COLS, sh.getLastColumn())).getValues()[0];
 
     if (payload.matricula && _mk(cur[L.MAT]) !== _mk(payload.matricula))
       return _err('A linha mudou de posição na planilha. Recarregue o painel e tente de novo.');
     if (payload.inicio && formatDate(cur[L.INICIO]) !== String(payload.inicio))
       return _err('A linha mudou de posição na planilha. Recarregue o painel e tente de novo.');
 
+    // gerente só pode CANCELAR uma solicitação ainda pendente, da filial dele
+    if (scope.perfil === 'gerente') {
+      if (_statusLanc(cur) !== ST.PEND)
+        return _err('Só o RH pode apagar férias já aprovadas ou recusadas.');
+      const fr = _rows(TAB.FUNC).find(function (r) { return _mk(r[F.MAT]) === _mk(cur[L.MAT]); });
+      if (!fr || !_noEscopo(scope, fr[F.FILIAL]))
+        return _err('Você não tem acesso a este funcionário.');
+    }
+
     sh.deleteRow(row);
     return JSON.stringify({ success: true });
+  } catch (e) { return _err(e.message); }
+}
+
+// ============================================================
+// FASE 3 — FLUXO DE APROVAÇÃO
+// ============================================================
+
+// Fila de aprovação. RH vê todas as filiais; gerente vê as solicitações da(s)
+// filial(is) dele (para acompanhar). Retorna pendentes + decididas nos últimos
+// `dias` dias (padrão 90).
+function getAprovacoes(dias) {
+  try {
+    const scope = _scopeAtual();
+    if (scope.perfil === 'nenhum') return _err('Acesso não liberado.');
+    const janela = Math.max(1, Number(dias) || 90);
+    const hoje = _midnight(new Date());
+    const corte = _plusDays(hoje, -janela);
+
+    const func = {};
+    _rows(TAB.FUNC).forEach(function (r) {
+      const m = _mk(r[F.MAT]);
+      if (m) func[m] = { nome: String(r[F.NOME] || '').trim(), filial: String(r[F.FILIAL] || '').trim(),
+        saldoIni: Number(r[F.SALDO_INI]) || 0 };
+    });
+
+    // saldo aprovado por matrícula (mesma regra do getVacationData)
+    const credit = {};
+    _rows(TAB.PERIODOS).forEach(function (r) {
+      const m = _mk(r[P.MAT]); if (!m) return;
+      const iniAq = toDate(r[P.INI_AQ]);
+      const fimAq = toDate(r[P.FIM_AQ]) || (iniAq ? _plusDays(_addMonths(iniAq, 12), -1) : null);
+      const dir = (typeof r[P.DIREITO] === 'number' && r[P.DIREITO] > 0) ? r[P.DIREITO] : _diasDireito(r[P.FALTAS]);
+      if (fimAq && fimAq <= hoje) credit[m] = (credit[m] || 0) + dir;
+    });
+    const adj = {};
+    _rows(TAB.AJUSTES).forEach(function (r) {
+      const m = _mk(r[AJ.MAT]); if (m) adj[m] = (adj[m] || 0) + (Number(r[AJ.DIAS]) || 0);
+    });
+
+    const lan = _rows(TAB.LANCAMENTOS);
+    const diasDe = function (r) {
+      let d = (typeof r[L.DIAS] === 'number') ? r[L.DIAS] : 0;
+      if (!d) { const s = toDate(r[L.INICIO]), e = toDate(r[L.TERMINO]); if (s && e) d = Math.round((e - s) / 864e5) + 1; }
+      return d;
+    };
+    const usado = {}, pend = {};
+    lan.forEach(function (r) {
+      const m = _mk(r[L.MAT]); if (!m) return;
+      const st = _statusLanc(r);
+      if (st === ST.APROV) usado[m] = (usado[m] || 0) + diasDe(r);
+      if (st === ST.PEND)  pend[m]  = (pend[m]  || 0) + diasDe(r);
+    });
+    const saldoOf = function (m) {
+      return ((func[m] && func[m].saldoIni) || 0) + (credit[m] || 0) - (usado[m] || 0) + (adj[m] || 0);
+    };
+
+    // férias (aprovadas + pendentes) por filial, para mostrar quem mais estará fora
+    const porFilial = {};
+    lan.forEach(function (r, i) {
+      const m = _mk(r[L.MAT]); const f = func[m]; if (!f) return;
+      if (_statusLanc(r) === ST.RECUS) return;
+      const s = toDate(r[L.INICIO]), e = toDate(r[L.TERMINO]); if (!s || !e) return;
+      (porFilial[f.filial] = porFilial[f.filial] || []).push({ row: i + 2, nome: f.nome, s: s, e: e });
+    });
+
+    const pendentes = [], decididas = [];
+    lan.forEach(function (r, i) {
+      const m = _mk(r[L.MAT]); const f = func[m]; if (!f) return;
+      if (!_noEscopo(scope, f.filial)) return;
+      const st = _statusLanc(r);
+      const temFluxo = String(r[L.STATUS] || '').trim() !== '';   // linhas antigas (sem status) não entram
+      if (!temFluxo) return;
+      const decEm = toDate(r[L.DECID_EM]);
+      if (st !== ST.PEND && (!decEm || decEm < corte)) return;
+      if (st === ST.APROV && String(r[L.SOLIC_POR] || '').trim() === String(r[L.DECID_POR] || '').trim()
+        && !String(r[L.MOTIVO] || '').trim()) return;   // lançada direto pelo RH — não passou pela fila
+
+      const s = toDate(r[L.INICIO]), e = toDate(r[L.TERMINO]);
+      const sobrepoe = (porFilial[f.filial] || []).filter(function (o) {
+        return o.row !== i + 2 && s && e && s <= o.e && e >= o.s;
+      }).map(function (o) { return o.nome; });
+      const item = {
+        rowIndex: i + 2, matricula: m, nome: f.nome, filial: f.filial,
+        inicio: formatDate(s), termino: formatDate(e), dias: diasDe(r),
+        status: st,
+        solicitadoPor: String(r[L.SOLIC_POR] || '').trim(),
+        solicitadoEm: r[L.SOLIC_EM] instanceof Date ? Utilities.formatDate(r[L.SOLIC_EM], Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm') : '',
+        decididoPor: String(r[L.DECID_POR] || '').trim(),
+        decididoEm: decEm ? Utilities.formatDate(decEm, Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm') : '',
+        motivo: String(r[L.MOTIVO] || '').trim(),
+        saldo: saldoOf(m),
+        pendenteTotal: pend[m] || 0,
+        sobrepoe: sobrepoe,
+      };
+      (st === ST.PEND ? pendentes : decididas).push(item);
+    });
+    pendentes.sort(function (a, b) { return a.inicio < b.inicio ? -1 : a.inicio > b.inicio ? 1 : 0; });
+    decididas.sort(function (a, b) { return a.decididoEm > b.decididoEm ? -1 : a.decididoEm < b.decididoEm ? 1 : 0; });
+
+    return JSON.stringify({ success: true, perfil: scope.perfil, pendentes: pendentes, decididas: decididas, janela: janela });
+  } catch (e) { return _err(e.message); }
+}
+
+// Aprova ou recusa uma solicitação pendente — só RH.
+// payload = { rowIndex, matricula, inicio, decisao: 'aprovar'|'recusar', motivo }
+function decidirFerias(payload) {
+  try {
+    const scope = _scopeAtual();
+    if (scope.perfil !== 'rh') return _err('Só o RH pode aprovar ou recusar férias.');
+    const row = Number(payload && payload.rowIndex);
+    if (!row || row < 2) return _err('Linha inválida.');
+    const decisao = String(payload.decisao || '').toLowerCase();
+    if (decisao !== 'aprovar' && decisao !== 'recusar') return _err('Decisão inválida.');
+    const motivo = String(payload.motivo || '').trim();
+    if (decisao === 'recusar' && !motivo) return _err('Informe o motivo da recusa.');
+
+    const sh = _sheet(TAB.LANCAMENTOS);
+    _ensureLancCols(sh);
+    if (row > sh.getLastRow()) return _err('Essa linha não existe mais. Recarregue o painel.');
+    const cur = sh.getRange(row, 1, 1, LANC_COLS).getValues()[0];
+    if (payload.matricula && _mk(cur[L.MAT]) !== _mk(payload.matricula))
+      return _err('A linha mudou de posição na planilha. Recarregue o painel e tente de novo.');
+    if (payload.inicio && formatDate(cur[L.INICIO]) !== String(payload.inicio))
+      return _err('A linha mudou de posição na planilha. Recarregue o painel e tente de novo.');
+    if (_statusLanc(cur) !== ST.PEND)
+      return _err('Esta solicitação já foi decidida (' + _statusLanc(cur).toLowerCase() + '). Recarregue o painel.');
+
+    const novo = decisao === 'aprovar' ? ST.APROV : ST.RECUS;
+    const agora = new Date();
+    sh.getRange(row, L.STATUS + 1).setValue(novo);
+    sh.getRange(row, L.DECID_POR + 1, 1, 3).setValues([[scope.email || 'RH', agora, motivo]]);
+    sh.getRange(row, L.DECID_EM + 1).setNumberFormat('dd/mm/yyyy hh:mm');
+
+    const fr = _rows(TAB.FUNC).find(function (r) { return _mk(r[F.MAT]) === _mk(cur[L.MAT]); });
+    const nome = fr ? String(fr[F.NOME] || '').trim() : String(cur[L.MAT]);
+    _notificar([String(cur[L.SOLIC_POR] || '').trim().toLowerCase()],
+      'Férias ' + novo.toLowerCase() + 's — ' + nome,
+      'As férias de ' + nome + ' (' + formatDateBR(formatDate(cur[L.INICIO])) + ' a '
+      + formatDateBR(formatDate(cur[L.TERMINO])) + ') foram ' + novo.toLowerCase() + 's pelo RH.'
+      + (motivo ? '\nMotivo: ' + motivo : ''));
+
+    return JSON.stringify({ success: true, status: novo });
   } catch (e) { return _err(e.message); }
 }
 
@@ -1343,6 +1562,45 @@ function _rows(name) {
   return sh.getRange(2, 1, last - 1, Math.max(1, sh.getLastColumn())).getValues();
 }
 function _err(msg) { return JSON.stringify({ success: false, error: String(msg) }); }
+
+// Status de um lançamento (aba Lancamentos). Vazio/desconhecido = Aprovado
+// (linhas anteriores à fase 3 já valiam como férias confirmadas).
+function _statusLanc(r) {
+  const s = String((r && r[L.STATUS]) || '').trim().toLowerCase();
+  if (s.indexOf('pend') === 0) return ST.PEND;
+  if (s.indexOf('recus') === 0) return ST.RECUS;
+  return ST.APROV;
+}
+
+// Garante as colunas M..R (Status / auditoria) na aba Lancamentos, com cabeçalho.
+function _ensureLancCols(sh) {
+  if (sh.getMaxColumns() < LANC_COLS) sh.insertColumnsAfter(sh.getMaxColumns(), LANC_COLS - sh.getMaxColumns());
+  const first = L.STATUS + 1;
+  const head = sh.getRange(1, first, 1, LANC_HEADERS_FASE3.length).getValues()[0];
+  if (head.some(function (h) { return !String(h || '').trim(); })) {
+    sh.getRange(1, first, 1, LANC_HEADERS_FASE3.length).setValues([LANC_HEADERS_FASE3]);
+  }
+}
+
+// Envia e-mail do fluxo de aprovação (só se NOTIFICAR_EMAIL). Nunca derruba a operação.
+function _notificar(destinos, assunto, corpo) {
+  if (!NOTIFICAR_EMAIL) return;
+  try {
+    const to = (destinos || []).filter(function (x) { return x && x.indexOf('@') > 0; });
+    if (!to.length) return;
+    const url = ScriptApp.getService().getUrl();
+    MailApp.sendEmail(to.join(','), '[Férias] ' + assunto, corpo + (url ? '\n\nPainel: ' + url + '?page=painel' : ''));
+  } catch (e) { /* cota estourada / sem permissão — segue sem e-mail */ }
+}
+
+// E-mails com perfil RH na aba Acessos
+function _emailsRH() {
+  try {
+    return _rows(TAB.ACESSOS).filter(function (r) {
+      return String(r[AC.PERFIL] || '').trim().toLowerCase() === 'rh';
+    }).map(function (r) { return String(r[AC.EMAIL] || '').trim().toLowerCase(); });
+  } catch (e) { return []; }
+}
 function _cap(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : s; }
 // Normaliza matrícula p/ comparação: aceita número ou texto, com ou sem
 // zeros à esquerda ("02016", 2016 e "2016" viram a mesma chave).
