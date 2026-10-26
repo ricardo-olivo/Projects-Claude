@@ -749,7 +749,7 @@
       <div class="card-value" id="stat-employees">—</div>
       <div class="card-sub">no cadastro <span class="card-cta">ver lista →</span></div>
     </div>
-    <div class="card card-click" role="button" tabindex="0" onclick="openKpi('pagas')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openKpi('pagas')}">
+    <div class="card card-click rh-only" role="button" tabindex="0" onclick="openKpi('pagas')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openKpi('pagas')}">
       <div class="card-label">Pagas este Mês</div>
       <div class="card-value" id="stat-paid-month">—</div>
       <div class="card-sub">férias com início no mês <span class="card-cta">ver lista →</span></div>
@@ -759,7 +759,7 @@
       <div class="card-value" id="stat-active">—</div>
       <div class="card-sub">período em andamento <span class="card-cta">ver lista →</span></div>
     </div>
-    <div class="card warning card-click" role="button" tabindex="0" onclick="openKpi('naoreg')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openKpi('naoreg')}">
+    <div class="card warning card-click rh-only" role="button" tabindex="0" onclick="openKpi('naoreg')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openKpi('naoreg')}">
       <div class="card-label">Não Registrados</div>
       <div class="card-value" id="stat-unregistered">—</div>
       <div class="card-sub">funcionários sem carteira <span class="card-cta">ver lista →</span></div>
@@ -819,9 +819,9 @@
     <button class="tab active" onclick="showTab('table', this)">Tabela</button>
     <button class="tab" onclick="showTab('employees', this)">Funcionários</button>
     <button class="tab" onclick="showTab('calendar', this)">Calendário</button>
-    <button class="tab" onclick="showTab('payment', this)">Pagamentos do Mês</button>
-    <button class="tab" onclick="showTab('report', this)">Relatório Mensal</button>
-    <button class="tab" onclick="showTab('due', this)">Vencimento Mensal</button>
+    <button class="tab rh-only" onclick="showTab('payment', this)">Pagamentos do Mês</button>
+    <button class="tab rh-only" onclick="showTab('report', this)">Relatório Mensal</button>
+    <button class="tab rh-only" onclick="showTab('due', this)">Vencimento Mensal</button>
     <button class="tab" id="tab-approvals" onclick="showTab('approvals', this)">Aprovações<span class="tab-count" id="apr-count" style="display:none"></span></button>
   </div>
 
