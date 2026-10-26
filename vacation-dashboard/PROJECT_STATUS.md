@@ -322,6 +322,10 @@ certos. CSS novo: `.card-click`, `.card-cta`, `.kpi-count`.
   pedidos pendentes de exemplo, `demoDecididas`.
 
 ### Deploy
+**PUBLICADO em 2026-10-26** (confirmado pelo usuário): login, fase 3 (aprovação), perfil
+Gerente Matriz e ocultação de Pagamentos/Relatório/Vencimento para gerentes estão no ar
+(commit `a11167c`). Gerente Matriz validado em produção.
+
 **Login (2026-10-26):** criar no Apps Script o arquivo HTML **`Login`** (além de `Home`),
 colar `Code.gs` / `Dashboard.html` / `Home.html` / `Login.html` e implantar nova versão com
 "Executar como: Eu" e "Quem pode acessar: Qualquer pessoa" (o controle agora é o login
