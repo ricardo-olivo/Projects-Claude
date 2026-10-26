@@ -736,6 +736,7 @@
   <div class="last-update">
     <div id="last-update-text">Carregando...</div>
     <button class="refresh-btn" onclick="loadData()">↻ Atualizar</button>
+    <button class="refresh-btn" onclick="sair()" title="Encerrar a sessão">⎋ Sair</button>
   </div>
 </div>
 
@@ -1355,31 +1356,75 @@
 </div>
 
 <script>
-  let allData = [];
-  let filteredData = [];
-  let conflicts = [];
-  let paymentAll = [];
-  let paymentDue = [];
-  let totals = {};
-  let allEmployees = [];
-  let fichaMat = '', fichaNome = '', fichaData = null;
-  let scope = { perfil: 'rh', filiais: null, email: '' };
-  function ehRH() { return !scope || scope.perfil !== 'gerente'; }
-  let payFilter  = 'month';
-  let sortCol = 'startDate';
-  let expandedGroups = new Set();   // chaves de funcionário com o grupo aberto na Tabela
-  let tableGroups = [];             // grupos renderizados (índice = ordem na tela)
-  let tableBranch = null;           // null = grade de cards de filial; string = tabela dessa filial
-  let sortDir = 1;
-  let calYear, calMonth;
+  // ── SESSÃO (login) ────────────────────────────────────────
+  // Todas as chamadas ao servidor passam por api(token, função, args) no Code.gs.
+  // gsRun() imita google.script.run e injeta o token; se a sessão expirou,
+  // volta para a tela de login. (Script com "var"/function no topo de propósito:
+  // a página pode ser reescrita por document.write depois de sair e entrar.)
+  function feriasToken() {
+    try { return localStorage.getItem('ferias_token') || window.__FERIAS_TOKEN || ''; }
+    catch (e) { return window.__FERIAS_TOKEN || ''; }
+  }
+  function voltarAoLogin() {
+    try { localStorage.removeItem('ferias_token'); } catch (e) {}
+    window.__FERIAS_TOKEN = '';
+    google.script.run
+      .withSuccessHandler(function (html) { document.open(); document.write(html); document.close(); })
+      .withFailureHandler(function () { alert('Sessão encerrada. Recarregue a página para entrar de novo.'); })
+      .paginaLogin();
+  }
+  function gsRun() {
+    var ok = null, fail = null;
+    var p = new Proxy({}, { get: function (_, name) {
+      if (name === 'withSuccessHandler') return function (f) { ok = f; return p; };
+      if (name === 'withFailureHandler') return function (f) { fail = f; return p; };
+      return function () {
+        var args = Array.prototype.slice.call(arguments);
+        google.script.run
+          .withSuccessHandler(function (r) { if (ok) ok(r); })
+          .withFailureHandler(function (e) {
+            if (String((e && e.message) || e).indexOf('SESSAO_EXPIRADA') >= 0) {
+              alert('Sua sessão expirou. Entre novamente.');
+              return voltarAoLogin();
+            }
+            if (fail) fail(e);
+          })
+          .api(feriasToken(), String(name), args);
+      };
+    }});
+    return p;
+  }
+  function sair() {
+    if (!confirm('Sair do Controle de Férias?')) return;
+    if (typeof google === 'undefined' || !google.script) { location.href = 'Login.html'; return; }
+    gsRun().withSuccessHandler(voltarAoLogin).withFailureHandler(voltarAoLogin).logout();
+  }
 
-  const today = new Date();
+  var allData = [];
+  var filteredData = [];
+  var conflicts = [];
+  var paymentAll = [];
+  var paymentDue = [];
+  var totals = {};
+  var allEmployees = [];
+  var fichaMat = '', fichaNome = '', fichaData = null;
+  var scope = { perfil: 'rh', filiais: null, email: '' };
+  function ehRH() { return !scope || scope.perfil !== 'gerente'; }
+  var payFilter  = 'month';
+  var sortCol = 'startDate';
+  var expandedGroups = new Set();   // chaves de funcionário com o grupo aberto na Tabela
+  var tableGroups = [];             // grupos renderizados (índice = ordem na tela)
+  var tableBranch = null;           // null = grade de cards de filial; string = tabela dessa filial
+  var sortDir = 1;
+  var calYear, calMonth;
+
+  var today = new Date();
   today.setHours(0,0,0,0);
   calYear  = today.getFullYear();
   calMonth = today.getMonth();
 
   // ── MOCK DATA (usado apenas fora do Google Apps Script) ───
-  const MOCK_PAYMENT_DATA = (() => {
+  var MOCK_PAYMENT_DATA = (() => {
     const MONTHS_PT = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho',
                        'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
     const cur = today.getMonth(); // 0-based
@@ -1412,7 +1457,7 @@
     ];
   })();
 
-  const MOCK_DATA = (function() {
+  var MOCK_DATA = (function() {
     const t = new Date(); t.setHours(0,0,0,0);
     const d = (offset, days) => {
       const s = new Date(t); s.setDate(s.getDate() + offset);
@@ -1521,7 +1566,7 @@
       return;
     }
 
-    google.script.run
+    gsRun()
       .withSuccessHandler(onDataLoaded)
       .withFailureHandler(onDataError)
       .getVacationData();
@@ -1630,8 +1675,8 @@
   }
 
   // ── MULTI-SELECT FILIAL ───────────────────────────────────
-  let selectedBranches = [];
-  let allBranchNames   = [];
+  var selectedBranches = [];
+  var allBranchNames   = [];
 
   function toggleMsDropdown(e) {
     e.stopPropagation();
@@ -1747,8 +1792,8 @@
   }
 
   // ── VISÃO FUNCIONÁRIOS (cadastro completo) ────────────────
-  let empFiltroReg = 'todos';        // 'todos' | 'sim' | 'nao'
-  let empFiltroStatus = 'ativos';    // 'ativos' | 'inativos' | 'todos'
+  var empFiltroReg = 'todos';        // 'todos' | 'sim' | 'nao'
+  var empFiltroStatus = 'ativos';    // 'ativos' | 'inativos' | 'todos'
   function setEmpFiltro(v, btn) {
     empFiltroReg = v;
     document.querySelectorAll('.emp-fbtn').forEach(b => b.classList.remove('active'));
@@ -1927,7 +1972,7 @@
     renderTable();
   }
 
-  const STATUS_RANK = { active: 3, future: 2, done: 1, pending: 0, unknown: 0 };
+  var STATUS_RANK = { active: 3, future: 2, done: 1, pending: 0, unknown: 0 };
 
   // resumo de um grupo com 2+ períodos (linha "pai" recolhida)
   function groupSummary(g) {
@@ -2092,7 +2137,7 @@
   }
 
   // ── RENDER CALENDAR ───────────────────────────────────────
-  let calView = 'month';
+  var calView = 'month';
 
   function setCalView(view, btn) {
     calView = view;
@@ -2346,7 +2391,7 @@
   });
 
   // ── DETALHE DOS CARDS DE RESUMO (KPIs) ───────────────────
-  let kpiWhich = '';
+  var kpiWhich = '';
 
   function openKpi(which) {
     kpiWhich = which;
@@ -2583,7 +2628,7 @@
     };
 
     if (typeof google !== 'undefined' && google.script) {
-      google.script.run.withSuccessHandler(onSuccess).withFailureHandler(onError).addEmployee(payload);
+      gsRun().withSuccessHandler(onSuccess).withFailureHandler(onError).addEmployee(payload);
     } else {
       setTimeout(() => onSuccess(JSON.stringify({ success: true, matricula: payload.matricula })), 500);
     }
@@ -2628,7 +2673,7 @@
       return;
     }
 
-    google.script.run
+    gsRun()
       .withSuccessHandler(txt => {
         let res;
         try { res = JSON.parse(txt); } catch (e) { res = { success: false, error: 'Resposta inválida.' }; }
@@ -2671,7 +2716,7 @@
       renderFicha(mockFicha(base));
       return;
     }
-    google.script.run
+    gsRun()
       .withSuccessHandler(txt => {
         let res;
         try { res = JSON.parse(txt); } catch (e) { res = { success: false, error: 'Resposta inválida do servidor.' }; }
@@ -2694,7 +2739,7 @@
     const original = btn ? btn.textContent : '';
     if (btn) { btn.disabled = true; btn.textContent = '…'; }
     const restore = () => { if (btn) { btn.disabled = false; btn.textContent = original; } };
-    google.script.run
+    gsRun()
       .withSuccessHandler(txt => {
         restore();
         let res;
@@ -2822,7 +2867,7 @@
       return;
     }
 
-    const runner = google.script.run
+    const runner = gsRun()
       .withSuccessHandler(txt => {
         let res;
         try { res = JSON.parse(txt); } catch (e) { res = { success: false, error: 'Resposta inválida.' }; }
@@ -2860,7 +2905,7 @@
       return;
     }
 
-    google.script.run
+    gsRun()
       .withSuccessHandler(txt => {
         let res;
         try { res = JSON.parse(txt); } catch (e) { res = { success: false, error: 'Resposta inválida.' }; }
@@ -2872,15 +2917,15 @@
   }
 
   // ── AJUSTE MANUAL / OBSERVAÇÃO (ficha, só RH) ─────────────
-  let ajEditRow = null;    // rowIndex na aba Ajustes (edição); null = inclusão
-  let ajEditIdx = null;    // índice em fichaData.ajustes (para o modo demo)
-  let ajEditOldDias = 0;   // dias que a linha já contribuía p/ o saldo (edição)
-  const demoAjustes = {};   // preview: ajustes por matrícula (não roda no Apps Script)
-  const demoVenc = {};      // preview: vencimento manual por matrícula
-  const demoPeriodos = {};  // preview: períodos aquisitivos por matrícula
-  const demoDecididas = []; // preview: solicitações já aprovadas/recusadas (aba Aprovações)
-  let perEditRow = null;    // rowIndex na aba Periodos (edição); null = inclusão
-  let perEditIdx = null;    // índice em fichaData.periodos (modo demo)
+  var ajEditRow = null;    // rowIndex na aba Ajustes (edição); null = inclusão
+  var ajEditIdx = null;    // índice em fichaData.ajustes (para o modo demo)
+  var ajEditOldDias = 0;   // dias que a linha já contribuía p/ o saldo (edição)
+  var demoAjustes = {};   // preview: ajustes por matrícula (não roda no Apps Script)
+  var demoVenc = {};      // preview: vencimento manual por matrícula
+  var demoPeriodos = {};  // preview: períodos aquisitivos por matrícula
+  var demoDecididas = []; // preview: solicitações já aprovadas/recusadas (aba Aprovações)
+  var perEditRow = null;    // rowIndex na aba Periodos (edição); null = inclusão
+  var perEditIdx = null;    // índice em fichaData.periodos (modo demo)
 
   function abrirAjuste(modo) {
     const mat = (fichaData && fichaData.func && fichaData.func.matricula) || fichaMat;
@@ -3011,7 +3056,7 @@
       return;
     }
 
-    const runner = google.script.run
+    const runner = gsRun()
       .withSuccessHandler(txt => {
         let res;
         try { res = JSON.parse(txt); } catch (e) { res = { success: false, error: 'Resposta inválida.' }; }
@@ -3055,7 +3100,7 @@
       return;
     }
 
-    google.script.run
+    gsRun()
       .withSuccessHandler(txt => {
         let res;
         try { res = JSON.parse(txt); } catch (e) { res = { success: false, error: 'Resposta inválida.' }; }
@@ -3116,7 +3161,7 @@
       return;
     }
 
-    google.script.run
+    gsRun()
       .withSuccessHandler(txt => {
         let res;
         try { res = JSON.parse(txt); } catch (e) { res = { success: false, error: 'Resposta inválida.' }; }
@@ -3146,7 +3191,7 @@
       if (document.getElementById('view-approvals').style.display !== 'none') { aprData = mockAprovacoes(); renderAprovacoes(); }
       return;
     }
-    google.script.run
+    gsRun()
       .withSuccessHandler(txt => {
         let res;
         try { res = JSON.parse(txt); } catch (e) { res = { success: false, error: 'Resposta inválida.' }; }
@@ -3454,7 +3499,7 @@
     };
 
     if (typeof google !== 'undefined' && google.script) {
-      google.script.run
+      gsRun()
         .withSuccessHandler(onSuccess)
         .withFailureHandler(onError)
         .addVacationRecord(payload);
@@ -3476,7 +3521,7 @@
   }
 
   // ── INLINE EDITING ────────────────────────────────────────
-  let activeEditCell = null;
+  var activeEditCell = null;
 
   function startEdit(td, field, rowIndex, branch, dataIdx) {
     if (activeEditCell) cancelEdit();
@@ -3569,7 +3614,7 @@
     };
 
     if (typeof google !== 'undefined' && google.script) {
-      google.script.run
+      gsRun()
         .withSuccessHandler(onSuccess)
         .withFailureHandler(onError)
         .updateVacationRecord(payload);
@@ -3717,8 +3762,8 @@
   // ── APROVAÇÕES (fase 3) ───────────────────────────────────
   // RH: fila de pendentes com Aprovar / Recusar. Gerente: acompanha as próprias
   // solicitações (pendentes podem ser canceladas pelo 🗑 na Tabela ou aqui).
-  let aprData = null;        // { pendentes:[], decididas:[] }
-  let aprRecusa = null;      // item sendo recusado
+  var aprData = null;        // { pendentes:[], decididas:[] }
+  var aprRecusa = null;      // item sendo recusado
 
   function atualizaContadorAprov() {
     const n = allData.filter(r => r.status === 'Pendente').length;
@@ -3751,7 +3796,7 @@
       setTimeout(() => { aprData = mockAprovacoes(); renderAprovacoes(); }, 200);
       return;
     }
-    google.script.run
+    gsRun()
       .withSuccessHandler(txt => {
         let res;
         try { res = JSON.parse(txt); } catch (e) { res = { success: false, error: 'Resposta inválida.' }; }
@@ -3841,7 +3886,7 @@
       aprData = mockAprovacoes(); renderAprovacoes();
       return true;
     }
-    google.script.run
+    gsRun()
       .withSuccessHandler(txt => {
         let res;
         try { res = JSON.parse(txt); } catch (e) { res = { success: false, error: 'Resposta inválida.' }; }
@@ -4070,7 +4115,7 @@
     if (p.length === 3) return `${p[2]}/${p[1]}/${p[0]}`;
     return iso;
   }
-  const MONTHS_PT_FULL = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho',
+  var MONTHS_PT_FULL = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho',
                           'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
   function fmtMonthYear(iso) {
     if (!iso) return '—';

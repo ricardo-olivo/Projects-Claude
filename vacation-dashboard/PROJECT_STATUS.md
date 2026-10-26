@@ -36,6 +36,10 @@ dias por funcionário, ficha individual, Aviso de Férias em PDF, e acesso
 segmentado por filial (RH x Gerente).
 
 ## Fase atual
+- **Login (e-mail + senha)** — concluído no código (2026-10-26): `Login.html` antes de
+  tudo, sessão por token, funções do servidor privadas atrás de `api()`. Usuário inicial
+  rfolivo@gmail.com (RH) é criado na aba `Acessos` no 1º login. Testado no preview com
+  servidor simulado (login, senha errada, sair, entrar de novo, sessão expirada).
 - **Fase 0 (núcleo)** — concluída.
 - **Fase 1 (página inicial + roteador `doGet`)** — concluída no código.
 - **Fase 2 (acesso por filial)** — concluída no **código**; falta configurar
@@ -317,6 +321,11 @@ certos. CSS novo: `.card-click`, `.card-cta`, `.kpi-count`.
   pedidos pendentes de exemplo, `demoDecididas`.
 
 ### Deploy
+**Login (2026-10-26):** criar no Apps Script o arquivo HTML **`Login`** (além de `Home`),
+colar `Code.gs` / `Dashboard.html` / `Home.html` / `Login.html` e implantar nova versão com
+"Executar como: Eu" e "Quem pode acessar: Qualquer pessoa" (o controle agora é o login
+do app). Na 1ª vez o Apps Script pede autorização nova (CacheService/Properties).
+
 Nada redeployado no Apps Script desde agosto — o próximo deploy precisa de
 **`Code.gs` + `Dashboard.html`** (nova versão) e do cabeçalho da coluna **J
 ("Vencimento")** na aba `Func`. Inclui a correção de fuso, o sábado como dia útil e

@@ -66,6 +66,16 @@
       background:#fdf0e1; border:1px solid #f6d5ac; color:var(--laranja-esc); font-size:12.5px;
     }
     .rodape{ margin-top:16px; font-size:11px; color:var(--suave); }
+    .links{ margin-top:14px; font-size:12.5px; color:var(--suave); }
+    .links a{ color:var(--verde-esc); font-weight:700; text-decoration:none; }
+    .links a:hover{ text-decoration:underline; }
+    .senha-form{ display:none; margin-top:14px; text-align:left; }
+    .senha-form input{ width:100%; padding:10px 12px; margin-bottom:8px; border:1px solid var(--linha);
+      border-radius:10px; font:inherit; font-size:14px; }
+    .senha-form input:focus{ outline:2px solid var(--verde); border-color:transparent; }
+    .senha-msg{ font-size:12.5px; min-height:16px; margin-bottom:8px; }
+    .senha-msg.erro{ color:#c0392b; } .senha-msg.ok{ color:var(--verde-esc); }
+    .btn-sec{ background:var(--laranja); padding:10px 16px; font-size:14px; }
   </style>
 </head>
 <body>
@@ -95,6 +105,18 @@
 
     <a class="btn" id="btn" href="#">Acessar o painel</a>
 
+    <div class="links">
+      <a href="#" id="lnk-senha">Trocar senha</a> · <a href="#" id="lnk-sair">Sair</a>
+    </div>
+
+    <form class="senha-form" id="senha-form" autocomplete="off">
+      <input type="password" id="s-atual" placeholder="Senha atual" autocomplete="current-password">
+      <input type="password" id="s-nova" placeholder="Nova senha (mín. 8 caracteres)" autocomplete="new-password">
+      <input type="password" id="s-conf" placeholder="Repita a nova senha" autocomplete="new-password">
+      <div class="senha-msg" id="s-msg"></div>
+      <button type="submit" class="btn btn-sec" id="s-btn">Salvar nova senha</button>
+    </form>
+
     <div class="rodape">Recursos Humanos · Líderfarma</div>
   </div>
 
@@ -110,33 +132,86 @@
       }
       var url = "<?!= scriptUrl ?>";
       var btn = document.getElementById('btn');
-      btn.href = url + '?page=painel';   // fallback p/ abrir em nova aba
+      var noGAS = typeof google === 'undefined' || !google.script;
+      btn.href = noGAS ? 'Dashboard.html' : '#';
 
-      btn.addEventListener('click', function (ev) {
-        ev.preventDefault();
-        if (btn.classList.contains('off')) return;
-        if (typeof google === 'undefined' || !google.script) {
-          window.location.href = url + '?page=painel';
-          return;
-        }
-        btn.textContent = 'Abrindo painel…';
+      // ---- sessão: toda chamada vai por api(token, função, args) ----
+      function token() {
+        try { return localStorage.getItem('ferias_token') || window.__FERIAS_TOKEN || ''; }
+        catch (e) { return window.__FERIAS_TOKEN || ''; }
+      }
+      function voltarAoLogin() {
+        try { localStorage.removeItem('ferias_token'); } catch (e) {}
+        window.__FERIAS_TOKEN = '';
         google.script.run
-          .withSuccessHandler(function (html) {
-            document.open(); document.write(html); document.close();
+          .withSuccessHandler(function (html) { document.open(); document.write(html); document.close(); })
+          .paginaLogin();
+      }
+      function chamar(fn, args, ok, fail) {
+        google.script.run
+          .withSuccessHandler(ok)
+          .withFailureHandler(function (e) {
+            if (String((e && e.message) || e).indexOf('SESSAO_EXPIRADA') >= 0) return voltarAoLogin();
+            if (fail) fail(e);
           })
-          .withFailureHandler(function () {
-            btn.textContent = 'Acessar o painel';
-            alert('Não foi possível abrir o painel. Tente novamente.');
-          })
-          .paginaPainel();
+          .api(token(), fn, args || []);
+      }
+
+      document.getElementById('lnk-sair').addEventListener('click', function (ev) {
+        ev.preventDefault();
+        if (noGAS) { location.href = 'Login.html'; return; }
+        chamar('logout', [], voltarAoLogin, voltarAoLogin);
       });
 
-      if (typeof google === 'undefined' || !google.script) {
+      var form = document.getElementById('senha-form');
+      document.getElementById('lnk-senha').addEventListener('click', function (ev) {
+        ev.preventDefault();
+        form.style.display = form.style.display === 'block' ? 'none' : 'block';
+        if (form.style.display === 'block') document.getElementById('s-atual').focus();
+      });
+      form.addEventListener('submit', function (ev) {
+        ev.preventDefault();
+        var msg = document.getElementById('s-msg');
+        var at = document.getElementById('s-atual').value;
+        var nv = document.getElementById('s-nova').value;
+        var cf = document.getElementById('s-conf').value;
+        msg.className = 'senha-msg erro';
+        if (!at || !nv) { msg.textContent = 'Preencha a senha atual e a nova.'; return; }
+        if (nv.length < 8) { msg.textContent = 'A nova senha precisa ter pelo menos 8 caracteres.'; return; }
+        if (nv !== cf) { msg.textContent = 'A confirmação não confere com a nova senha.'; return; }
+        if (noGAS) { msg.className = 'senha-msg ok'; msg.textContent = 'Preview: senha não é gravada.'; return; }
+        var b = document.getElementById('s-btn'); b.disabled = true; b.textContent = 'Salvando…';
+        chamar('trocarSenha', [{ atual: at, nova: nv }], function (txt) {
+          b.disabled = false; b.textContent = 'Salvar nova senha';
+          var r; try { r = JSON.parse(txt); } catch (e) { r = { success: false, error: 'Resposta inválida.' }; }
+          if (r.success) {
+            msg.className = 'senha-msg ok'; msg.textContent = 'Senha alterada.';
+            form.reset(); setTimeout(function () { form.style.display = 'none'; msg.textContent = ''; }, 1800);
+          } else msg.textContent = r.error || 'Não foi possível trocar a senha.';
+        }, function (e) {
+          b.disabled = false; b.textContent = 'Salvar nova senha';
+          msg.textContent = 'Erro: ' + ((e && e.message) || e);
+        });
+      });
+
+      btn.addEventListener('click', function (ev) {
+        if (noGAS) return;                 // preview: segue o link para Dashboard.html
+        ev.preventDefault();
+        if (btn.classList.contains('off')) return;
+        btn.textContent = 'Abrindo painel…';
+        chamar('paginaPainel', [], function (html) {
+          document.open(); document.write(html); document.close();
+        }, function () {
+          btn.textContent = 'Acessar o painel';
+          alert('Não foi possível abrir o painel. Tente novamente.');
+        });
+      });
+
+      if (noGAS) {
         document.getElementById('quem').textContent = '';
         return;
       }
-      google.script.run
-        .withSuccessHandler(function (txt) {
+      chamar('getResumoHome', [], function (txt) {
           var r;
           try { r = JSON.parse(txt); } catch (e) { r = { ok: false }; }
           if (!r.ok) {
@@ -159,11 +234,9 @@
             var perfil = r.perfil === 'rh' ? 'RH' : 'Gerente';
             quem.innerHTML = (r.email ? '<b>' + r.email + '</b> · ' : '') + perfil + ' · ' + r.escopo;
           }
-        })
-        .withFailureHandler(function () {
+        }, function () {
           document.getElementById('quem').textContent = '';
-        })
-        .getResumoHome();
+        });
     })();
   </script>
 </body>

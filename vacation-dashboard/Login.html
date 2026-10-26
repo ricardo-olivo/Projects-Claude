@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Controle de Férias — Acesso</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:ital,wght@0,600;0,700;0,800;1,700;1,900&display=swap" rel="stylesheet">
+  <style>
+    :root{
+      --verde:#8cc63e; --verde-esc:#6fae23;
+      --laranja:#f07f1a; --laranja-esc:#d96e0f;
+      --tinta:#2b2f36; --suave:#6b7280;
+      --card:#ffffff; --fundo:#f4f6f4; --linha:#e6e9e6;
+    }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{
+      font-family:'Nunito',-apple-system,'Segoe UI',sans-serif;
+      background:radial-gradient(1200px 500px at 50% -10%, #eaf3df 0%, var(--fundo) 60%);
+      color:var(--tinta); min-height:100vh;
+      display:flex; align-items:center; justify-content:center; padding:24px;
+    }
+    .card{
+      background:var(--card); width:100%; max-width:420px;
+      border:1px solid var(--linha); border-radius:20px;
+      box-shadow:0 10px 40px -12px rgba(43,47,54,.18);
+      padding:36px 32px 28px; text-align:center;
+    }
+    .logo{ margin:0 auto 4px; width:240px; }
+    .logo-word{ font-weight:900; font-style:italic; font-size:50px; line-height:1; letter-spacing:-2px; white-space:nowrap; }
+    .logo-word .g{ color:var(--verde); } .logo-word .o{ color:var(--laranja); }
+    .logo-swoosh{ display:block; width:96%; height:13px; margin:1px auto 0; }
+    .logo-tag{ color:var(--laranja); font-style:italic; font-weight:700; font-size:13px; text-align:right; width:96%; margin:3px auto 0; }
+
+    h1{ font-size:19px; font-weight:800; margin:20px 0 4px; }
+    .sub{ color:var(--suave); font-size:13px; margin-bottom:22px; }
+
+    form{ text-align:left; }
+    label{ display:block; font-size:12px; font-weight:700; color:var(--suave); margin:0 0 5px 2px; }
+    .campo{ position:relative; margin-bottom:14px; }
+    input{
+      width:100%; padding:12px 14px; border:1px solid var(--linha); border-radius:12px;
+      font:inherit; font-size:15px; color:var(--tinta); background:#fff;
+    }
+    input:focus{ outline:2px solid var(--verde); border-color:transparent; }
+    .ver{
+      position:absolute; right:8px; bottom:7px; border:0; background:none; cursor:pointer;
+      color:var(--suave); font:inherit; font-size:12px; font-weight:700; padding:6px;
+    }
+    .erro{
+      display:none; margin-bottom:14px; padding:10px 12px; border-radius:10px;
+      background:#fdecea; border:1px solid #f5c2bd; color:#b3261e; font-size:13px;
+    }
+    .btn{
+      width:100%; padding:13px 20px; border-radius:12px; border:0; cursor:pointer;
+      background:var(--verde); color:#fff; font:inherit; font-weight:800; font-size:15px;
+    }
+    .btn:hover{ filter:brightness(1.05); }
+    .btn:disabled{ background:var(--linha); color:var(--suave); cursor:default; }
+    .rodape{ margin-top:18px; font-size:11px; color:var(--suave); text-align:center; }
+    .carregando{ color:var(--suave); font-size:13px; padding:20px 0; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="logo">
+      <div class="logo-word"><span class="g">líder</span><span class="o">farma</span></div>
+      <svg class="logo-swoosh" viewBox="0 0 300 24" preserveAspectRatio="none" aria-hidden="true">
+        <path d="M3,17 C55,3 115,2 165,10 C210,17 260,20 297,6" fill="none" stroke="#8cc63e" stroke-width="10" stroke-linecap="round"/>
+      </svg>
+      <div class="logo-tag">bem-estar e confiança</div>
+    </div>
+
+    <h1>Controle de Férias</h1>
+    <div class="sub">Entre com seu e-mail e senha</div>
+
+    <div class="carregando" id="carregando">Verificando acesso…</div>
+
+    <form id="form" style="display:none" novalidate>
+      <div class="campo">
+        <label for="email">E-mail</label>
+        <input type="email" id="email" autocomplete="username" required>
+      </div>
+      <div class="campo">
+        <label for="senha">Senha</label>
+        <input type="password" id="senha" autocomplete="current-password" required>
+        <button type="button" class="ver" id="ver" aria-label="Mostrar senha">mostrar</button>
+      </div>
+      <div class="erro" id="erro" role="alert"></div>
+      <button type="submit" class="btn" id="entrar">Entrar</button>
+    </form>
+
+    <div class="rodape">Esqueceu a senha? Fale com o RH.<br>Recursos Humanos · Líderfarma</div>
+  </div>
+
+  <script>
+    // Tudo dentro de uma função: esta página é reescrita por document.write ao
+    // sair/expirar a sessão, e declarações let/const no topo dariam conflito.
+    (function () {
+      var DESTINO = '<?= destino ?>' === 'painel' ? 'painel' : 'home';
+      var noGAS = typeof google === 'undefined' || !google.script;
+
+      var form = document.getElementById('form');
+      var erro = document.getElementById('erro');
+      var btn  = document.getElementById('entrar');
+
+      function guardar(tok) {
+        window.__FERIAS_TOKEN = tok || '';
+        try { if (tok) localStorage.setItem('ferias_token', tok); else localStorage.removeItem('ferias_token'); } catch (e) {}
+      }
+      function lerToken() {
+        try { return localStorage.getItem('ferias_token') || window.__FERIAS_TOKEN || ''; }
+        catch (e) { return window.__FERIAS_TOKEN || ''; }
+      }
+      function mostrarForm() {
+        document.getElementById('carregando').style.display = 'none';
+        form.style.display = 'block';
+        document.getElementById('email').focus();
+      }
+      function mostrarErro(msg) {
+        erro.textContent = msg; erro.style.display = 'block';
+        btn.disabled = false; btn.textContent = 'Entrar';
+      }
+      // abre a página de destino "no lugar" (sem trocar a URL — funciona dentro do Google Sites)
+      function abrir() {
+        google.script.run
+          .withSuccessHandler(function (html) { document.open(); document.write(html); document.close(); })
+          .withFailureHandler(function () { guardar(''); mostrarForm(); })
+          .api(lerToken(), DESTINO === 'painel' ? 'paginaPainel' : 'paginaHome', []);
+      }
+
+      document.getElementById('ver').addEventListener('click', function () {
+        var s = document.getElementById('senha');
+        var mostra = s.type === 'password';
+        s.type = mostra ? 'text' : 'password';
+        this.textContent = mostra ? 'ocultar' : 'mostrar';
+      });
+
+      form.addEventListener('submit', function (ev) {
+        ev.preventDefault();
+        erro.style.display = 'none';
+        var email = document.getElementById('email').value.trim();
+        var senha = document.getElementById('senha').value;
+        if (!email || !senha) return mostrarErro('Informe e-mail e senha.');
+        btn.disabled = true; btn.textContent = 'Entrando…';
+
+        if (noGAS) {   // preview local (sem Apps Script): só segue para a página
+          location.href = DESTINO === 'painel' ? 'Dashboard.html' : 'Home.html';
+          return;
+        }
+        google.script.run
+          .withSuccessHandler(function (txt) {
+            var r; try { r = JSON.parse(txt); } catch (e) { r = { success: false, error: 'Resposta inválida do servidor.' }; }
+            if (!r.success) return mostrarErro(r.error || 'Não foi possível entrar.');
+            guardar(r.token);
+            btn.textContent = 'Abrindo…';
+            abrir();
+          })
+          .withFailureHandler(function (e) { mostrarErro('Erro de comunicação: ' + ((e && e.message) || e)); })
+          .login(email, senha);
+      });
+
+      // já tem sessão válida neste navegador? entra direto
+      var tok = lerToken();
+      if (noGAS || !tok) return mostrarForm();
+      google.script.run
+        .withSuccessHandler(function () { abrir(); })
+        .withFailureHandler(function () { guardar(''); mostrarForm(); })
+        .api(tok, 'sessaoAtual', []);
+    })();
+  </script>
+</body>
+</html>

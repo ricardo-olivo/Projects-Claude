@@ -57,7 +57,7 @@ calcula um **"banco de dias"** por funcionário e gera o **Aviso de Férias em P
 | **Hospedagem** | Apps Script Web App (`doGet`) — gratuito, sem servidor |
 | **Bibliotecas** | Nenhuma no runtime. Fontes Google (Nunito) só na `Home.html` |
 | **APIs internas** | `google.script.run` (cliente → funções do `Code.gs`) |
-| **Autenticação** | `Session.getActiveUser().getEmail()` + aba `Acessos` na planilha |
+| **Autenticação** | Login próprio (e-mail + senha) — `Login.html`, hash SHA-256 com salt na aba `Acessos` (col. D), sessão em `CacheService` (token de 6 h) |
 | **Geração de PDF** | `Utilities.newBlob(html, 'text/html').getAs('application/pdf')` |
 | **Preview local** | `serve.ps1` (servidor estático PowerShell, porta 8765) com dados MOCK |
 | **Versionamento** | Git — repositório `Projects-Claude` (multi-projeto) no GitHub |
@@ -148,9 +148,25 @@ max(0,  Σ direito dos períodos com concessão já vencida
   **determinístico** por funcionário (`_ctpsFake`) — placeholder, trocar pelo real.
 - Nº Registro e R/H = matrícula. Nº do documento sai como `______ / <matrícula>`.
 
-### Acesso (fase 2)
-- Sem aba `Acessos` (ou vazia) → todo mundo é **RH** (modo migração).
-- Com a aba: e-mail não cadastrado → **sem acesso** (`perfil: 'nenhum'`).
+### Login e acesso
+- **Toda URL abre `Login.html`** (`doGet`). Depois de entrar, o Login carrega no lugar
+  (`document.write`) a Home ou o painel (`?page=painel`). Não usa mais
+  `Session.getActiveUser` — o e-mail vem da sessão.
+- **Só 4 funções são públicas**: `doGet`, `login`, `paginaLogin`, `api`. Todas as outras
+  terminam em `_` (o Apps Script não deixa o navegador chamá-las). O navegador chama
+  `api(token, "nomeDaFuncao", [args])`, que confere o token (`_lerSessao_`), preenche
+  `_SESSAO` e despacha pela tabela `API`. Sessão inválida → erro `SESSAO_EXPIRADA` →
+  front volta ao login. **Função nova chamada pelo front = acrescentar na tabela `API`.**
+- Front: `gsRun()` (Dashboard) / `chamar()` (Home) imitam `google.script.run` e injetam
+  o token (`localStorage.ferias_token`, com fallback `window.__FERIAS_TOKEN`).
+- Aba `Acessos`: E-mail · Filial · Perfil · **Senha**. Senha = `h1$salt$hex` (SHA-256
+  iterado 100x). O RH pode digitar uma **senha provisória em texto** — no 1º login vira
+  hash. Trocar senha: link na Home (`trocarSenha`, mín. 8 caracteres).
+- `_ensureAcessos_` cria a aba / cabeçalho e inclui `USUARIO_INICIAL` (rfolivo@gmail.com,
+  RH) **uma única vez** (Script Property `SEED_ACESSOS`).
+- 5 senhas erradas → e-mail bloqueado 15 min. Sessão expira após 6 h sem uso.
+- E-mail sem linha na aba `Acessos` → **sem acesso** (`perfil: "nenhum"`); se a linha for
+  removida, a sessão cai na próxima chamada.
 - `RH` = filiais `null` (todas). `Gerente` = lista de filiais das linhas dele.
 - Filtro por filial é aplicado **no servidor** (nunca confiar no navegador).
 
@@ -182,7 +198,8 @@ Repositório: `Projects-Claude` (contém vários projetos). Este projeto vive em
 vacation-dashboard/
 ├── Code.gs          Backend Apps Script (~1690 linhas). TODA a lógica de negócio.
 ├── Dashboard.html   Painel (~4090 linhas): HTML + CSS + JS. 7 visões + modais.
-├── Home.html        Página inicial (170 linhas): logo, resumo, botão.
+├── Login.html       Tela de login (e-mail + senha) — abre antes de tudo.
+├── Home.html        Página inicial (170 linhas): logo, resumo, botão. Sair / Trocar senha.
 ├── serve.ps1        Servidor estático local (porta 8765) p/ preview com MOCK.
 ├── README.md        ⚠️ DESATUALIZADO — descreve a arquitetura ANTIGA (28 planilhas).
 ├── CLAUDE.md        Este arquivo.
@@ -190,6 +207,11 @@ vacation-dashboard/
 ```
 
 ### `Code.gs` — mapa das funções
+
+> Desde o login (2026-10-26) **todas** as funções abaixo têm `_` no fim no código
+> (ex.: `getVacationData_`) — só são chamáveis pela `api()`. Públicas: `doGet`, `login`,
+> `paginaLogin`, `api`. Novas: `paginaHome_`, `sessaoAtual_`, `logout_`, `trocarSenha_`,
+> `_hashSenha_`, `_conferirSenha_`, `_lerSessao_`, `_apagarSessao_`, `_ensureAcessos_`.
 
 | Função | Papel |
 |---|---|
@@ -286,6 +308,12 @@ Colunas `_seq` / `_chave` (cinza) ligam as abas e **não devem ser apagadas**.
 ---
 
 ## Cuidados (não alterar sem análise)
+
+- **Funções do `Code.gs` chamadas pelo navegador NÃO podem ficar públicas** (sem `_` no
+  fim) — passam pela `api()`. Uma função pública nova fura o login.
+- **Script do `Dashboard.html` usa `var`/`function` no topo, não `let`/`const`**: a página
+  é reescrita por `document.write` (sair → entrar de novo) e `let`/`const` no topo dão
+  "already declared" e o painel não carrega. `Login.html`/`Home.html` ficam dentro de IIFE.
 
 - **Não voltar para o modelo antigo** de varrer 27/28 planilhas de filial — foi
   substituído de propósito pelo modelo de planilha única.
