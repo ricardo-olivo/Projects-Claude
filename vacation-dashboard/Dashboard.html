@@ -1410,6 +1410,10 @@
   var fichaMat = '', fichaNome = '', fichaData = null;
   var scope = { perfil: 'rh', filiais: null, email: '' };
   function ehRH() { return !scope || scope.perfil !== 'gerente'; }
+  // Gerente Matriz: gerente que também aprova férias das filiais em scope.aprova
+  function ehMatriz() { return !ehRH() && !!(scope.aprova && scope.aprova.length); }
+  function podeAprovar(filial) { return ehRH() || !!(scope.aprova && scope.aprova.includes(filial)); }
+  function aprovaTodasMinhas() { return ehRH() || (scope.filiais || []).every(f => podeAprovar(f)); }
   var payFilter  = 'month';
   var sortCol = 'startDate';
   var expandedGroups = new Set();   // chaves de funcionário com o grupo aberto na Tabela
@@ -1541,11 +1545,16 @@
         // preview: um funcionário com vários vencimentos (testa o relatório mensal)
         const _mrob = mockEmployees.find(e => e.nome === 'Roberto Silva');
         if (_mrob) { _mrob.vencimentos = ['2026-08-09', '2027-08-09']; _mrob.vencCalc = true; }
-        // preview: ?perfil=gerente&filial=Filial 05 simula o portal do gerente
+        // preview: ?perfil=gerente&filial=Filial 05 simula o portal do gerente;
+        // ?perfil=matriz&filial=Filial 05,Filial 06 simula o Gerente Matriz
         const qs = new URLSearchParams(location.search);
-        const mockScope = qs.get('perfil') === 'gerente'
-          ? { perfil: 'gerente', filiais: [qs.get('filial') || 'Filial 05'], email: 'gerente@preview' }
-          : { perfil: 'rh', filiais: null, email: 'rh@preview' };
+        const qp = qs.get('perfil');
+        const qf = (qs.get('filial') || 'Filial 05').split(',').map(s => s.trim()).filter(Boolean);
+        const mockScope = qp === 'gerente'
+          ? { perfil: 'gerente', filiais: qf, email: 'gerente@preview', aprova: [] }
+          : qp === 'matriz'
+          ? { perfil: 'gerente', filiais: qf, email: 'matriz@preview', aprova: qf }
+          : { perfil: 'rh', filiais: null, email: 'rh@preview', aprova: null };
         const inMock = b => !mockScope.filiais || mockScope.filiais.includes(b);
         onDataLoaded(JSON.stringify({
           scope: mockScope,
@@ -1645,7 +1654,7 @@
     if (scope.perfil === 'gerente') {
       const fs = (scope.filiais || []);
       selectedBranches = fs.slice();
-      lbl.textContent = 'Portal do Gerente · ' + (fs.join(', ') || '—')
+      lbl.textContent = (ehMatriz() ? 'Portal do Gerente Matriz · ' : 'Portal do Gerente · ') + (fs.join(', ') || '—')
         + (scope.email ? ' · ' + scope.email : '');
       // trava o filtro de filial
       if (fg) {
@@ -2369,8 +2378,8 @@
     document.getElementById('modal-save-error').style.display = 'none';
     document.getElementById('btn-save-vacation').disabled = false;
     // fase 3: gerente solicita (vai para a fila do RH); RH lança já aprovado
-    document.getElementById('btn-save-vacation').textContent = ehRH() ? 'Salvar Férias' : 'Enviar para aprovação';
-    document.getElementById('modal-title').textContent = ehRH() ? 'Incluir Férias' : 'Solicitar Férias';
+    document.getElementById('btn-save-vacation').textContent = aprovaTodasMinhas() ? 'Salvar Férias' : 'Enviar para aprovação';
+    document.getElementById('modal-title').textContent = aprovaTodasMinhas() ? 'Incluir Férias' : 'Solicitar Férias';
     document.querySelectorAll('.form-error').forEach(el => el.textContent = '');
 
     populateEmployeeDatalist();
@@ -3514,7 +3523,7 @@
           rowIndex: allData.length + 2,
           returnDate: ret.toISOString().split('T')[0],
           total: tot,
-          status: ehRH() ? 'Aprovado' : 'Pendente',
+          status: podeAprovar(payload.branch) ? 'Aprovado' : 'Pendente',
         }));
       }, 700);
     }
@@ -3771,7 +3780,7 @@
     el.textContent = n;
     el.style.display = n ? '' : 'none';
     const tab = document.getElementById('tab-approvals');
-    tab.firstChild.textContent = ehRH() ? 'Aprovações' : 'Minhas solicitações';
+    tab.firstChild.textContent = (ehRH() || ehMatriz()) ? 'Aprovações' : 'Minhas solicitações';
     tab.style.display = (scope && scope.perfil === 'nenhum') ? 'none' : '';
   }
 
@@ -3783,7 +3792,7 @@
       return { rowIndex: r.rowIndex, matricula: r.matricula, nome: r.name, filial: r.branch,
         inicio: r.startDate, termino: r.endDate, dias: Number(r.total) || 0, status: 'Pendente',
         solicitadoPor: r.solicitadoPor || 'gerente@preview', solicitadoEm: '', decididoPor: '', decididoEm: '',
-        motivo: '', saldo: Number(r.availableDays) || 0, pendenteTotal: r.pendingDays || 0, sobrepoe };
+        motivo: '', saldo: Number(r.availableDays) || 0, pendenteTotal: r.pendingDays || 0, sobrepoe, podeAprovar: podeAprovar(r.branch) };
     });
     return { success: true, pendentes: pend,
       decididas: demoDecididas.filter(d => !scope.filiais || scope.filiais.includes(d.filial)), janela: 90 };
@@ -3816,7 +3825,7 @@
   }
 
   function renderAprovacoes() {
-    const rh = ehRH();
+    const rh = ehRH() || ehMatriz();   // quem aprova (RH ou Gerente Matriz)
     const d = aprData || { pendentes: [], decididas: [] };
     document.getElementById('apr-title').textContent = rh ? 'Aprovações de férias' : 'Minhas solicitações de férias';
     document.getElementById('apr-info').textContent =
@@ -3829,7 +3838,7 @@
       const conf = p.sobrepoe.length
         ? `<span class="${p.sobrepoe.length >= 2 ? 'apr-warn' : ''}" title="${escHtml(p.sobrepoe.join(', '))}">${p.sobrepoe.length} na filial</span><div class="apr-sub">${escHtml(p.sobrepoe.slice(0, 3).join(', '))}${p.sobrepoe.length > 3 ? '…' : ''}</div>`
         : '<span class="apr-sub">nenhuma</span>';
-      const acoes = rh
+      const acoes = p.podeAprovar
         ? `<button class="btn btn-ok" onclick="aprovarFerias(${i})">✓ Aprovar</button>
            <button class="btn btn-no" onclick="abrirRecusa(${i})">✕ Recusar</button>`
         : `<button class="btn btn-no" onclick="cancelarSolicitacao(${i})">Cancelar pedido</button>`;
@@ -3869,7 +3878,9 @@
         <tbody>${decRows || empty(8, 'Nenhuma decisão no período.')}</tbody>
       </table></div>
       <div class="edit-row-hint">${rh
-        ? 'Férias lançadas pelo RH já entram aprovadas e não passam por esta fila. Pedidos de gerente só descontam do saldo e liberam o Aviso em PDF depois de aprovados.'
+        ? (ehRH()
+            ? 'Férias lançadas pelo RH já entram aprovadas e não passam por esta fila. Pedidos de gerente só descontam do saldo e liberam o Aviso em PDF depois de aprovados.'
+            : 'Como Gerente Matriz, você aprova as férias de: ' + scope.aprova.join(', ') + '. Férias que você mesmo lança nessas filiais já entram aprovadas.')
         : 'Seus pedidos só descontam do saldo e liberam o Aviso em PDF depois que o RH aprovar.'}</div>`;
   }
 
@@ -3881,7 +3892,7 @@
       if (decisao === 'aprovar' && r) { r.status = 'Aprovado'; r.pendingDays = 0; r.availableDays = (Number(r.availableDays) || 0) - p.dias; }
       if (decisao === 'recusar' && r) { allData = allData.filter(x => x !== r); allData.forEach((x, i) => { x._id = i; }); }
       demoDecididas.unshift({ ...p, status: decisao === 'aprovar' ? 'Aprovado' : 'Recusado', motivo: motivo || '',
-        decididoPor: 'rh@preview', decididoEm: new Date().toISOString().slice(0, 16).replace('T', ' ') });
+        decididoPor: scope.email || 'rh@preview', decididoEm: new Date().toISOString().slice(0, 16).replace('T', ' ') });
       applyFilters(); renderStats(); atualizaContadorAprov(); renderAlerts();
       aprData = mockAprovacoes(); renderAprovacoes();
       return true;

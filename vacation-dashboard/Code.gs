@@ -188,7 +188,7 @@ function login(email, senha) {
 
 function sessaoAtual_() {
   const s = _scopeAtual_();
-  return JSON.stringify({ success: true, email: s.email, perfil: s.perfil, filiais: s.filiais });
+  return JSON.stringify({ success: true, email: s.email, perfil: s.perfil, filiais: s.filiais, aprova: s.aprova });
 }
 
 function logout_() {
@@ -296,18 +296,53 @@ function _scopeAtual_() {
   });
   if (!meus.length) return { email: email, perfil: 'nenhum', filiais: [] };
 
-  const ehRH = meus.some(function (r) {
-    return String(r[AC.PERFIL] || '').trim().toLowerCase() === 'rh';
-  });
-  if (ehRH) return { email: email, perfil: 'rh', filiais: null };
+  const ehRH = meus.some(function (r) { return _perfilAcesso_(r[AC.PERFIL]) === 'rh'; });
+  if (ehRH) return { email: email, perfil: 'rh', filiais: null, aprova: null };
 
-  const filiais = meus.map(function (r) { return String(r[AC.FILIAL] || '').trim(); })
-    .filter(function (x) { return x; });
-  return { email: email, perfil: 'gerente', filiais: filiais };
+  // "Gerente Matriz" = gerente (mesmas restrições) que também APROVA férias das
+  // filiais das linhas dele marcadas como Gerente Matriz.
+  const filiais = [], aprova = [];
+  meus.forEach(function (r) {
+    const f = String(r[AC.FILIAL] || '').trim();
+    if (!f) return;
+    if (filiais.indexOf(f) < 0) filiais.push(f);
+    if (_perfilAcesso_(r[AC.PERFIL]) === 'matriz' && aprova.indexOf(f) < 0) aprova.push(f);
+  });
+  return { email: email, perfil: 'gerente', filiais: filiais, aprova: aprova };
+}
+
+// Texto da coluna Perfil -> 'rh' | 'matriz' | 'gerente'
+// ("Gerente Matriz", "gerente_matriz", "Matriz" contam como matriz)
+function _perfilAcesso_(v) {
+  const s = String(v || '').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  if (s === 'rh') return 'rh';
+  if (s.indexOf('matriz') >= 0) return 'matriz';
+  return 'gerente';
 }
 
 function _noEscopo_(scope, filial) {
   return !scope.filiais || scope.filiais.indexOf(String(filial || '').trim()) >= 0;
+}
+
+// Pode aprovar/recusar férias desta filial? (RH: todas; Gerente Matriz: as dele)
+function _podeAprovar_(scope, filial) {
+  if (scope.perfil === 'rh') return true;
+  return !!(scope.aprova && scope.aprova.indexOf(String(filial || '').trim()) >= 0);
+}
+
+// E-mails de quem aprova uma filial: RH + Gerentes Matriz daquela filial
+function _emailsAprovadores_(filial) {
+  try {
+    const f = String(filial || '').trim();
+    const out = [];
+    _rows_(TAB.ACESSOS).forEach(function (r) {
+      const p = _perfilAcesso_(r[AC.PERFIL]);
+      const e = String(r[AC.EMAIL] || '').trim().toLowerCase();
+      if (!e) return;
+      if ((p === 'rh' || (p === 'matriz' && String(r[AC.FILIAL] || '').trim() === f)) && out.indexOf(e) < 0) out.push(e);
+    });
+    return out;
+  } catch (e) { return []; }
 }
 
 // Resumo para a página inicial
@@ -339,6 +374,7 @@ function getResumoHome_() {
     return JSON.stringify({
       ok: true,
       perfil: scope.perfil,
+      aprova: (scope.aprova || []).length > 0,
       email: scope.email,
       escopo: scope.filiais ? scope.filiais.join(', ') : 'Todas as filiais',
       funcionarios: nFunc,
@@ -557,7 +593,7 @@ function getVacationData_() {
     paymentErrors: payment.errors,
     totals: tot,
     employees: outEmp,
-    scope: { perfil: scope.perfil, filiais: scope.filiais, email: scope.email },
+    scope: { perfil: scope.perfil, filiais: scope.filiais, email: scope.email, aprova: scope.aprova },
   });
 }
 
@@ -1039,9 +1075,10 @@ function addVacationRecord_(payload) {
     const chave = String(matRaw) + '-' + seq;
     const nr = sh.getLastRow() + 1;
 
-    // fase 3: gerente SOLICITA (Pendente, não desconta saldo); RH já lança aprovado
+    // fase 3: gerente SOLICITA (Pendente, não desconta saldo); RH e Gerente Matriz
+    // (nas filiais que ele aprova) já lançam aprovado
     const agora = new Date();
-    const status = scope.perfil === 'gerente' ? ST.PEND : ST.APROV;
+    const status = _podeAprovar_(scope, match[F.FILIAL]) ? ST.APROV : ST.PEND;
     const quem = scope.email || (scope.perfil === 'gerente' ? 'gerente' : 'RH');
 
     // grava só VALORES (nada de fórmula — evita erro de separador/locale no Sheets).
@@ -1061,7 +1098,7 @@ function addVacationRecord_(payload) {
     sh.getRange(nr, L.DECID_EM + 1).setNumberFormat('dd/mm/yyyy hh:mm');
 
     if (status === ST.PEND) {
-      _notificar_(_emailsRH_(), 'Nova solicitação — ' + name + ' (' + String(match[F.FILIAL] || '').trim() + ')',
+      _notificar_(_emailsAprovadores_(match[F.FILIAL]), 'Nova solicitação — ' + name + ' (' + String(match[F.FILIAL] || '').trim() + ')',
         quem + ' solicitou férias para ' + name + ' de ' + formatDateBR_(formatDate_(start))
         + ' a ' + formatDateBR_(formatDate_(end)) + ' (' + total + ' dias).\nAbra a aba "Aprovações" do painel para aprovar ou recusar.');
     }
@@ -1641,13 +1678,14 @@ function getAprovacoes_(dias) {
         saldo: saldoOf(m),
         pendenteTotal: pend[m] || 0,
         sobrepoe: sobrepoe,
+        podeAprovar: _podeAprovar_(scope, f.filial),
       };
       (st === ST.PEND ? pendentes : decididas).push(item);
     });
     pendentes.sort(function (a, b) { return a.inicio < b.inicio ? -1 : a.inicio > b.inicio ? 1 : 0; });
     decididas.sort(function (a, b) { return a.decididoEm > b.decididoEm ? -1 : a.decididoEm < b.decididoEm ? 1 : 0; });
 
-    return JSON.stringify({ success: true, perfil: scope.perfil, pendentes: pendentes, decididas: decididas, janela: janela });
+    return JSON.stringify({ success: true, perfil: scope.perfil, aprova: scope.aprova, pendentes: pendentes, decididas: decididas, janela: janela });
   } catch (e) { return _err_(e.message); }
 }
 
@@ -1656,7 +1694,8 @@ function getAprovacoes_(dias) {
 function decidirFerias_(payload) {
   try {
     const scope = _scopeAtual_();
-    if (scope.perfil !== 'rh') return _err_('Só o RH pode aprovar ou recusar férias.');
+    if (scope.perfil !== 'rh' && !(scope.aprova && scope.aprova.length))
+      return _err_('Só o RH ou o Gerente Matriz podem aprovar ou recusar férias.');
     const row = Number(payload && payload.rowIndex);
     if (!row || row < 2) return _err_('Linha inválida.');
     const decisao = String(payload.decisao || '').toLowerCase();
@@ -1675,18 +1714,22 @@ function decidirFerias_(payload) {
     if (_statusLanc_(cur) !== ST.PEND)
       return _err_('Esta solicitação já foi decidida (' + _statusLanc_(cur).toLowerCase() + '). Recarregue o painel.');
 
+    // Gerente Matriz só decide as filiais que ele aprova (confere pela filial do funcionário)
+    const frDec = _rows_(TAB.FUNC).find(function (r) { return _mk_(r[F.MAT]) === _mk_(cur[L.MAT]); });
+    if (scope.perfil !== 'rh' && (!frDec || !_podeAprovar_(scope, frDec[F.FILIAL])))
+      return _err_('Você não pode aprovar férias desta filial.');
+
     const novo = decisao === 'aprovar' ? ST.APROV : ST.RECUS;
     const agora = new Date();
     sh.getRange(row, L.STATUS + 1).setValue(novo);
     sh.getRange(row, L.DECID_POR + 1, 1, 3).setValues([[scope.email || 'RH', agora, motivo]]);
     sh.getRange(row, L.DECID_EM + 1).setNumberFormat('dd/mm/yyyy hh:mm');
 
-    const fr = _rows_(TAB.FUNC).find(function (r) { return _mk_(r[F.MAT]) === _mk_(cur[L.MAT]); });
-    const nome = fr ? String(fr[F.NOME] || '').trim() : String(cur[L.MAT]);
+    const nome = frDec ? String(frDec[F.NOME] || '').trim() : String(cur[L.MAT]);
     _notificar_([String(cur[L.SOLIC_POR] || '').trim().toLowerCase()],
       'Férias ' + novo.toLowerCase() + 's — ' + nome,
       'As férias de ' + nome + ' (' + formatDateBR_(formatDate_(cur[L.INICIO])) + ' a '
-      + formatDateBR_(formatDate_(cur[L.TERMINO])) + ') foram ' + novo.toLowerCase() + 's pelo RH.'
+      + formatDateBR_(formatDate_(cur[L.TERMINO])) + ') foram ' + novo.toLowerCase() + 's por ' + (scope.email || 'RH') + '.'
       + (motivo ? '\nMotivo: ' + motivo : ''));
 
     return JSON.stringify({ success: true, status: novo });

@@ -231,7 +231,7 @@
             document.getElementById('btn').classList.add('off');
             document.getElementById('btn').textContent = 'Acesso pendente';
           } else {
-            var perfil = r.perfil === 'rh' ? 'RH' : 'Gerente';
+            var perfil = r.perfil === 'rh' ? 'RH' : (r.aprova ? 'Gerente Matriz' : 'Gerente');
             quem.innerHTML = (r.email ? '<b>' + r.email + '</b> · ' : '') + perfil + ' · ' + r.escopo;
           }
         }, function () {

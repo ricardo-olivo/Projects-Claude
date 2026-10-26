@@ -165,6 +165,13 @@ max(0,  Σ direito dos períodos com concessão já vencida
 - `_ensureAcessos_` cria a aba / cabeçalho e inclui `USUARIO_INICIAL` (rfolivo@gmail.com,
   RH) **uma única vez** (Script Property `SEED_ACESSOS`).
 - 5 senhas erradas → e-mail bloqueado 15 min. Sessão expira após 6 h sem uso.
+- **Perfis (coluna C)**: `RH` (todas as filiais, tudo) · `Gerente` (só as filiais das linhas
+  dele, só solicita) · **`Gerente Matriz`** (como Gerente — mesmas travas de editar/apagar —
+  mas **aprova/recusa** férias das filiais das linhas marcadas como Gerente Matriz, e o que
+  ele lança nelas já entra Aprovado). No servidor o Matriz é `perfil: "gerente"` +
+  `scope.aprova = [filiais]` (`_perfilAcesso_`, `_podeAprovar_`); assim todas as checagens
+  `perfil === "gerente"` continuam bloqueando edição. Pedido novo notifica RH + Matriz da
+  filial (`_emailsAprovadores_`). Preview: `?perfil=matriz&filial=Filial 05,Filial 06`.
 - E-mail sem linha na aba `Acessos` → **sem acesso** (`perfil: "nenhum"`); se a linha for
   removida, a sessão cai na próxima chamada.
 - `RH` = filiais `null` (todas). `Gerente` = lista de filiais das linhas dele.
