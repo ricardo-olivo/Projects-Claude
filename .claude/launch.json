@@ -18,6 +18,12 @@
       "runtimeExecutable": "powershell",
       "runtimeArgs": ["-ExecutionPolicy", "Bypass", "-File", "farmacias-dashboard/serve.ps1"],
       "port": 51873
+    },
+    {
+      "name": "comparativo-vendas",
+      "runtimeExecutable": "powershell",
+      "runtimeArgs": ["-ExecutionPolicy", "Bypass", "-File", "comparativo-vendas/serve.ps1"],
+      "port": 51874
     }
   ]
 }
