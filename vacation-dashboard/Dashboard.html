@@ -2349,6 +2349,12 @@
   // Lista única de funcionários (nome + filial) a partir dos dados carregados
   function currentEmployees() {
     const map = new Map();
+    // cadastro completo (inclui SEM registro, que só entram em allData depois da 1ª férias)
+    allEmployees.forEach(e => {
+      if (!e.nome || e.ativo === false) return;
+      const key = e.nome + '|' + (e.filial || '');
+      if (!map.has(key)) map.set(key, { name: e.nome, branch: e.filial || '' });
+    });
     allData.forEach(r => {
       if (!r.name) return;
       if (r.ativo === false) return;   // desligado — não entra em novas férias
