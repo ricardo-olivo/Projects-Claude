@@ -1108,6 +1108,13 @@
           <span class="calc-hint">Dias corridos (inclusive)</span>
         </div>
       </div>
+      <div class="form-row" id="m-periodo-row" style="display:none">
+        <div class="form-group full">
+          <label for="m-periodo">Período aquisitivo</label>
+          <select id="m-periodo"></select>
+          <span class="calc-hint" id="m-periodo-hint">Automático = último período já completo antes do início das férias</span>
+        </div>
+      </div>
       <div id="modal-save-error" class="error-banner" style="display:none"></div>
     </div>
     <div class="modal-footer">
@@ -1123,6 +1130,7 @@
     <div class="modal-header">
       <h3 id="ficha-title">Ficha do Funcionário</h3>
       <div class="no-print" style="display:flex;gap:8px;align-items:center">
+        <button class="btn btn-secondary rh-only" id="ficha-edit-btn" style="padding:6px 12px;font-size:12px;display:none" onclick="openEmpEdit()">✏ Editar</button>
         <button class="btn btn-secondary rh-only" id="ficha-status-btn" style="padding:6px 12px;font-size:12px;display:none" onclick="toggleEmpStatus()">Marcar inativo</button>
         <button class="btn btn-secondary" style="padding:6px 12px;font-size:12px" onclick="printFicha()">🖨 Imprimir</button>
         <button class="modal-close" onclick="closeFicha()" aria-label="Fechar">×</button>
@@ -1222,7 +1230,7 @@
             <option value="sim">Sim</option>
             <option value="nao">Não</option>
           </select>
-          <span class="calc-hint">"Sim" já cria o 1º período aquisitivo</span>
+          <span class="calc-hint" id="e-reg-hint">"Sim" já cria o 1º período aquisitivo</span>
         </div>
         <div class="form-group">
           <label for="e-saldo">Saldo inicial de férias</label>
@@ -1242,6 +1250,29 @@
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeEmpModal()">Cancelar</button>
       <button class="btn btn-primary" id="btn-save-emp" onclick="submitAddEmployee()">Salvar Funcionário</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL TROCAR PERÍODO AQUISITIVO DE UMAS FÉRIAS (ficha, só RH) -->
+<div class="modal-overlay" id="lper-overlay" onclick="if(event.target===this)fecharLancPeriodo()">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="lper-title">
+    <div class="modal-header">
+      <h3 id="lper-title">Período aquisitivo das férias</h3>
+      <button class="modal-close" onclick="fecharLancPeriodo()" aria-label="Fechar">×</button>
+    </div>
+    <div class="modal-body">
+      <p id="lper-desc" style="font-size:13px;color:var(--gray-700);margin-bottom:12px"></p>
+      <div class="form-group">
+        <label for="lper-sel">Período aquisitivo</label>
+        <select id="lper-sel"></select>
+        <span class="calc-hint">Não muda o saldo — define qual período aparece no Aviso de Férias em PDF.</span>
+      </div>
+      <div id="lper-error" class="error-banner" style="display:none"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="fecharLancPeriodo()">Cancelar</button>
+      <button class="btn btn-primary" id="lper-save" onclick="salvarLancPeriodo()">Salvar</button>
     </div>
   </div>
 </div>
@@ -2348,6 +2379,35 @@
       document.getElementById('m-branch').value = matches[0].branch;
       clearFieldError('m-branch');
     }
+    fillPeriodoSelect();
+  }
+
+  // ── PERÍODO AQUISITIVO NO "INCLUIR FÉRIAS" ────────────────
+  // funcionário escolhido no modal (nome + filial) → registro de allEmployees
+  function empDoModal() {
+    const nm = document.getElementById('m-name').value.trim().toLowerCase();
+    const br = document.getElementById('m-branch').value;
+    if (!nm) return null;
+    return allEmployees.find(e => (e.nome || '').toLowerCase() === nm && (!br || e.filial === br)) || null;
+  }
+  // mesma regra do servidor: último período já completo antes do início; senão o 1º
+  function autoPeriodo(ps, startISO) {
+    if (!ps.length || !startISO) return '';
+    const c = ps.filter(p => p.fim && p.fim < startISO);
+    return (c.length ? c[c.length - 1] : ps[0]).label;
+  }
+  function fillPeriodoSelect() {
+    const row = document.getElementById('m-periodo-row');
+    const sel = document.getElementById('m-periodo');
+    const e = empDoModal();
+    const ps = (e && e.periodos) || [];
+    if (!ps.length) { row.style.display = 'none'; sel.innerHTML = ''; return; }
+    const prev = sel.value;
+    const auto = autoPeriodo(ps, document.getElementById('m-start').value);
+    sel.innerHTML = `<option value="">Automático${auto ? ' → ' + escHtml(auto) : ''}</option>`
+      + ps.map(p => `<option value="${escHtml(p.label)}">${escHtml(p.label)} (${fmtDateBR(p.ini)} a ${fmtDateBR(p.fim)})</option>`).join('');
+    if (prev && ps.some(p => p.label === prev)) sel.value = prev;
+    row.style.display = '';
   }
 
   function openAddModal() {
@@ -2382,6 +2442,9 @@
     document.getElementById('modal-title').textContent = aprovaTodasMinhas() ? 'Incluir Férias' : 'Solicitar Férias';
     document.querySelectorAll('.form-error').forEach(el => el.textContent = '');
 
+    document.getElementById('m-periodo').innerHTML = '';
+    document.getElementById('m-periodo-row').style.display = 'none';
+
     populateEmployeeDatalist();
     document.getElementById('modal-overlay').classList.add('open');
     document.getElementById('m-name').focus();
@@ -2396,7 +2459,7 @@
   }
 
   document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') { closeAddModal(); closeFicha(); fecharNovoPeriodo(); closeEmpModal(); closeKpi(); fecharAjuste(); fecharVenc(); fecharRecusa(); }
+    if (e.key === 'Escape') { closeAddModal(); closeFicha(); fecharNovoPeriodo(); closeEmpModal(); closeKpi(); fecharAjuste(); fecharVenc(); fecharRecusa(); fecharLancPeriodo(); }
   });
 
   // ── DETALHE DOS CARDS DE RESUMO (KPIs) ───────────────────
@@ -2534,9 +2597,39 @@
     document.getElementById('btn-save-emp').disabled = false;
     document.getElementById('btn-save-emp').textContent = 'Salvar Funcionário';
     ['e-nome','e-filial','e-adm','e-mat','e-saldo'].forEach(clearFieldError);
+    setEmpModo(null);
 
     document.getElementById('emp-overlay').classList.add('open');
     document.getElementById('e-nome').focus();
+  }
+
+  // ── EDITAR FUNCIONÁRIO (mesmo modal do cadastro; só RH) ───
+  var empEditMat = null;   // matrícula em edição; null = cadastro novo
+
+  function setEmpModo(mat) {
+    empEditMat = mat;
+    const ed = mat != null;
+    document.getElementById('emp-title').textContent = ed ? 'Editar Funcionário' : 'Cadastrar Funcionário';
+    document.getElementById('btn-save-emp').textContent = ed ? 'Salvar alterações' : 'Salvar Funcionário';
+    document.getElementById('e-mat').disabled = ed;   // matrícula é a chave — não muda
+    document.getElementById('e-reg-hint').textContent = ed
+      ? 'Mudar a admissão não recalcula os períodos já cadastrados'
+      : '"Sim" já cria o 1º período aquisitivo';
+  }
+
+  function openEmpEdit() {
+    if (!ehRH() || !fichaData) return;
+    const f = fichaData.func, s = fichaData.saldo || {};
+    openEmpModal();
+    setEmpModo(String(f.matricula));
+    document.getElementById('e-nome').value   = f.nome || '';
+    document.getElementById('e-filial').value = f.filial || '';
+    document.getElementById('e-cargo').value  = f.cargo || '';
+    document.getElementById('e-adm').value    = f.admissao || '';
+    document.getElementById('e-mat').value    = f.matricula;
+    document.getElementById('e-reg').value    = f.registrado ? 'sim' : 'nao';
+    document.getElementById('e-saldo').value  = (s.inicial == null || s.inicial === '') ? 0 : s.inicial;
+    document.getElementById('e-ctps').value   = f.ctps || '';
   }
 
   function closeEmpModal() {
@@ -2561,7 +2654,7 @@
     if (!filial) setErr('e-filial', 'Informe a filial');
     if (!adm)    setErr('e-adm', 'Informe a admissão');
     if (!mat)    setErr('e-mat', 'Informe a matrícula');
-    else if (allEmployees.some(e => String(e.matricula).replace(/^0+/, '') === mat.replace(/^0+/, '')))
+    else if (empEditMat == null && allEmployees.some(e => String(e.matricula).replace(/^0+/, '') === mat.replace(/^0+/, '')))
       setErr('e-mat', 'Já existe funcionário com essa matrícula');
     if (saldo !== '' && isNaN(Number(saldo))) setErr('e-saldo', 'Saldo inválido');
     return ok;
@@ -2569,6 +2662,7 @@
 
   function submitAddEmployee() {
     if (!validateEmpModal()) return;
+    if (empEditMat != null) return submitEditEmployee();
 
     const payload = {
       matricula:    document.getElementById('e-mat').value.trim(),
@@ -2641,6 +2735,50 @@
     } else {
       setTimeout(() => onSuccess(JSON.stringify({ success: true, matricula: payload.matricula })), 500);
     }
+  }
+
+  function submitEditEmployee() {
+    const mat = empEditMat;
+    const payload = {
+      matricula:    mat,
+      nome:         document.getElementById('e-nome').value.trim(),
+      filial:       document.getElementById('e-filial').value.trim(),
+      cargo:        document.getElementById('e-cargo').value.trim(),
+      admissao:     document.getElementById('e-adm').value,
+      registrado:   document.getElementById('e-reg').value === 'sim',
+      saldoInicial: Number(document.getElementById('e-saldo').value) || 0,
+      ctps:         document.getElementById('e-ctps').value.trim(),
+    };
+    const btn = document.getElementById('btn-save-emp');
+    const err = document.getElementById('emp-save-error');
+    btn.disabled = true; btn.textContent = 'Salvando…'; err.style.display = 'none';
+    const falhou = msg => {
+      btn.disabled = false; btn.textContent = 'Salvar alterações';
+      err.textContent = 'Erro: ' + msg; err.style.display = 'block';
+    };
+    const ok = () => {
+      closeEmpModal();
+      setEmpModo(null);
+      if (typeof google !== 'undefined' && google.script) {
+        loadData();
+        openFichaFor(mat, payload.nome);
+        return;
+      }
+      // demo: espelha a alteração nos dados carregados
+      const e = allEmployees.find(x => _mkFront(x.matricula) === _mkFront(mat));
+      if (e) Object.assign(e, { nome: payload.nome, filial: payload.filial, cargo: payload.cargo, registrado: payload.registrado });
+      allData.forEach(r => { if (_mkFront(r.matricula) === _mkFront(mat)) { r.name = payload.nome; r.branch = payload.filial; } });
+      applyFilters(); renderEmployees();
+      openFichaFor(mat, payload.nome);
+    };
+    if (typeof google === 'undefined' || !google.script) { setTimeout(ok, 300); return; }
+    gsRun()
+      .withSuccessHandler(txt => {
+        let r; try { r = JSON.parse(txt); } catch (e) { r = { success: false, error: 'Resposta inválida.' }; }
+        if (r.success) ok(); else falhou(r.error || 'não foi possível salvar.');
+      })
+      .withFailureHandler(e => falhou((e && e.message) || e))
+      .updateEmployee(payload);
   }
 
   // ── FICHA DO FUNCIONÁRIO ──────────────────────────────────
@@ -3211,6 +3349,52 @@
       .deleteVacationRecord({ rowIndex: r.rowIndex, matricula: r.matricula, inicio: r.startDate });
   }
 
+  // ── TROCAR O PERÍODO AQUISITIVO DE FÉRIAS JÁ LANÇADAS (só RH) ──
+  var lperIdx = null;   // índice em fichaData.lancamentos
+
+  function abrirLancPeriodo(i) {
+    const l = fichaData && fichaData.lancamentos[i];
+    if (!l) return;
+    lperIdx = i;
+    document.getElementById('lper-desc').textContent =
+      'Férias de ' + fmtDateBR(l.inicio) + ' a ' + fmtDateBR(l.termino) + ' (' + (l.dias || '?') + ' dias).';
+    const sel = document.getElementById('lper-sel');
+    sel.innerHTML = fichaData.periodos.map(p =>
+      `<option value="${escHtml(p.periodo)}">${escHtml(p.periodo)} (${fmtDateBR(p.iniAq)} a ${fmtDateBR(p.fimAq)})</option>`).join('');
+    if (fichaData.periodos.some(p => p.periodo === l.periodo)) sel.value = l.periodo;
+    document.getElementById('lper-error').style.display = 'none';
+    const b = document.getElementById('lper-save'); b.disabled = false; b.textContent = 'Salvar';
+    document.getElementById('lper-overlay').classList.add('open');
+  }
+
+  function fecharLancPeriodo() {
+    document.getElementById('lper-overlay').classList.remove('open');
+    lperIdx = null;
+  }
+
+  function salvarLancPeriodo() {
+    const l = fichaData && fichaData.lancamentos[lperIdx];
+    if (!l) return;
+    const periodo = document.getElementById('lper-sel').value;
+    const b = document.getElementById('lper-save'), err = document.getElementById('lper-error');
+    if (periodo === l.periodo) return fecharLancPeriodo();
+    b.disabled = true; b.textContent = 'Salvando…'; err.style.display = 'none';
+    if (typeof google === 'undefined' || !google.script) {   // preview
+      l.periodo = periodo; fecharLancPeriodo(); renderFicha(fichaData); return;
+    }
+    gsRun()
+      .withSuccessHandler(txt => {
+        let r; try { r = JSON.parse(txt); } catch (e) { r = { success: false, error: 'Resposta inválida.' }; }
+        if (r.success) { fecharLancPeriodo(); openFichaFor(fichaMat, fichaNome); }
+        else { b.disabled = false; b.textContent = 'Salvar'; err.textContent = 'Erro: ' + (r.error || ''); err.style.display = 'block'; }
+      })
+      .withFailureHandler(e => {
+        b.disabled = false; b.textContent = 'Salvar';
+        err.textContent = 'Erro: ' + ((e && e.message) || e); err.style.display = 'block';
+      })
+      .updateLancamentoPeriodo({ rowIndex: l.rowIndex, matricula: fichaMat, inicio: l.inicio, periodo });
+  }
+
   function fichaStatusClass(t) {
     t = (t || '').toLowerCase();
     if (t.indexOf('vencido') >= 0) return 'fs-crit';
@@ -3257,6 +3441,8 @@
     const val = n => (n == null || n === '') ? '—' : n;
 
     // botão ativar/inativar no cabeçalho (só RH, só com matrícula real)
+    const btnE = document.getElementById('ficha-edit-btn');
+    if (btnE) btnE.style.display = (ehRH() && f.matricula && String(f.matricula) !== '—') ? '' : 'none';
     const btnS = document.getElementById('ficha-status-btn');
     if (btnS) {
       const podeMexer = ehRH() && f.matricula && String(f.matricula) !== '—';
@@ -3296,8 +3482,9 @@
     };
     const lanTbl = d.lancamentos.length ? `<div class="ficha-tbl-wrap"><table class="ficha-tbl">
         <thead><tr><th>Período</th><th>Parc.</th><th>Início</th><th>Término</th><th>Retorno útil</th><th>Dias</th><th>Tipo</th><th>Status</th><th class="no-print">Aviso</th></tr></thead>
-        <tbody>${d.lancamentos.map(l => `<tr${l.status === 'Recusado' ? ' style="opacity:.6"' : ''}>
-          <td>${escHtml(l.periodo || '—')}</td>
+        <tbody>${d.lancamentos.map((l, li) => `<tr${l.status === 'Recusado' ? ' style="opacity:.6"' : ''}>
+          <td style="white-space:nowrap">${escHtml(l.periodo || '—')}${(ehRH() && l.rowIndex && d.periodos.length && l.status !== 'Recusado')
+            ? ` <button class="mini-btn no-print" title="Trocar o período aquisitivo" onclick="abrirLancPeriodo(${li})">✏</button>` : ''}</td>
           <td style="text-align:center">${val(l.parcela)}</td>
           <td>${fmtDateBR(l.inicio)}</td>
           <td>${fmtDateBR(l.termino)}</td>
@@ -3383,6 +3570,7 @@
   }
 
   function calcModalDates() {
+    fillPeriodoSelect();   // "Automático → período" depende do início
     const start = document.getElementById('m-start').value;
     const end   = document.getElementById('m-end').value;
     if (!start || !end) {
@@ -3444,6 +3632,7 @@
       name:      document.getElementById('m-name').value.trim(),
       startDate: document.getElementById('m-start').value,
       endDate:   document.getElementById('m-end').value,
+      periodo:   document.getElementById('m-periodo').value || '',   // '' = automático
     };
 
     const btn = document.getElementById('btn-save-vacation');

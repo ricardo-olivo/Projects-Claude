@@ -239,6 +239,9 @@ vacation-dashboard/
 | `addPeriodoAquisitivo(payload)` | grava período na aba Periodos (só RH) |
 | `updatePeriodoAquisitivo(payload)` / `deletePeriodoAquisitivo(payload)` | edita / apaga uma linha da aba Periodos pelo `rowIndex` (confere a matrícula, recalcula fim/concessão/direito/situação) — só RH. `getEmployeeFicha` devolve `rowIndex` e `faltas` em cada período |
 | `addEmployee(payload)` | cadastra funcionário na aba Func (só RH); matrícula sugerida/editável; se registrado, cria o 1º período aquisitivo |
+| `updateEmployee(payload)` | edita Nome/Filial/Cargo/Admissão/Saldo inicial/Registrado/CTPS na aba Func (só RH). Matrícula não muda. Admissão nova **não** recalcula períodos já cadastrados. Front: botão "✏ Editar" na ficha (mesmo modal do cadastro, `empEditMat`) |
+| `updateLancamentoPeriodo(payload)` | troca a coluna Período de um lançamento (`{rowIndex, matricula, inicio, periodo}`) — só RH; ✏ no histórico da ficha. Não mexe no saldo, só no Aviso PDF |
+| `_periodosDe_(mat)` | períodos de uma matrícula `[{label, raw, ini, fim}]`. `getVacationData.employees[].periodos` usa isso p/ o select do "Incluir Férias". **Período automático do `addVacationRecord`** = último período já completo antes do início das férias (antes: sempre o mais recente); `payload.periodo` força um período |
 | `setEmployeeStatus(payload)` | grava `Func.Situação` = Ativo/Inativo (desligamento) — só RH. `getVacationData`/`getEmployeeFicha` devolvem `ativo` |
 | `addAjuste(payload)` | grava linha na aba `Ajustes` (Data · Dias ± · Observação) — só RH. Dias vazio/0 = só observação (não mexe no saldo) |
 | `updateAjuste(payload)` / `deleteAjuste(payload)` | edita / apaga uma linha da aba `Ajustes` pelo `rowIndex` (confere a matrícula) — só RH. `getEmployeeFicha` devolve `rowIndex` em cada ajuste |

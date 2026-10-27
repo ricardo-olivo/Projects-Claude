@@ -122,7 +122,8 @@ const API = {
   deleteVacationRecord: deleteVacationRecord_,
   addPeriodoAquisitivo: addPeriodoAquisitivo_, updatePeriodoAquisitivo: updatePeriodoAquisitivo_,
   deletePeriodoAquisitivo: deletePeriodoAquisitivo_,
-  addEmployee: addEmployee_, setEmployeeStatus: setEmployeeStatus_,
+  addEmployee: addEmployee_, updateEmployee: updateEmployee_, setEmployeeStatus: setEmployeeStatus_,
+  updateLancamentoPeriodo: updateLancamentoPeriodo_,
   setEmployeeVencimento: setEmployeeVencimento_,
   addAjuste: addAjuste_, updateAjuste: updateAjuste_, deleteAjuste: deleteAjuste_,
   getAprovacoes: getAprovacoes_, decidirFerias: decidirFerias_,
@@ -559,6 +560,9 @@ function getVacationData_() {
       pendente: pend[mat] || 0,
       vencimento: dueOf(mat),
       vencimentos: temCalc ? concISO : (vencManual ? [vencManual] : []),
+      periodos: _periodosDe_(mat, per).map(function (p) {
+        return { label: p.label, ini: formatDate_(p.ini), fim: formatDate_(p.fim) };
+      }),
       vencManual: vencManual,
       vencCalc: temCalc,
       situacao: sit,
@@ -685,6 +689,7 @@ function getEmployeeFicha_(matricula) {
         filial: String(fr[F.FILIAL] || '').trim(),
         cargo: String(fr[F.CARGO] || '').trim(),
         admissao: formatDate_(fr[F.ADMISSAO]),
+        ctps: String(fr[F.CTPS] || '').trim(),
         situacao: String(fr[F.SITUACAO] || '').trim(),
         ativo: String(fr[F.SITUACAO] || '').trim().toLowerCase() !== 'inativo',
         registrado: reg !== 'não' && reg !== 'nao',
@@ -1038,14 +1043,20 @@ function addVacationRecord_(payload) {
     const mat = _mk_(matRaw);
     if (!mat) return _err_('O funcionário "' + name + '" está sem matrícula na aba Func. Preencha a coluna Matrícula e tente de novo.');
 
-    // período aquisitivo mais recente
+    // período aquisitivo: o escolhido no formulário (payload.periodo) ou, automático,
+    // o último período JÁ COMPLETO antes do início das férias (férias antecipadas,
+    // sem nenhum completo => o 1º período). Antes usava sempre o mais recente,
+    // o que ligava férias antigas a um período ainda em formação.
     let periodoRaw = '';
-    const per = _rows_(TAB.PERIODOS).filter(function (r) {
-      return _mk_(r[P.MAT]) === mat;
-    });
-    if (per.length) {
-      per.sort(function (a, b) { return (toDate_(a[P.INI_AQ]) || 0) - (toDate_(b[P.INI_AQ]) || 0); });
-      periodoRaw = per[per.length - 1][P.PERIODO];
+    const pers = _periodosDe_(mat);
+    const escolhido = String(payload.periodo || '').trim();
+    if (escolhido) {
+      const pe = pers.find(function (p) { return p.label === escolhido; });
+      if (!pe) return _err_('Período "' + escolhido + '" não existe para este funcionário.');
+      periodoRaw = pe.raw;
+    } else if (pers.length) {
+      const completos = pers.filter(function (p) { return p.fim && p.fim < start; });
+      periodoRaw = (completos.length ? completos[completos.length - 1] : pers[0]).raw;
     }
 
     const sh = _sheet_(TAB.LANCAMENTOS);
@@ -1375,6 +1386,88 @@ function addEmployee_(payload) {
       periodo: periodo, periodoAviso: periodoAviso,
     });
   } catch (e) { return _err_(e.message); }
+}
+
+// ============================================================
+// EDITAR FUNCIONÁRIO — reescreve Nome/Filial/Cargo/Admissão/Saldo inicial/
+// Registrado/CTPS da linha na aba Func (só RH). A matrícula NÃO muda (é a
+// chave que liga Periodos/Lancamentos/Ajustes). Mudar a admissão não recalcula
+// os períodos aquisitivos já cadastrados — eles são editados na ficha.
+// payload = { matricula, nome, filial, cargo, admissao, saldoInicial, registrado, ctps }
+// ============================================================
+function updateEmployee_(payload) {
+  try {
+    if (_scopeAtual_().perfil !== 'rh')
+      return _err_('Só o RH pode editar funcionário.');
+    payload = payload || {};
+    const mat = _mk_(payload.matricula);
+    if (!mat) return _err_('Matrícula não informada.');
+    const nome   = String(payload.nome   || '').trim();
+    const filial = String(payload.filial || '').trim();
+    if (!nome)   return _err_('Nome é obrigatório.');
+    if (!filial) return _err_('Filial é obrigatória.');
+    const adm = toDate_(payload.admissao);
+    if (!adm) return _err_('Data de admissão inválida.');
+    const saldoN = Number(payload.saldoInicial);
+    if (isNaN(saldoN)) return _err_('Saldo inicial inválido.');
+    const regStr = String(payload.registrado).toLowerCase();
+    const registrado = payload.registrado !== false && regStr !== 'não' && regStr !== 'nao' && regStr !== 'false';
+
+    const rows = _rows_(TAB.FUNC);
+    const idx = rows.findIndex(function (r) { return _mk_(r[F.MAT]) === mat; });
+    if (idx < 0) return _err_('Funcionário não encontrado: ' + mat);
+
+    const sh = _sheet_(TAB.FUNC);
+    const row = idx + 2;
+    // B..E (Nome, Filial, Cargo, Admissão), G..H (Saldo inicial, Registrado), I (CTPS)
+    sh.getRange(row, F.NOME + 1, 1, 4).setValues([[nome, filial, String(payload.cargo || '').trim(), adm]]);
+    sh.getRange(row, F.ADMISSAO + 1).setNumberFormat('dd/mm/yyyy');
+    sh.getRange(row, F.SALDO_INI + 1, 1, 2).setValues([[saldoN, registrado ? 'Sim' : 'Não']]);
+    if (sh.getMaxColumns() > F.CTPS) sh.getRange(row, F.CTPS + 1).setValue(String(payload.ctps || '').trim());
+
+    return JSON.stringify({ success: true, matricula: mat });
+  } catch (e) { return _err_(e.message); }
+}
+
+// ============================================================
+// TROCAR O PERÍODO AQUISITIVO de um lançamento de férias (só RH)
+// payload = { rowIndex, matricula, inicio, periodo }  (matricula/inicio = conferência)
+// ============================================================
+function updateLancamentoPeriodo_(payload) {
+  try {
+    if (_scopeAtual_().perfil !== 'rh')
+      return _err_('Só o RH pode alterar o período das férias.');
+    const row = Number(payload && payload.rowIndex);
+    if (!row || row < 2) return _err_('Linha inválida.');
+    const periodo = String(payload.periodo || '').trim();
+    const sh = _sheet_(TAB.LANCAMENTOS);
+    if (row > sh.getLastRow()) return _err_('Essa linha não existe mais. Recarregue o painel.');
+    const cur = sh.getRange(row, 1, 1, L.TERMINO + 1).getValues()[0];
+    const mat = _mk_(cur[L.MAT]);
+    if (payload.matricula && mat !== _mk_(payload.matricula))
+      return _err_('A linha mudou de posição na planilha. Recarregue o painel e tente de novo.');
+    if (payload.inicio && formatDate_(cur[L.INICIO]) !== String(payload.inicio))
+      return _err_('A linha mudou de posição na planilha. Recarregue o painel e tente de novo.');
+    const pr = _periodosDe_(mat).find(function (p) { return p.label === periodo; });
+    if (!pr) return _err_('Período "' + periodo + '" não existe para este funcionário.');
+    sh.getRange(row, L.PERIODO + 1).setValue(pr.raw);
+    return JSON.stringify({ success: true, periodo: pr.label });
+  } catch (e) { return _err_(e.message); }
+}
+
+// Períodos aquisitivos de uma matrícula, em ordem: [{ label, raw, ini, fim }]
+// label = texto da coluna Período (ou "aaaa/aaaa" calculado); raw = valor da célula
+function _periodosDe_(mat, perRows) {
+  return (perRows || _rows_(TAB.PERIODOS)).filter(function (r) { return _mk_(r[P.MAT]) === mat; })
+    .map(function (r) {
+      const ini = toDate_(r[P.INI_AQ]);
+      const fim = toDate_(r[P.FIM_AQ]) || (ini ? _plusDays_(_addMonths_(ini, 12), -1) : null);
+      const txt = String(r[P.PERIODO] || '').trim();
+      const label = txt || (ini && fim ? ini.getFullYear() + '/' + fim.getFullYear() : '');
+      return { label: label, raw: txt ? r[P.PERIODO] : label, ini: ini, fim: fim };
+    })
+    .filter(function (p) { return p.label; })
+    .sort(function (a, b) { return (a.ini || 0) - (b.ini || 0); });
 }
 
 // ============================================================

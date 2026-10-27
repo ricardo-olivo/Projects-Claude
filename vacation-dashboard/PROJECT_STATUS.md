@@ -36,6 +36,9 @@ dias por funcionário, ficha individual, Aviso de Férias em PDF, e acesso
 segmentado por filial (RH x Gerente).
 
 ## Fase atual
+- **Editar funcionário + escolher/trocar período das férias** (2026-10-27) — no código,
+  testado no preview; **falta deploy**. Depois do deploy: corrigir pela ficha o nome da
+  Cleci (matrícula 35, "Naria" → "Maria") e o período das 2 férias dela (2025/2026 → 2024/2025).
 - **Perfil Gerente Matriz** (2026-10-26) — aprova férias das filiais dele; testado no preview.
 - **Login (e-mail + senha)** — concluído no código (2026-10-26): `Login.html` antes de
   tudo, sessão por token, funções do servidor privadas atrás de `api()`. Usuário inicial
