@@ -126,7 +126,7 @@ segmentado por filial (RH x Gerente).
 3. ~~Lançar ajuste manual (aba `Ajustes`) pelo dashboard.~~ **Feito** (pela ficha,
    só RH) — falta deploy.
 4. **Reescrever o `README.md`** — está descrevendo a arquitetura antiga (28 planilhas).
-5. **Trocar o logo recriado pelo PNG oficial** (`LOGO_DATA_URI` na `Home.html`).
+5. ~~Trocar o logo recriado pelo PNG oficial.~~ **Feito** (2026-10-27): `logo-liderfarma.png` embutido em base64 na `Home.html` (`LOGO_DATA_URI`) e na `Login.html`.
 6. Preencher `EMPRESA_PADRAO` / criar aba `Lojas` com CNPJ correto por filial
    (o CNPJ atual `79.408.746/0001-99` é da matriz e pode não valer para todas).
 7. Confirmar/ajustar a regra de "Pagamentos do Mês" para sem-registro (mês =

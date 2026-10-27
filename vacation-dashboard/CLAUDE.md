@@ -359,4 +359,4 @@ Colunas `_seq` / `_chave` (cinza) ligam as abas e **não devem ser apagadas**.
 | Acesso por e-mail + aba `Acessos` (sem senha) | Aproveita o login Google Workspace; nada de senha para gerenciar. |
 | Sem aba `Acessos` → todo mundo é RH | Permite implantar já e ligar o controle depois (migração suave). |
 | Perfil Gerente só marca férias (não edita/apaga/inclui período) | Abre espaço para o fluxo de aprovação (fase 3). |
-| Logo da Home recriado em CSS/SVG | Não temos o PNG oficial no projeto; `LOGO_DATA_URI` permite trocar depois. |
+| Logo oficial embutido em base64 (`logo-liderfarma.png`) na Home e no Login | Apps Script não serve arquivos de imagem soltos; o data URI vai dentro do HTML. |
