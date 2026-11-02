@@ -901,6 +901,7 @@
             <button class="emp-fbtn2" id="emps-todos" onclick="setEmpStatusFiltro('todos', this)">Todos</button>
           </div>
           <span class="result-count" id="emp-count"></span>
+          <button class="btn-add-vacation rh-only" onclick="abrirImport()">⇪ Importar em lote</button>
           <button class="btn-add-vacation rh-only" onclick="openEmpModal()">+ Cadastrar Funcionário</button>
         </div>
       </div>
@@ -1352,6 +1353,34 @@
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="fecharAjuste()">Cancelar</button>
       <button class="btn btn-primary" id="aj-save" onclick="salvarAjuste()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL IMPORTAÇÃO EM LOTE (só RH) -->
+<div class="modal-overlay" id="import-overlay" onclick="if(event.target===this)fecharImport()">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="import-title" style="max-width:760px">
+    <div class="modal-header">
+      <h3 id="import-title">Importar em lote</h3>
+      <button class="modal-close" onclick="fecharImport()" aria-label="Fechar">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group full">
+          <label for="import-texto">Texto da importação</label>
+          <textarea id="import-texto" rows="12" spellcheck="false" style="font-family:Consolas,monospace;font-size:12px"
+            oninput="importConferido=false;var g=document.getElementById('import-gravar');g.disabled=true;delete g.dataset.confirmar;g.textContent='Gravar'"
+            placeholder="@ Nome do funcionário (ou matrícula)&#10;P 09/08/2024            (período aquisitivo — início)&#10;A 13/06/2025 +12,5 Rescisão   (ajuste de saldo)&#10;F 03/11/2025 05/11/2025  (férias — início e fim)&#10;= 29                    (saldo esperado, só para conferir)"></textarea>
+          <span class="calc-hint">Primeiro "Conferir" (não grava nada). Depois "Gravar". Rodar de novo não duplica o que já existe.</span>
+        </div>
+      </div>
+      <div id="import-resultado" style="max-height:300px;overflow:auto;font-size:12px"></div>
+      <div id="import-error" class="error-banner" style="display:none"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="fecharImport()">Fechar</button>
+      <button class="btn btn-secondary" id="import-conferir" onclick="rodarImport(true)">Conferir</button>
+      <button class="btn btn-primary" id="import-gravar" onclick="rodarImport(false)" disabled>Gravar</button>
     </div>
   </div>
 </div>
@@ -2640,6 +2669,81 @@
 
   function closeEmpModal() {
     document.getElementById('emp-overlay').classList.remove('open');
+  }
+
+  // ── IMPORTAÇÃO EM LOTE (só RH) — texto "@ Nome / P / A / F / =" → importarLote no servidor
+  var importConferido = false;
+  function abrirImport() {
+    document.getElementById('import-resultado').innerHTML = '';
+    document.getElementById('import-error').style.display = 'none';
+    var g = document.getElementById('import-gravar');
+    g.disabled = true; delete g.dataset.confirmar; g.textContent = 'Gravar';
+    importConferido = false;
+    document.getElementById('import-overlay').classList.add('open');
+    setTimeout(function () { document.getElementById('import-texto').focus(); }, 50);
+  }
+  function fecharImport() {
+    document.getElementById('import-overlay').classList.remove('open');
+  }
+  function rodarImport(simular) {
+    var texto = document.getElementById('import-texto').value;
+    var errEl = document.getElementById('import-error');
+    errEl.style.display = 'none';
+    if (!texto.trim()) { errEl.textContent = 'Cole o texto da importação.'; errEl.style.display = ''; return; }
+    if (typeof google === 'undefined' || !google.script) {
+      errEl.textContent = 'A importação só funciona no painel publicado (Apps Script).';
+      errEl.style.display = ''; return;
+    }
+    var bC = document.getElementById('import-conferir'), bG = document.getElementById('import-gravar');
+    // confirmação no próprio botão (2º clique) — confirm() é bloqueado em alguns navegadores embutidos
+    if (!simular && !bG.dataset.confirmar) {
+      bG.dataset.confirmar = '1';
+      bG.textContent = 'Clique de novo para gravar';
+      return;
+    }
+    delete bG.dataset.confirmar;
+    bG.textContent = 'Gravar';
+    bC.disabled = true; bG.disabled = true;
+    var bt = simular ? bC : bG, txtOrig = simular ? 'Conferir' : 'Gravar';
+    bt.textContent = simular ? 'Conferindo…' : 'Gravando…';
+    var fim = function () { bC.disabled = false; bt.textContent = txtOrig; };
+    gsRun().withSuccessHandler(function (json) {
+      fim();
+      var r; try { r = JSON.parse(json); } catch (e) { r = { success: false, error: 'Resposta inválida.' }; }
+      if (!r.success) { errEl.textContent = r.error; errEl.style.display = ''; return; }
+      document.getElementById('import-resultado').innerHTML = htmlImport(r);
+      var temErro = r.funcionarios.some(function (f) {
+        return f.erro || f.itens.some(function (i) { return i.status === 'erro'; });
+      });
+      importConferido = simular;
+      bG.disabled = !simular || temErro;
+      if (!simular) loadData();
+    }).withFailureHandler(function (e) {
+      fim();
+      errEl.textContent = 'Erro: ' + ((e && e.message) || e);
+      errEl.style.display = '';
+    }).importarLote(texto, !!simular);
+  }
+  function htmlImport(r) {
+    var cor = { ok: '#15803d', existe: '#6b7280', erro: '#b91c1c' };
+    var rot = { ok: r.simulado ? 'vai gravar' : 'gravado', existe: 'já existia', erro: 'erro' };
+    return '<p style="margin:8px 0;font-weight:600">' + (r.simulado ? 'Conferência — nada foi gravado ainda' : 'Importação concluída') + '</p>'
+      + r.funcionarios.map(function (f) {
+        if (f.erro) return '<div style="margin:8px 0;color:#b91c1c">✗ Linha ' + f.linha + ' — ' + escHtml(f.erro) + '</div>';
+        var bate = f.esperado == null || f.saldoFinal == null ? null : Math.abs(f.saldoFinal - f.esperado) < 0.001;
+        var saldo = 'saldo ' + (f.saldoAntes == null ? '?' : String(f.saldoAntes).replace('.', ','))
+          + ' → <b>' + (f.saldoFinal == null ? '?' : String(f.saldoFinal).replace('.', ',')) + '</b>'
+          + (f.esperado == null ? '' : (bate ? ' <span style="color:#15803d">✓ igual à planilha</span>'
+            : ' <span style="color:#b91c1c">✗ planilha diz ' + String(f.esperado).replace('.', ',') + '</span>'));
+        return '<div style="margin:10px 0;border-top:1px solid var(--gray-200);padding-top:6px">'
+          + '<div><b>' + escHtml(f.nome) + '</b> · ' + escHtml(f.filial) + ' · mat. ' + escHtml(f.matricula) + ' — ' + saldo + '</div>'
+          + (f.aviso ? '<div style="color:#b45309">⚠ ' + escHtml(f.aviso) + '</div>' : '')
+          + f.itens.map(function (i) {
+            return '<div style="color:' + cor[i.status] + ';padding-left:10px">' + escHtml(i.texto)
+              + ' — ' + rot[i.status] + (i.msg ? ': ' + escHtml(i.msg) : '') + '</div>';
+          }).join('')
+          + '</div>';
+      }).join('');
   }
 
   function validateEmpModal() {

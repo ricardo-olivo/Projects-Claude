@@ -127,6 +127,7 @@ const API = {
   setEmployeeVencimento: setEmployeeVencimento_,
   addAjuste: addAjuste_, updateAjuste: updateAjuste_, deleteAjuste: deleteAjuste_,
   getAprovacoes: getAprovacoes_, decidirFerias: decidirFerias_,
+  importarLote: importarLote_,
 };
 
 // Sessão da execução atual (cada chamada do navegador é uma execução separada)
@@ -1587,6 +1588,209 @@ function addAjuste_(payload) {
 
     return JSON.stringify({ success: true, dias: dias, data: formatDate_(data), obs: obs });
   } catch (e) { return _err_(e.message); }
+}
+
+// ============================================================
+// IMPORTAÇÃO EM LOTE (só RH) — períodos, ajustes e férias de vários
+// funcionários de uma vez, a partir de um texto colado no painel:
+//   @ Nome do funcionário (ou matrícula)
+//   P 09/08/2024                  período aquisitivo (início) [faltas opcional]
+//   A 13/06/2025 +12,5 Observação ajuste de saldo (dias com sinal)
+//   F 03/11/2025 05/11/2025       férias (gozo), início e fim
+//   = 29                          saldo esperado no fim (só para conferir)
+//   # comentário
+// simular=true só confere e calcula o saldo previsto, sem gravar nada.
+// Grava pelas mesmas funções do painel (mesmas regras). Rodar de novo não
+// duplica: período/férias/ajuste idênticos já existentes são pulados.
+// ============================================================
+function importarLote_(texto, simular) {
+  try {
+    if (_scopeAtual_().perfil !== 'rh')
+      return _err_('Só o RH pode importar em lote.');
+    const parsed = _parseLote_(String(texto || ''));
+    if (parsed.erroGeral) return _err_(parsed.erroGeral);
+
+    const func = _rows_(TAB.FUNC);
+    const pers = _rows_(TAB.PERIODOS);
+    const lancs = _rows_(TAB.LANCAMENTOS);
+    const ajs = _rows_(TAB.AJUSTES);
+    const today = _midnight_(new Date());
+    const t0 = Date.now();
+    const out = [];
+
+    parsed.blocos.forEach(function (b) {
+      const res = { ref: b.ref, linha: b.linha, itens: [], esperado: b.esperado };
+      out.push(res);
+      const fr = _acharFuncLote_(func, b.ref);
+      if (fr.erro) { res.erro = fr.erro; return; }
+      const r = fr.row, mat = _mk_(r[F.MAT]);
+      res.nome = String(r[F.NOME] || '').trim();
+      res.filial = String(r[F.FILIAL] || '').trim();
+      res.matricula = String(r[F.MAT]);
+      res.aviso = fr.aviso || '';
+      const fichaAntes = JSON.parse(getEmployeeFicha_(mat));
+      res.saldoAntes = fichaAntes.success === false ? null : fichaAntes.saldo.atual;
+
+      const perIni = pers.filter(function (x) { return _mk_(x[P.MAT]) === mat; })
+        .map(function (x) { return formatDate_(x[P.INI_AQ]); });
+      const lancsF = lancs.filter(function (x) { return _mk_(x[L.MAT]) === mat && _statusLanc_(x) !== ST.RECUS; })
+        .map(function (x) { return { s: toDate_(x[L.INICIO]), e: toDate_(x[L.TERMINO]) }; });
+      const ajsF = ajs.filter(function (x) { return _mk_(x[AJ.MAT]) === mat; });
+      let delta = 0;
+
+      // ordem: períodos, ajustes, férias (o período automático das férias depende dos períodos)
+      const ordem = { P: 0, A: 1, F: 2 };
+      b.itens.slice().sort(function (x, y) {
+        return (ordem[x.tipo] - ordem[y.tipo]) || ((x.d1 || 0) - (y.d1 || 0));
+      }).forEach(function (it) {
+        const item = { linha: it.linha, tipo: it.tipo, texto: it.texto };
+        res.itens.push(item);
+        if (it.erro) { item.status = 'erro'; item.msg = it.erro; return; }
+        if (!simular && Date.now() - t0 > 300000) {
+          item.status = 'erro'; item.msg = 'Tempo esgotado — rode a importação de novo para continuar.'; return;
+        }
+        if (it.tipo === 'P') {
+          if (perIni.indexOf(formatDate_(it.d1)) >= 0) { item.status = 'existe'; item.msg = 'período já cadastrado'; return; }
+          const fim = _plusDays_(_addMonths_(it.d1, 12), -1);
+          const dir = _diasDireito_(it.faltas);
+          if (fim <= today) delta += dir;
+          item.msg = 'período ' + formatDateBR_(formatDate_(it.d1)) + ' a ' + formatDateBR_(formatDate_(fim))
+            + ' — ' + dir + ' dias' + (fim <= today ? '' : ' (ainda em formação, não credita)');
+          if (simular) { item.status = 'ok'; perIni.push(formatDate_(it.d1)); return; }
+          const g = JSON.parse(addPeriodoAquisitivo_({ matricula: mat, inicioAquisitivo: formatDate_(it.d1), faltas: it.faltas }));
+          item.status = g.success ? 'ok' : 'erro'; if (!g.success) item.msg = g.error;
+          else perIni.push(formatDate_(it.d1));
+        } else if (it.tipo === 'A') {
+          const dup = ajsF.some(function (x) {
+            return formatDate_(x[AJ.DATA]) === formatDate_(it.d1) && Number(x[AJ.DIAS] || 0) === it.dias
+              && String(x[AJ.OBS] || '').trim() === it.obs;
+          });
+          if (dup) { item.status = 'existe'; item.msg = 'ajuste já lançado'; return; }
+          delta += it.dias;
+          item.msg = 'ajuste ' + (it.dias > 0 ? '+' : '') + it.dias + (it.obs ? ' — ' + it.obs : '');
+          if (simular) { item.status = 'ok'; return; }
+          const g = JSON.parse(addAjuste_({ matricula: mat, data: formatDate_(it.d1), dias: it.dias, obs: it.obs }));
+          item.status = g.success ? 'ok' : 'erro'; if (!g.success) item.msg = g.error;
+        } else {
+          const igual = lancsF.some(function (x) {
+            return x.s && x.e && formatDate_(x.s) === formatDate_(it.d1) && formatDate_(x.e) === formatDate_(it.d2);
+          });
+          if (igual) { item.status = 'existe'; item.msg = 'férias já lançadas'; return; }
+          const choque = lancsF.find(function (x) { return x.s && x.e && it.d1 <= x.e && it.d2 >= x.s; });
+          if (choque) {
+            item.status = 'erro';
+            item.msg = 'sobrepõe férias de ' + formatDateBR_(formatDate_(choque.s)) + ' a ' + formatDateBR_(formatDate_(choque.e));
+            return;
+          }
+          const dias = Math.round((it.d2 - it.d1) / 864e5) + 1;
+          delta -= dias;
+          item.msg = 'férias ' + dias + ' dias';
+          lancsF.push({ s: it.d1, e: it.d2 });
+          if (simular) { item.status = 'ok'; return; }
+          const g = JSON.parse(addVacationRecord_({
+            name: res.nome, branch: res.filial,
+            startDate: formatDate_(it.d1), endDate: formatDate_(it.d2),
+          }));
+          item.status = g.success ? 'ok' : 'erro'; if (!g.success) item.msg = g.error;
+        }
+      });
+
+      if (simular) {
+        res.saldoFinal = res.saldoAntes == null ? null : Math.round((res.saldoAntes + delta) * 100) / 100;
+      } else {
+        const fichaDepois = JSON.parse(getEmployeeFicha_(mat));
+        res.saldoFinal = fichaDepois.success === false ? null : fichaDepois.saldo.atual;
+      }
+    });
+
+    return JSON.stringify({ success: true, simulado: !!simular, funcionarios: out });
+  } catch (e) { return _err_(e.message); }
+}
+
+// Texto da importação → blocos por funcionário (só leitura, sem planilha)
+function _parseLote_(texto) {
+  const blocos = [];
+  let atual = null;
+  const linhas = texto.split(/\r?\n/);
+  for (var i = 0; i < linhas.length; i++) {
+    const s = linhas[i].trim();
+    if (!s || s.charAt(0) === '#') continue;
+    const n = i + 1;
+    if (s.charAt(0) === '@') {
+      atual = { ref: s.slice(1).trim(), linha: n, itens: [], esperado: null };
+      blocos.push(atual);
+      continue;
+    }
+    if (!atual) return { erroGeral: 'Linha ' + n + ': comece cada funcionário com "@ Nome".' };
+    const tipo = s.charAt(0).toUpperCase();
+    const resto = s.slice(1).trim();
+    if (tipo === '=') {
+      const v = Number(resto.replace(',', '.'));
+      atual.esperado = isNaN(v) ? null : v;
+      continue;
+    }
+    const it = { linha: n, tipo: tipo, texto: s };
+    const partes = resto.split(/\s+/);
+    if (tipo === 'P') {
+      it.d1 = _dataLote_(partes[0]);
+      it.faltas = Number(partes[1] || 0) || 0;
+      if (!it.d1) it.erro = 'data inválida';
+    } else if (tipo === 'F') {
+      it.d1 = _dataLote_(partes[0]);
+      it.d2 = _dataLote_(partes[1]);
+      if (!it.d1 || !it.d2) it.erro = 'datas inválidas (use dd/mm/aaaa dd/mm/aaaa)';
+      else if (it.d2 < it.d1) it.erro = 'fim antes do início';
+    } else if (tipo === 'A') {
+      it.d1 = _dataLote_(partes[0]);
+      it.dias = Number(String(partes[1] || '').replace(',', '.'));
+      it.obs = partes.slice(2).join(' ');
+      if (!it.d1) it.erro = 'data inválida';
+      else if (isNaN(it.dias)) it.erro = 'dias inválido (ex.: -15 ou +12,5)';
+    } else {
+      it.erro = 'tipo desconhecido (use P, A, F ou =)';
+    }
+    atual.itens.push(it);
+  }
+  if (!blocos.length) return { erroGeral: 'Nenhum funcionário no texto (linhas "@ Nome").' };
+  return { blocos: blocos };
+}
+
+// dd/mm/aaaa ou dd/mm/aa → Date local
+function _dataLote_(s) {
+  const m = String(s || '').match(/^(\d{1,2})\/(\d{1,2})\/(\d{2}|\d{4})$/);
+  if (!m) return null;
+  const ano = m[3].length === 2 ? 2000 + Number(m[3]) : Number(m[3]);
+  const d = new Date(ano, Number(m[2]) - 1, Number(m[1]));
+  return d.getMonth() === Number(m[2]) - 1 ? d : null;
+}
+
+// "@ ..." → linha da aba Func: matrícula, nome exato (sem acento/maiúscula) ou,
+// se só um bater, nome que contém todas as palavras do outro
+function _acharFuncLote_(func, ref) {
+  const norm = function (v) {
+    return String(v || '').normalize('NFD').replace(/[̀-ͯ]/g, '')
+      .toLowerCase().replace(/\s+/g, ' ').trim();
+  };
+  const alvo = norm(ref);
+  if (!alvo) return { erro: 'funcionário não informado' };
+  if (/^\d+$/.test(alvo)) {
+    const r = func.find(function (x) { return _mk_(x[F.MAT]) === _mk_(alvo); });
+    return r ? { row: r } : { erro: 'matrícula ' + ref + ' não encontrada' };
+  }
+  const exatos = func.filter(function (x) { return norm(x[F.NOME]) === alvo; });
+  if (exatos.length === 1) return { row: exatos[0] };
+  if (exatos.length > 1) return { erro: 'mais de um funcionário com o nome "' + ref + '" — use a matrícula' };
+  const pa = alvo.split(' ');
+  const parecidos = func.filter(function (x) {
+    const pc = norm(x[F.NOME]).split(' ');
+    if (!pc[0]) return false;
+    const contem = function (a, b) { return a.every(function (w) { return b.indexOf(w) >= 0; }); };
+    return contem(pc, pa) || contem(pa, pc);
+  });
+  if (parecidos.length === 1)
+    return { row: parecidos[0], aviso: 'no cadastro: "' + String(parecidos[0][F.NOME]).trim() + '"' };
+  if (parecidos.length > 1) return { erro: '"' + ref + '" bate com mais de um funcionário — use a matrícula' };
+  return { erro: '"' + ref + '" não encontrado no cadastro' };
 }
 
 // ============================================================

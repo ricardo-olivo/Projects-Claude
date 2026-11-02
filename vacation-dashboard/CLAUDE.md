@@ -245,6 +245,7 @@ vacation-dashboard/
 | `setEmployeeStatus(payload)` | grava `Func.Situação` = Ativo/Inativo (desligamento) — só RH. `getVacationData`/`getEmployeeFicha` devolvem `ativo` |
 | `addAjuste(payload)` | grava linha na aba `Ajustes` (Data · Dias ± · Observação) — só RH. Dias vazio/0 = só observação (não mexe no saldo) |
 | `updateAjuste(payload)` / `deleteAjuste(payload)` | edita / apaga uma linha da aba `Ajustes` pelo `rowIndex` (confere a matrícula) — só RH. `getEmployeeFicha` devolve `rowIndex` em cada ajuste |
+| `importarLote(texto, simular)` | Importação em lote (só RH; botão "⇪ Importar em lote" na aba Funcionários). Texto: `@ Nome ou matrícula` · `P dd/mm/aaaa [faltas]` (período) · `A dd/mm/aaaa ±dias obs` (ajuste) · `F dd/mm/aaaa dd/mm/aaaa` (férias) · `= saldo esperado` · `#` comentário. `simular=true` só confere e projeta o saldo. Grava por `addPeriodoAquisitivo_`/`addAjuste_`/`addVacationRecord_` (mesmas regras); período/férias/ajuste idênticos já existentes são pulados (rodar de novo não duplica). Helpers `_parseLote_`, `_dataLote_`, `_acharFuncLote_` (nome sem acento/maiúscula; se só um cadastro contiver todas as palavras, usa e avisa) |
 | `setEmployeeVencimento(payload)` | grava o vencimento das férias (mês/ano) na coluna J da aba `Func` — só RH. Só é usado quando **não** há período aquisitivo (concessão calculada tem prioridade) |
 | `getPaymentData(func, saldoOf)` | funcionários sem registro (aba Func + planilha legada opcional) |
 | `detectConflicts(data)` | 3+ sobreposições na mesma filial |
