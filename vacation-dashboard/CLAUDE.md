@@ -39,7 +39,7 @@ calcula um **"banco de dias"** por funcionário e gera o **Aviso de Férias em P
 - Aviso de Férias em PDF (download).
 - Filtro por filial, status, mês, busca por nome; filtro Registrado/Sem registro
   na aba Funcionários.
-- Detecção de conflitos (3+ pessoas da mesma filial com férias sobrepostas).
+- Detecção de conflitos (3+ pessoas da mesma filial com férias sobrepostas) — **desligada** (`ALERTA_CONFLITOS = false` no `Code.gs`, 2026-11-02) até o RH passar a regra de cada filial.
 - Acesso por filial (fase 2) — implementado no código, ainda não testado em produção.
 - Fluxo de aprovação (fase 3) — aba "Aprovações" (RH) / "Minhas solicitações" (gerente),
   status Pendente/Aprovado/Recusado na aba `Lancamentos`, e-mails opcionais

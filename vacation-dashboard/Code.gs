@@ -54,6 +54,10 @@ const ST = { PEND: 'Pendente', APROV: 'Aprovado', RECUS: 'Recusado' };
 // E-mails do fluxo de aprovação (gerente pede → RH recebe; RH decide → gerente recebe).
 // Desligado por padrão: conta Gmail comum tem limite de 100 e-mails/dia.
 const NOTIFICAR_EMAIL = false;
+
+// Alertas de conflito (3+ da mesma filial de férias juntos). Desligado até o RH
+// definir a regra de cada filial — com o histórico importado, só gerava ruído.
+const ALERTA_CONFLITOS = false;
 const AJ = { MAT:0, DATA:1, DIAS:2, OBS:3 };
 const LO = { FILIAL:0, RAZAO:1, CNPJ:2, CIDADE:3 };
 
@@ -533,7 +537,7 @@ function getVacationData_() {
     });
   });
 
-  const conflicts = detectConflicts_(allData);
+  const conflicts = ALERTA_CONFLITOS ? detectConflicts_(allData) : [];
   const payment = getPaymentData_(func, saldoOf);
 
   // contagens + lista completa do cadastro (aba Func)
