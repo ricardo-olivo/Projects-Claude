@@ -684,6 +684,17 @@
       min-width: 180px;
     }
     .pf-search:focus { border-color: var(--primary); }
+    .pf-month {
+      padding: 5px 10px;
+      border: 1px solid var(--gray-200);
+      border-radius: 6px;
+      background: var(--gray-100);
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--gray-500);
+      cursor: pointer;
+    }
+    .pf-month.active { background: var(--primary); border-color: var(--primary); color: white; }
     .month-group-header td {
       background: var(--gray-50);
       font-size: 12px;
@@ -962,6 +973,21 @@
         <button class="pf-btn"        id="pfbtn-future" onclick="setPayFilter('future',this)">Próximos Meses</button>
         <button class="pf-btn"        id="pfbtn-past"   onclick="setPayFilter('past',  this)">Meses Anteriores</button>
         <button class="pf-btn"        id="pfbtn-all"    onclick="setPayFilter('all',   this)">Todos</button>
+        <select class="pf-month" id="pf-month" onchange="setPayMonth(this.value)" title="Ver só um mês">
+          <option value="">Mês específico…</option>
+          <option value="1">Janeiro</option>
+          <option value="2">Fevereiro</option>
+          <option value="3">Março</option>
+          <option value="4">Abril</option>
+          <option value="5">Maio</option>
+          <option value="6">Junho</option>
+          <option value="7">Julho</option>
+          <option value="8">Agosto</option>
+          <option value="9">Setembro</option>
+          <option value="10">Outubro</option>
+          <option value="11">Novembro</option>
+          <option value="12">Dezembro</option>
+        </select>
         <input class="pf-search" id="pf-search" type="text" placeholder="Buscar nome ou filial..." oninput="renderPaymentTable()" />
       </div>
       <div id="payment-loading" class="loading">
@@ -1475,6 +1501,7 @@
   function podeAprovar(filial) { return ehRH() || !!(scope.aprova && scope.aprova.includes(filial)); }
   function aprovaTodasMinhas() { return ehRH() || (scope.filiais || []).every(f => podeAprovar(f)); }
   var payFilter  = 'month';
+  var payPickMonth = null;
   var sortCol = 'startDate';
   var expandedGroups = new Set();   // chaves de funcionário com o grupo aberto na Tabela
   var tableGroups = [];             // grupos renderizados (índice = ordem na tela)
@@ -3974,6 +4001,19 @@
     payFilter = mode;
     document.querySelectorAll('.pf-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
+    const sel = document.getElementById('pf-month');
+    sel.value = ''; sel.classList.remove('active');
+    renderPaymentTable();
+  }
+
+  // Um mês só (o vencimento se repete todo ano no mês da admissão)
+  function setPayMonth(val) {
+    const sel = document.getElementById('pf-month');
+    if (!val) { setPayFilter('month', document.getElementById('pfbtn-month')); return; }
+    payFilter = 'pick';
+    payPickMonth = Number(val);
+    document.querySelectorAll('.pf-btn').forEach(b => b.classList.remove('active'));
+    sel.classList.add('active');
     renderPaymentTable();
   }
 
@@ -3991,6 +4031,7 @@
     if      (payFilter === 'month')  source = paymentAll.filter(r => r.monthNum === curMonthNum);
     else if (payFilter === 'future') source = paymentAll.filter(r => r.monthNum  > curMonthNum);
     else if (payFilter === 'past')   source = paymentAll.filter(r => r.monthNum  < curMonthNum);
+    else if (payFilter === 'pick')   source = paymentAll.filter(r => r.monthNum === payPickMonth);
     else                             source = [...paymentAll];
 
     if (search) source = source.filter(r =>
