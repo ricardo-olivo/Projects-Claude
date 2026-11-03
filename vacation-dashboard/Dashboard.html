@@ -764,9 +764,9 @@
       <div class="card-sub">no cadastro <span class="card-cta">ver lista →</span></div>
     </div>
     <div class="card card-click rh-only" role="button" tabindex="0" onclick="openKpi('pagas')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openKpi('pagas')}">
-      <div class="card-label">Pagas este Mês</div>
+      <div class="card-label">Férias Pagas</div>
       <div class="card-value" id="stat-paid-month">—</div>
-      <div class="card-sub">férias com início no mês <span class="card-cta">ver lista →</span></div>
+      <div class="card-sub"><span id="stat-paid-sub">vencimentos do mês anterior pagos</span> <span class="card-cta">ver lista →</span></div>
     </div>
     <div class="card success card-click" role="button" tabindex="0" onclick="openKpi('ferias')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openKpi('ferias')}">
       <div class="card-label">Em Férias Agora</div>
@@ -2209,12 +2209,27 @@
   }
 
   // ── RENDER STATS ──────────────────────────────────────────
+  // Vencimentos do mês anterior (mesma lista da aba Vencimento Mensal) e quantos
+  // estão marcados "Sim" em "Férias Paga?". Em novembro, olha outubro.
+  function vencMesAnterior() {
+    const d = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+    const mesISO = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+    const rows = [];
+    (allEmployees || []).forEach(e => {
+      const list = (e.vencimentos && e.vencimentos.length) ? e.vencimentos : (e.vencimento ? [e.vencimento] : []);
+      [...new Set(list)].filter(v => v && v.substring(0, 7) === mesISO).forEach(v =>
+        rows.push({ e, v, pago: feriasPagas[e.matricula + '|' + v] || '' }));
+    });
+    rows.sort((a, b) => (a.e.filial || '').localeCompare(b.e.filial || '', 'pt-BR') || a.e.nome.localeCompare(b.e.nome, 'pt-BR'));
+    return { mesISO, nomeMes: MONTHS_PT_FULL[d.getMonth()], ano: d.getFullYear(),
+             rows, pagos: rows.filter(r => r.pago === 'Sim').length };
+  }
+
   function renderStats() {
     const source = filteredData.length < allData.length ? filteredData : allData;
     const active = source.filter(r => getStatus(r) === 'active').length;
 
-    const curKey = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0');
-    const paidMonth = source.filter(r => r.startDate && r.startDate.substring(0, 7) === curKey && r.status !== 'Pendente').length;
+    const pg = vencMesAnterior();
 
     const employees = (totals.funcionarios != null)
       ? totals.funcionarios
@@ -2224,7 +2239,8 @@
       : paymentAll.filter(r => !r.registrado).length;
 
     document.getElementById('stat-employees').textContent    = employees;
-    document.getElementById('stat-paid-month').textContent   = paidMonth;
+    document.getElementById('stat-paid-month').textContent   = `${pg.pagos} de ${pg.rows.length}`;
+    document.getElementById('stat-paid-sub').textContent     = `vencimentos de ${pg.nomeMes.toLowerCase()} pagos`;
     document.getElementById('stat-active').textContent       = active;
     document.getElementById('stat-unregistered').textContent = unregistered;
   }
@@ -2569,17 +2585,15 @@
            <td style="text-align:center">${(e.saldo === '' || e.saldo == null) ? '—' : e.saldo}</td></tr>`).join(''));
     }
     else if (which === 'pagas') {
-      title = 'Férias com início neste mês';
-      gotoLabel = 'Ver na Tabela (filtro do mês)';
-      const list = source.filter(r => r.startDate && r.startDate.substring(0, 7) === curKey && r.status !== 'Pendente')
-        .sort((a, b) => (a.startDate < b.startDate ? -1 : 1));
-      html = `<p class="kpi-count">${list.length} registro(s)</p>` + tbl(
-        ['Filial', 'Funcionário', 'Início', 'Fim', 'Retorno', 'Dias'],
-        list.map(r => `<tr>
-          <td>${escHtml(r.branch)}</td><td>${escHtml(r.name)}</td>
-          <td>${fmtDateBR(r.startDate)}</td><td>${fmtDateBR(r.endDate)}</td>
-          <td>${fmtDateBR(r.returnDate)}</td>
-          <td style="text-align:center">${r.total || '—'}</td></tr>`).join(''));
+      const pg = vencMesAnterior();
+      title = `Vencimentos de ${pg.nomeMes.toLowerCase()}/${pg.ano} — férias pagas`;
+      gotoLabel = `Abrir Vencimento Mensal (${pg.nomeMes.toLowerCase()})`;
+      const pagoBadge = p => p === 'Sim' ? '<span class="badge badge-active">Sim</span>'
+        : p === 'Não' ? '<span class="badge badge-inativo">Não</span>' : '<span class="badge badge-done">—</span>';
+      html = `<p class="kpi-count">${pg.pagos} de ${pg.rows.length} pago(s)</p>` + tbl(
+        ['Filial', 'Funcionário', 'Vencimento', 'Férias paga?'],
+        pg.rows.map(r => empRow(r.e) +
+          `<td>${fmtDateBR(r.v)}</td><td>${pagoBadge(r.pago)}</td></tr>`).join(''));
     }
     else if (which === 'ferias') {
       title = 'Em férias agora';
@@ -2627,14 +2641,13 @@
         document.getElementById(w === 'naoreg' ? 'empf-nao' : 'empf-todos'));
       setEmpStatusFiltro('todos', document.getElementById('emps-todos'));
       document.getElementById('view-employees').scrollIntoView({ block: 'start' });
-    } else if (w === 'pagas' || w === 'ferias') {
+    } else if (w === 'pagas') {
+      document.getElementById('due-month').value = vencMesAnterior().mesISO;
+      showTab('due', tabBtns[5]);
+      document.getElementById('view-due').scrollIntoView({ block: 'start' });
+    } else if (w === 'ferias') {
       tableBranch = null;
-      if (w === 'pagas') {
-        document.getElementById('filter-month').value =
-          today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0');
-      } else {
-        document.getElementById('filter-status').value = 'active';
-      }
+      document.getElementById('filter-status').value = 'active';
       showTab('table', tabBtns[0]);
       applyFilters();
       document.getElementById('view-table').scrollIntoView({ block: 'start' });
@@ -4489,11 +4502,11 @@
     const antes = feriasPagas[key] || '';
     const novo = cb.checked ? cb.value : '';
     if (novo) feriasPagas[key] = novo; else delete feriasPagas[key];
-    renderDueView();
+    renderDueView(); renderStats();
     if (typeof google === 'undefined' || !google.script) return;   // preview local
     const desfaz = msg => {
       if (antes) feriasPagas[key] = antes; else delete feriasPagas[key];
-      renderDueView();
+      renderDueView(); renderStats();
       alert('Não foi possível salvar: ' + msg);
     };
     gsRun()
