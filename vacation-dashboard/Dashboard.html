@@ -966,7 +966,7 @@
         <div>
           <h2>Pagamento de Férias — Sem Registro e 1/3 dos Registrados</h2>
           <div style="font-size:12px;color:var(--gray-500);margin-top:3px">
-            Sem registro: mês do vencimento da ficha (ou da admissão) · Registrados: mês do vencimento ou do fim do período aquisitivo (ano atual) — pagar 1/3
+            Sem registro: mês do vencimento (ou da admissão) · Registrados: mês do vencimento ou do fim do período aquisitivo (ano atual) — pagar 1/3
           </div>
         </div>
         <span class="payment-month-badge" id="payment-month-badge">Mês vigente</span>
@@ -4106,7 +4106,7 @@
                  r.vencimento ? `vencimento ${fmtDateBR(r.vencimento)}` : '',
                  r.periodo ? `período ${escHtml(r.periodo)} termina ${fmtDateBR(r.periodoFim)}` : '',
                 ].filter(Boolean).join(' · ')
-              : 'Sem registro'}</div></td>
+              : 'Sem registro' + (r.vencimento ? ` · vencimento ${fmtDateBR(r.vencimento)}` : ' · mês da admissão')}</div></td>
           <td>${escHtml(r.branch)}</td>
           <td>
             <span class="badge ${r.monthNum === curMonthNum ? 'badge-active' : r.monthNum > curMonthNum ? 'badge-future' : 'badge-done'}">

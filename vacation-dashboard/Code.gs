@@ -578,6 +578,24 @@ function getVacationData_() {
     });
   });
 
+  // sem registro: usa o mês do vencimento do ano atual (mesma lista da aba
+  // Vencimento Mensal); sem vencimento no ano, fica o mês da admissão
+  const empPorMat = {};
+  employees.forEach(function (e) { empPorMat[e.matricula] = e; });
+  const anoPag = String(today.getFullYear()), mesPag = today.getMonth() + 1;
+  payment.all.forEach(function (r) {
+    const e = r.matricula && empPorMat[r.matricula];
+    if (!e) return;
+    const vencs = e.vencimentos.length ? e.vencimentos : (e.vencimento ? [e.vencimento] : []);
+    const v = vencs.filter(function (x) { return x && x.substring(0, 4) === anoPag; }).pop();
+    if (!v) return;
+    r.monthNum = Number(v.substring(5, 7));
+    r.month = _cap_(MONTHS_PT[r.monthNum - 1]);
+    r.vencimento = v;
+    r.isDue = r.monthNum === mesPag;
+  });
+  payment.due = payment.all.filter(function (r) { return r.isDue; });
+
   // registrados: 1/3 no mês do vencimento ou do fim do período aquisitivo
   _pagamentoTerco_(employees).forEach(function (r) {
     payment.all.push(r);
@@ -971,7 +989,7 @@ function _avisoHtml_(d) {
 // FUNCIONÁRIOS SEM REGISTRO — PAGAMENTO DE FÉRIAS
 // Fonte: coluna "Registrado" = "Não" na aba Func (+ planilha legada
 // opcional em PAYMENT_SHEET_ID).
-// mês de vencimento = mês do vencimento manual (Func col. J) ou, sem ele, da admissão;
+// mês de vencimento = mês do vencimento no ano atual (como na aba Vencimento Mensal) ou, sem ele, da admissão;
 // pagar 30 dias    = saldo atual >= 30.
 // ============================================================
 function getPaymentData_(func, saldoOf) {
@@ -984,11 +1002,12 @@ function getPaymentData_(func, saldoOf) {
       if (reg !== 'não' && reg !== 'nao') return;
       const name = String(r[F.NOME] || '').trim();
       if (!name) return;
-      // vencimento manual da ficha (col. J) tem prioridade; senão, mês da admissão
-      const base = toDate_(r[F.VENC]) || toDate_(r[F.ADMISSAO]);
+      // mês da admissão; getVacationData_ troca pelo vencimento do ano atual, se houver
+      const base = toDate_(r[F.ADMISSAO]);
       const monthNum = base ? base.getMonth() + 1 : null;
       const saldo = saldoOf ? saldoOf(_mk_(r[F.MAT])) : 0;
       const rec = {
+        matricula: _mk_(r[F.MAT]),
         name: name,
         branch: String(r[F.FILIAL] || '').trim(),
         month: monthNum ? _cap_(MONTHS_PT[monthNum - 1]) : '',
