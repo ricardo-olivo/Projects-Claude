@@ -18,7 +18,10 @@ const TAB = {
   FERIADOS:    'Feriados',
   LOJAS:       'Lojas',     // opcional: Filial | Razão Social | CNPJ | Cidade
   ACESSOS:     'Acessos',   // E-mail | Filial | Perfil (RH | Gerente) | Senha — criada sozinha no 1º login
+  PAGOS:       'Pagamentos', // Matrícula | Vencimento | Pago | Atualizado em | Por — criada sozinha na 1ª marcação
 };
+const PG = { MAT:0, VENC:1, PAGO:2, EM:3, POR:4 };
+const PAGOS_HEADERS = ['Matrícula', 'Vencimento', 'Pago', 'Atualizado em', 'Por'];
 const AC = { EMAIL:0, FILIAL:1, PERFIL:2, SENHA:3 };
 const ACESSOS_HEADERS = ['E-mail', 'Filial', 'Perfil', 'Senha'];
 
@@ -128,7 +131,7 @@ const API = {
   deletePeriodoAquisitivo: deletePeriodoAquisitivo_,
   addEmployee: addEmployee_, updateEmployee: updateEmployee_, setEmployeeStatus: setEmployeeStatus_,
   updateLancamentoPeriodo: updateLancamentoPeriodo_,
-  setEmployeeVencimento: setEmployeeVencimento_,
+  setEmployeeVencimento: setEmployeeVencimento_, setFeriasPaga: setFeriasPaga_,
   addAjuste: addAjuste_, updateAjuste: updateAjuste_, deleteAjuste: deleteAjuste_,
   getAprovacoes: getAprovacoes_, decidirFerias: decidirFerias_,
   importarLote: importarLote_,
@@ -575,6 +578,12 @@ function getVacationData_() {
     });
   });
 
+  // registrados: 1/3 no mês do vencimento ou do fim do período aquisitivo
+  _pagamentoTerco_(employees).forEach(function (r) {
+    payment.all.push(r);
+    if (r.isDue) payment.due.push(r);
+  });
+
   // --- escopo por filial (gerente vê só as filiais dele) ---
   let outData = allData, outEmp = employees, outPayAll = payment.all, outPayDue = payment.due, outConf = conflicts;
   let tot = { funcionarios: nFunc, registrados: nReg, naoRegistrados: nNao };
@@ -602,6 +611,7 @@ function getVacationData_() {
     paymentErrors: payment.errors,
     totals: tot,
     employees: outEmp,
+    feriasPagas: _feriasPagas_(outEmp),
     scope: { perfil: scope.perfil, filiais: scope.filiais, email: scope.email, aprova: scope.aprova },
   });
 }
@@ -982,6 +992,7 @@ function getPaymentData_(func, saldoOf) {
         branch: String(r[F.FILIAL] || '').trim(),
         month: monthNum ? _cap_(MONTHS_PT[monthNum - 1]) : '',
         monthNum: monthNum,
+        registrado: false,
         pay30: saldo >= 30,
         isDue: monthNum === currentMonth,
         saldo: saldo,
@@ -1018,6 +1029,44 @@ function getPaymentData_(func, saldoOf) {
   }
 
   return { all: all, due: due, errors: errors };
+}
+
+// Registrados ativos — pagamento de 1/3 no mês (ano atual) em que
+// vence a concessão (mesma regra da aba Vencimento Mensal) OU termina
+// um período aquisitivo. Uma linha por funcionário × mês.
+function _pagamentoTerco_(employees) {
+  const hoje = new Date();
+  const ano = String(hoje.getFullYear()), mesAtual = hoje.getMonth() + 1;
+  const out = [];
+  employees.forEach(function (e) {
+    if (!e.registrado || !e.ativo) return;
+    const porMes = {};
+    const mes = function (iso) { return iso && iso.substring(0, 4) === ano ? Number(iso.substring(5, 7)) : 0; };
+    const vencs = e.vencimentos.length ? e.vencimentos : (e.vencimento ? [e.vencimento] : []);
+    vencs.forEach(function (iso) {
+      const m = mes(iso); if (m) (porMes[m] = porMes[m] || {}).venc = iso;
+    });
+    e.periodos.forEach(function (p) {
+      const m = mes(p.fim); if (m) (porMes[m] = porMes[m] || {}).per = p;
+    });
+    Object.keys(porMes).forEach(function (k) {
+      const m = Number(k), x = porMes[k];
+      out.push({
+        name: e.nome,
+        branch: e.filial,
+        month: _cap_(MONTHS_PT[m - 1]),
+        monthNum: m,
+        registrado: true,
+        vencimento: x.venc || '',
+        periodo: x.per ? x.per.label : '',
+        periodoIni: x.per ? x.per.ini : '',
+        periodoFim: x.per ? x.per.fim : '',
+        pay30: false,
+        isDue: m === mesAtual,
+      });
+    });
+  });
+  return out;
 }
 
 // ============================================================
@@ -1542,6 +1591,73 @@ function setEmployeeVencimento_(payload) {
     cell.setValue(first).setNumberFormat('mm/yyyy');
 
     return JSON.stringify({ success: true, vencimento: m[1] + '-' + m[2] + '-01' });
+  } catch (e) { return _err_(e.message); }
+}
+
+// ============================================================
+// FÉRIAS PAGA? — marca Sim/Não por (matrícula × vencimento) na aba Pagamentos
+// payload = { matricula, vencimento: 'yyyy-mm-dd', pago: 'Sim' | 'Não' | '' (limpa) }
+// Só RH grava; o painel lê o mapa { 'mat|yyyy-mm-dd': 'Sim'|'Não' } em feriasPagas.
+// ============================================================
+function _ensurePagos_() {
+  const ss = SpreadsheetApp.openById(MODEL_SHEET_ID);
+  let sh = ss.getSheetByName(TAB.PAGOS);
+  if (!sh) {
+    sh = ss.insertSheet(TAB.PAGOS);
+    sh.getRange(1, 1, 1, PAGOS_HEADERS.length).setValues([PAGOS_HEADERS]).setFontWeight('bold');
+    sh.setFrozenRows(1);
+  }
+  return sh;
+}
+
+function _feriasPagas_(employees) {
+  const out = {};
+  try {
+    const sh = SpreadsheetApp.openById(MODEL_SHEET_ID).getSheetByName(TAB.PAGOS);
+    if (!sh || sh.getLastRow() <= 1) return out;
+    const permitidas = {};
+    (employees || []).forEach(function (e) { permitidas[e.matricula] = true; });
+    sh.getRange(2, 1, sh.getLastRow() - 1, PAGOS_HEADERS.length).getValues().forEach(function (r) {
+      const mat = _mk_(r[PG.MAT]), venc = formatDate_(r[PG.VENC]);
+      const pago = String(r[PG.PAGO] || '').trim();
+      if (mat && venc && pago && permitidas[mat]) out[mat + '|' + venc] = pago;
+    });
+  } catch (e) { /* aba ilegível não derruba o painel */ }
+  return out;
+}
+
+function setFeriasPaga_(payload) {
+  try {
+    const scope = _scopeAtual_();
+    if (scope.perfil !== 'rh') return _err_('Só o RH pode marcar férias como pagas.');
+
+    payload = payload || {};
+    const mat = _mk_(payload.matricula);
+    const venc = toDate_(payload.vencimento);
+    if (!mat || !venc) return _err_('Matrícula ou vencimento não informado.');
+    const vencISO = formatDate_(venc);
+    const p = String(payload.pago || '').trim().toLowerCase();
+    const pago = p === 'sim' ? 'Sim' : (p === 'não' || p === 'nao') ? 'Não' : '';
+
+    const sh = _ensurePagos_();
+    const last = sh.getLastRow();
+    let row = 0;
+    if (last > 1) {
+      const vals = sh.getRange(2, 1, last - 1, 2).getValues();
+      for (var i = 0; i < vals.length; i++) {
+        if (_mk_(vals[i][PG.MAT]) === mat && formatDate_(vals[i][PG.VENC]) === vencISO) { row = i + 2; break; }
+      }
+    }
+    if (!pago) {
+      if (row) sh.deleteRow(row);
+      return JSON.stringify({ success: true, pago: '' });
+    }
+    const linha = [[mat, venc, pago, new Date(), scope.email || 'RH']];
+    if (!row) row = sh.getLastRow() + 1;
+    sh.getRange(row, 1, 1, PAGOS_HEADERS.length).setValues(linha);
+    sh.getRange(row, PG.VENC + 1).setNumberFormat('dd/mm/aaaa');
+    sh.getRange(row, PG.EM + 1).setNumberFormat('dd/mm/aaaa hh:mm');
+    return JSON.stringify({ success: true, pago: pago });
   } catch (e) { return _err_(e.message); }
 }
 

@@ -655,6 +655,9 @@
     }
     .pay30-yes  { background: var(--danger-light); color: var(--danger); }
     .pay30-no   { background: var(--gray-100);     color: var(--gray-500); }
+    .pago-opt   { display: inline-flex; align-items: center; gap: 4px; margin-right: 12px; font-size: 12px; cursor: pointer; white-space: nowrap; }
+    .pago-opt input { cursor: pointer; }
+    .pay-terco  { background: var(--primary-light, #e8efff); color: var(--primary); }
     .payment-filter-bar {
       padding: 12px 20px;
       border-bottom: 1px solid var(--gray-100);
@@ -961,9 +964,9 @@
     <div class="payment-section">
       <div class="payment-header">
         <div>
-          <h2>Funcionários Sem Registro — Pagamento de Férias</h2>
+          <h2>Pagamento de Férias — Sem Registro e 1/3 dos Registrados</h2>
           <div style="font-size:12px;color:var(--gray-500);margin-top:3px">
-            Funcionários que não possuem registro nas planilhas de filiais e devem receber pagamento de férias
+            Sem registro: mês de aniversário da admissão · Registrados: mês do vencimento ou do fim do período aquisitivo (ano atual) — pagar 1/3
           </div>
         </div>
         <span class="payment-month-badge" id="payment-month-badge">Mês vigente</span>
@@ -1001,7 +1004,7 @@
               <th>Funcionário</th>
               <th>Filial</th>
               <th>Mês do Vencimento</th>
-              <th>Pagar 30 dias?</th>
+              <th>Pagamento</th>
             </tr>
           </thead>
           <tbody id="payment-body"></tbody>
@@ -1073,6 +1076,7 @@
               <th>Vencimento</th>
               <th>Dias Disponíveis</th>
               <th>Situação</th>
+              <th>Férias Paga?</th>
             </tr>
           </thead>
           <tbody id="due-body"></tbody>
@@ -1493,6 +1497,7 @@
   var paymentDue = [];
   var totals = {};
   var allEmployees = [];
+  var feriasPagas = {};   // "mat|yyyy-mm-dd" -> "Sim" | "Não" (aba Pagamentos)
   var fichaMat = '', fichaNome = '', fichaData = null;
   var scope = { perfil: 'rh', filiais: null, email: '' };
   function ehRH() { return !scope || scope.perfil !== 'gerente'; }
@@ -1545,6 +1550,13 @@
       mk(+2, 'Antônio Neves',     'Filial 04',        true ),
       mk(+2, 'Cleusa Monteiro',   'Caçador Centro',   false),
       mk(+3, 'Diego Figueiredo',  'Filial 01',        true ),
+      // Registrados — 1/3 no mês em que o período aquisitivo termina
+      Object.assign(mk(-1, 'Luiza Carolina de Almeida', 'Matriz', false),
+        { registrado: true, periodo: '2025/2026', periodoIni: '2025-10-22', periodoFim: '2026-10-21' }),
+      Object.assign(mk(-1, 'Leila Duarte', 'Matriz', false),
+        { registrado: true, vencimento: '2026-10-31' }),
+      Object.assign(mk( 0, 'Joana Prado', 'Filial 02', false),
+        { registrado: true, periodo: '2025/2026', periodoIni: '2025-12-01', periodoFim: '2026-11-30' }),
     ];
   })();
 
@@ -1702,6 +1714,7 @@
     paymentDue = result.paymentDue || [];
     totals     = result.totals || {};
     allEmployees = result.employees || [];
+    feriasPagas  = result.feriasPagas || {};
     scope      = result.scope || { perfil: 'rh', filiais: null, email: '' };
     const errors = result.errors || [];
 
@@ -2208,7 +2221,7 @@
       : new Set(allData.map(r => r.name).filter(Boolean)).size;
     const unregistered = (totals.naoRegistrados != null)
       ? totals.naoRegistrados
-      : paymentAll.length;
+      : paymentAll.filter(r => !r.registrado).length;
 
     document.getElementById('stat-employees').textContent    = employees;
     document.getElementById('stat-paid-month').textContent   = paidMonth;
@@ -4087,7 +4100,13 @@
       const countLabel  = `${g.rows.length} funcionário${g.rows.length > 1 ? 's' : ''}`;
       const groupRows   = g.rows.map(r => `
         <tr>
-          <td><strong>${escHtml(r.name)}</strong></td>
+          <td><strong>${escHtml(r.name)}</strong>
+            <div style="font-size:11px;color:var(--gray-500)">${r.registrado
+              ? ['Registrado',
+                 r.vencimento ? `vencimento ${fmtDateBR(r.vencimento)}` : '',
+                 r.periodo ? `período ${escHtml(r.periodo)} termina ${fmtDateBR(r.periodoFim)}` : '',
+                ].filter(Boolean).join(' · ')
+              : 'Sem registro'}</div></td>
           <td>${escHtml(r.branch)}</td>
           <td>
             <span class="badge ${r.monthNum === curMonthNum ? 'badge-active' : r.monthNum > curMonthNum ? 'badge-future' : 'badge-done'}">
@@ -4095,9 +4114,9 @@
             </span>
           </td>
           <td>
-            <span class="badge ${r.pay30 ? 'pay30-yes' : 'pay30-no'}">
-              ${r.pay30 ? 'Sim — 30 dias' : 'Não'}
-            </span>
+            ${r.registrado
+              ? `<span class="badge pay-terco">1/3 de férias</span>`
+              : `<span class="badge ${r.pay30 ? 'pay30-yes' : 'pay30-no'}">${r.pay30 ? '30 dias' : 'Não'}</span>`}
           </td>
         </tr>`).join('');
       return `
@@ -4445,13 +4464,46 @@
           <td>${fmtDateBR(r.dueDate)}</td>
           <td style="text-align:center">${r.availableDays !== '' && r.availableDays !== undefined ? r.availableDays : '—'}</td>
           <td>${sitBadge(r)}</td>
+          <td>${pagoCell(r)}</td>
         </tr>`).join('');
       return `
         <tr class="month-group-header">
-          <td colspan="5">${escHtml(g.branch)} <span style="font-weight:400;opacity:.7">(${g.rows.length} vencimento${g.rows.length > 1 ? 's' : ''})</span></td>
+          <td colspan="6">${escHtml(g.branch)} <span style="font-weight:400;opacity:.7">(${g.rows.length} vencimento${g.rows.length > 1 ? 's' : ''})</span></td>
         </tr>
         ${rows}`;
     }).join('');
+  }
+
+  // "Férias Paga?" — Sim / Não por (matrícula × vencimento); só o RH marca
+  function pagoCell(r) {
+    if (!r.matricula) return '—';
+    const atual = feriasPagas[r.matricula + '|' + r.dueDate] || '';
+    const dis = ehRH() ? '' : ' disabled';
+    const box = v => `<label class="pago-opt"><input type="checkbox" data-mat="${escHtml(String(r.matricula))}"
+        data-venc="${escHtml(r.dueDate)}" value="${v}" onchange="marcarPaga(this)"${atual === v ? ' checked' : ''}${dis}> ${v}</label>`;
+    return box('Sim') + box('Não');
+  }
+
+  function marcarPaga(cb) {
+    const key = cb.dataset.mat + '|' + cb.dataset.venc;
+    const antes = feriasPagas[key] || '';
+    const novo = cb.checked ? cb.value : '';
+    if (novo) feriasPagas[key] = novo; else delete feriasPagas[key];
+    renderDueView();
+    if (typeof google === 'undefined' || !google.script) return;   // preview local
+    const desfaz = msg => {
+      if (antes) feriasPagas[key] = antes; else delete feriasPagas[key];
+      renderDueView();
+      alert('Não foi possível salvar: ' + msg);
+    };
+    gsRun()
+      .withSuccessHandler(txt => {
+        let res;
+        try { res = JSON.parse(txt); } catch (e) { res = { success: false, error: 'Resposta inválida.' }; }
+        if (!res.success) desfaz(res.error || 'erro');
+      })
+      .withFailureHandler(e => desfaz((e && e.message) || e))
+      .setFeriasPaga({ matricula: cb.dataset.mat, vencimento: cb.dataset.venc, pago: novo });
   }
 
   function printDue() {
