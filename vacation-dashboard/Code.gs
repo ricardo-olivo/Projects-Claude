@@ -971,7 +971,7 @@ function _avisoHtml_(d) {
 // FUNCIONÁRIOS SEM REGISTRO — PAGAMENTO DE FÉRIAS
 // Fonte: coluna "Registrado" = "Não" na aba Func (+ planilha legada
 // opcional em PAYMENT_SHEET_ID).
-// mês de vencimento = mês de aniversário da admissão;
+// mês de vencimento = mês do vencimento manual (Func col. J) ou, sem ele, da admissão;
 // pagar 30 dias    = saldo atual >= 30.
 // ============================================================
 function getPaymentData_(func, saldoOf) {
@@ -984,8 +984,9 @@ function getPaymentData_(func, saldoOf) {
       if (reg !== 'não' && reg !== 'nao') return;
       const name = String(r[F.NOME] || '').trim();
       if (!name) return;
-      const adm = toDate_(r[F.ADMISSAO]);
-      const monthNum = adm ? adm.getMonth() + 1 : null;
+      // vencimento manual da ficha (col. J) tem prioridade; senão, mês da admissão
+      const base = toDate_(r[F.VENC]) || toDate_(r[F.ADMISSAO]);
+      const monthNum = base ? base.getMonth() + 1 : null;
       const saldo = saldoOf ? saldoOf(_mk_(r[F.MAT])) : 0;
       const rec = {
         name: name,
