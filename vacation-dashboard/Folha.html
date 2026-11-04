@@ -64,6 +64,17 @@
     .recibo .ln.tot { font-weight: 700; color: var(--danger); background: white; }
     .recibo .ln.liq { font-weight: 700; color: var(--danger); border-top: 2px solid var(--gray-900); }
     .recibo .ass { padding: 14px 10px 8px; font-size: 12px; color: var(--gray-500); }
+    /* cartões da mesma linha com o mesmo tamanho: cada seção (cabeçalho, proventos, descontos,
+       observações, líquido) ocupa uma linha da grade e fica com a altura da maior da linha */
+    .recibo { display: grid; grid-row: span 5; grid-template-rows: subgrid; row-gap: 0; }
+    .recibo .bp { background: #f0fdf4; display: flex; flex-direction: column; }
+    .recibo .bp .ln.tot { margin-top: auto; }   /* Total na mesma altura em todos os cartões da linha */
+    .recibo .bd { background: #fff7ed; }
+    .recibo .bf { display: flex; flex-direction: column; justify-content: flex-end; }
+    @supports not (grid-template-rows: subgrid) {
+      .recibo { display: flex; flex-direction: column; grid-row: auto; }
+      .recibo .bi { flex: 1; }
+    }
     .selo-inativo { background: var(--gray-200); color: var(--gray-700); border-radius: 4px; padding: 0 5px; font-size: 10px; margin-left: 4px; }
     .aviso-sessao { font-size: 12px; color: var(--gray-500); margin-left: auto; }
     .imp-box { background: white; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,.08); padding: 20px; margin-bottom: 18px; }
@@ -418,13 +429,12 @@
     return '<div class="recibo">'
       + '<div class="rh"><div class="rn">' + esc(r.nome) + (r.ativo ? '' : '<span class="selo-inativo">inativo</span>') + '</div>'
       + '<div class="rs">' + esc(r.filial) + ' · ' + esc(nomeMes(folhaMesAtual)) + (r.inicio ? ' · Início: ' + esc(r.inicio) : '') + ' · USO RESTRITO DA EMPRESA</div></div>'
-      + p.map(function (l) { return ln('p', l.descricao, l.valor); }).join('')
-      + ln('tot', 'Total', r.proventos)
-      + d.map(function (l) { return ln('d', l.descricao, l.valor); }).join('')
-      + ferHtml
-      + i.map(function (l) { return ln('i', l.descricao, null); }).join('')
-      + ln('liq', 'Líquido a Receber', r.liquido)
-      + '<div class="ass">Assinatura: ____________________________</div>'
+      + '<div class="bp">' + p.map(function (l) { return ln('p', l.descricao, l.valor); }).join('')
+      + ln('tot', 'Total', r.proventos) + '</div>'
+      + '<div class="bd">' + d.map(function (l) { return ln('d', l.descricao, l.valor); }).join('') + '</div>'
+      + '<div class="bi">' + ferHtml + i.map(function (l) { return ln('i', l.descricao, null); }).join('') + '</div>'
+      + '<div class="bf">' + ln('liq', 'Líquido a Receber', r.liquido)
+      + '<div class="ass">Assinatura: ____________________________</div></div>'
       + '</div>';
   }
 
