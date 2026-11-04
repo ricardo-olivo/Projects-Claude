@@ -19,7 +19,7 @@
 // ============================================================
 
 // ID da planilha da folha (Google Sheets, NÃO compartilhada com ninguém).
-const FOLHA_SHEET_ID = '';
+const FOLHA_SHEET_ID = '1Qvv6f3kJnaM8ag2uPinlQu_EZly-syNdeH3JlKlTphI';
 
 const FOLHA_TAB = {
   FUNC: 'Funcionarios', FILIAIS: 'Filiais', RUBRICAS: 'Rubricas', LANC: 'Lancamentos',
