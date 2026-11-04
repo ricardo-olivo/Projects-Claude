@@ -19,7 +19,7 @@
 // ============================================================
 
 // ID da planilha da folha (Google Sheets, NÃO compartilhada com ninguém).
-const FOLHA_SHEET_ID = '1Qvv6f3kJnaM8ag2uPinlQu_EZly-syNdeH3JlKlTphI';
+const FOLHA_SHEET_ID = '1A9OpzvS2FTdpkpY336mgRil3JkBIw0keTCKG-SFbQTo';
 
 const FOLHA_TAB = {
   FUNC: 'Funcionarios', FILIAIS: 'Filiais', RUBRICAS: 'Rubricas', LANC: 'Lancamentos',
@@ -226,9 +226,15 @@ function _base32Decode_(s) {
 }
 
 // ---------- planilha da folha ----------
+// Só aceita a planilha se ela já tiver as abas da folha — assim um ID errado dá erro claro
+// em vez de criar abas vazias numa planilha que não é a da folha.
 function _folhaSS_() {
   if (!FOLHA_SHEET_ID) throw new Error('Planilha da folha ainda não configurada (FOLHA_SHEET_ID no FolhaPagamento.gs).');
-  return SpreadsheetApp.openById(FOLHA_SHEET_ID);
+  const ss = SpreadsheetApp.openById(FOLHA_SHEET_ID);
+  if (!ss.getSheetByName(FOLHA_TAB.FUNC) || !ss.getSheetByName(FOLHA_TAB.LANC))
+    throw new Error('A planilha "' + ss.getName() + '" não é a planilha da folha (faltam as abas '
+      + FOLHA_TAB.FUNC + ' e ' + FOLHA_TAB.LANC + '). Confira o FOLHA_SHEET_ID no FolhaPagamento.gs.');
+  return ss;
 }
 function _folhaAba_(nome) {
   const ss = _folhaSS_();
