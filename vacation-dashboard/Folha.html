@@ -75,6 +75,14 @@
       .recibo { display: flex; flex-direction: column; grid-row: auto; }
       .recibo .bi { flex: 1; }
     }
+    /* janela (novo funcionário) */
+    .ov { position: fixed; inset: 0; background: rgba(0,0,0,.4); display: flex; align-items: center; justify-content: center; z-index: 50; padding: 16px; }
+    .ov.hidden { display: none; }
+    .ov-box { background: white; border-radius: 10px; padding: 20px; width: 100%; max-width: 480px; max-height: 90vh; overflow: auto; }
+    .ov-box h2 { margin: 0 0 6px; font-size: 18px; }
+    .ov-box input[type=date] { width: 100%; padding: 8px 10px; border: 1px solid var(--gray-300); border-radius: 7px; font-size: 15px; }
+    .ov-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .ov-hint { font-size: 12px; color: var(--gray-500); margin: 10px 0 0; }
     /* edição de recibo */
     .recibo .rn { display: flex; align-items: center; gap: 6px; }
     .btn-ed { margin-left: auto; border: 1px solid var(--gray-300); background: white; color: var(--gray-700); border-radius: 5px; font-size: 11px; padding: 2px 8px; cursor: pointer; font-weight: 600; }
@@ -194,6 +202,8 @@
       <div><label for="busca">Buscar funcionário</label><input type="text" id="busca" oninput="renderFolha()" placeholder="nome…"></div>
       <button class="btn btn-sec no-print" onclick="window.print()" title="Imprime os recibos que estão na tela">🖨 Imprimir recibos</button>
       <button class="btn btn-sec no-print" onclick="abrirImportacao()" title="Lê o relatório de comissão e o PDF dos manipulados e preenche a Premiação do mês">⬆ Importar comissões</button>
+      <button class="btn btn-sec no-print" onclick="abrirNovoMes()" title="Cria o mês seguinte copiando o último: valores fixos repetem, variáveis vêm em branco">📅 Abrir novo mês</button>
+      <button class="btn btn-sec no-print" onclick="abrirNovoFunc()" title="Cadastra um funcionário na folha e cria o recibo dele no mês aberto">+ Novo funcionário</button>
       <span class="aviso-sessao" id="aviso-sessao"></span>
     </div>
     <div class="cards">
@@ -207,6 +217,26 @@
   </div>
 
   <!-- importação de comissões (fase 2) -->
+  <!-- cadastro de funcionário novo -->
+  <div class="ov hidden" id="ov-func" onclick="if(event.target===this)fecharNovoFunc()">
+    <div class="ov-box">
+      <h2>+ Novo funcionário</h2>
+      <label for="nf-nome">Nome completo</label><input type="text" id="nf-nome" maxlength="80">
+      <label for="nf-filial">Filial</label><input type="text" id="nf-filial" list="nf-filiais" placeholder="escolha ou digite"><datalist id="nf-filiais"></datalist>
+      <div class="ov-2">
+        <div><label for="nf-inicio">Início</label><input type="date" id="nf-inicio"></div>
+        <div><label for="nf-salario">Salário (R$)</label><input type="text" id="nf-salario" inputmode="decimal" placeholder="0,00"></div>
+      </div>
+      <div class="ov-2">
+        <div><label for="nf-piso">Piso da premiação (opcional)</label><input type="text" id="nf-piso" inputmode="decimal" placeholder="0,00"></div>
+        <div><label for="nf-mat">Matrícula no painel de férias (opcional)</label><input type="text" id="nf-mat"></div>
+      </div>
+      <p class="ov-hint" id="nf-hint"></p>
+      <div class="msg erro" id="nf-msg"></div>
+      <div class="ed-botoes"><button class="btn btn-sec" onclick="fecharNovoFunc()">Cancelar</button><button class="btn ed-salvar" id="nf-salvar" onclick="salvarNovoFunc()">Cadastrar</button></div>
+    </div>
+  </div>
+
   <div class="hidden" id="tela-import">
     <div class="imp-box">
       <h2>⬆ Importar comissões — <span id="imp-mes"></span></h2>
@@ -572,6 +602,77 @@
     }).catch(function (e) { if (e && e.message !== 'bloqueada') falha('Erro: ' + e.message); });
   }
 
+  // ── ABRIR NOVO MÊS ────────────────────────────────────────
+  function mesSeguinte(m) {
+    var p = String(m).split('-').map(Number), a = p[0], n = p[1] + 1;
+    if (n > 12) { n = 1; a++; }
+    return a + '-' + String(n).padStart(2, '0');
+  }
+  function abrirNovoMes() {
+    var meses = Array.from(document.getElementById('sel-mes').options).map(function (o) { return o.value; }).sort();
+    if (!meses.length) return alert('Nenhum mês lançado ainda.');
+    var ultimo = meses[meses.length - 1], novo = mesSeguinte(ultimo);
+    if (editId && !confirm('Há um recibo em edição. Descartar as alterações dele?')) return;
+    if (!confirm('Criar a folha de ' + nomeMes(novo) + ' a partir de ' + nomeMes(ultimo) + '?\n\n'
+      + '• Só funcionários ATIVOS.\n'
+      + '• Valores fixos (salário, gratificação, INSS… — coluna "Recorrente" da aba Rubricas) são repetidos.\n'
+      + '• Premiação, horas extras, conta farmácia e outros variáveis vêm em branco.\n'
+      + '• Anotações de férias não são copiadas (o recibo mostra as férias do painel).')) return;
+    document.getElementById('recibos').textContent = 'Criando ' + nomeMes(novo) + '…';
+    chamarFolha('folhaAbrirMes', novo).then(function (j) {
+      if (!j.success) { alert('Erro: ' + j.error); carregarMes(); return; }
+      var sel = document.getElementById('sel-mes');
+      var o = document.createElement('option'); o.value = j.mes; o.textContent = nomeMes(j.mes);
+      sel.insertBefore(o, sel.firstChild); sel.value = j.mes;
+      carregarMes();
+      alert(nomeMes(j.mes) + ' criado: ' + j.funcionarios + ' recibos (' + j.linhas + ' linhas)'
+        + (j.novos ? ', dos quais ' + j.novos + ' sem recibo em ' + nomeMes(j.origem) + ' (só Salário/Premiação/INSS)' : '') + '.');
+    }).catch(function (e) { if (e && e.message !== 'bloqueada') alert('Erro: ' + e.message); });
+  }
+
+  // ── NOVO FUNCIONÁRIO ──────────────────────────────────────
+  function abrirNovoFunc() {
+    ['nf-nome', 'nf-filial', 'nf-inicio', 'nf-salario', 'nf-piso', 'nf-mat'].forEach(function (id) { document.getElementById(id).value = ''; });
+    var filiais = Array.from(new Set(folhaRecibos.map(function (r) { return r.filial; }))).sort();
+    document.getElementById('nf-filiais').innerHTML = filiais.map(function (f) { return '<option value="' + esc(f) + '">'; }).join('');
+    var sf = document.getElementById('sel-filial').value;
+    if (sf) document.getElementById('nf-filial').value = sf;
+    document.getElementById('nf-hint').textContent = folhaMesAtual
+      ? 'O recibo dele já é criado em ' + nomeMes(folhaMesAtual) + ' com Salário, Premiação e INSS — o resto você completa no ✏ Editar.'
+      : '';
+    document.getElementById('nf-msg').textContent = '';
+    var b = document.getElementById('nf-salvar'); b.disabled = false; b.textContent = 'Cadastrar';
+    document.getElementById('ov-func').classList.remove('hidden');
+    document.getElementById('nf-nome').focus();
+  }
+  function fecharNovoFunc() { document.getElementById('ov-func').classList.add('hidden'); }
+  function salvarNovoFunc() {
+    var msgEl = document.getElementById('nf-msg'), b = document.getElementById('nf-salvar');
+    var d = {
+      nome: document.getElementById('nf-nome').value.trim(),
+      filial: document.getElementById('nf-filial').value.trim(),
+      inicio: document.getElementById('nf-inicio').value,
+      salario: lerValor(document.getElementById('nf-salario').value),
+      piso: lerValor(document.getElementById('nf-piso').value),
+      matFerias: document.getElementById('nf-mat').value.trim(),
+    };
+    if (!d.nome) return (msgEl.textContent = 'Informe o nome.');
+    if (!d.filial) return (msgEl.textContent = 'Informe a filial.');
+    if ((d.salario !== null && (isNaN(d.salario) || d.salario < 0)) || (d.piso !== null && (isNaN(d.piso) || d.piso < 0)))
+      return (msgEl.textContent = 'Valor inválido (use o formato 1.234,56).');
+    b.disabled = true; b.textContent = 'Salvando…'; msgEl.textContent = '';
+    chamarFolha('folhaNovoFuncionario', folhaMesAtual, d).then(function (j) {
+      if (!j.success) { b.disabled = false; b.textContent = 'Cadastrar'; msgEl.textContent = j.error; return; }
+      fecharNovoFunc();
+      if (j.recibo) {
+        folhaRecibos.push(j.recibo);
+        document.getElementById('busca').value = j.recibo.nome;   // mostra o recibo recém-criado
+        renderFolha();
+      }
+      alert(d.nome + ' cadastrado (' + j.id + ').' + (j.recibo ? '\nCompleta o recibo dele pelo ✏ Editar.' : ''));
+    }).catch(function (e) { if (e && e.message !== 'bloqueada') { b.disabled = false; b.textContent = 'Cadastrar'; msgEl.textContent = 'Erro: ' + e.message; } });
+  }
+
   function voltarPainel() {
     var ft = folhaToken; folhaToken = '';
     if (!noAppsScript()) { location.href = 'Dashboard.html'; return; }
@@ -911,6 +1012,8 @@
         return r({ mes: args[1], linhas: linhas, semFuncionario: sem, empates: [], funcionarios: func });
       }
       case 'folhaSalvarRecibo': return r({});
+      case 'folhaAbrirMes': return r({ mes: args[1], origem: '2026-08', funcionarios: FOLHA_MOCK.length, novos: 0, linhas: 20 });
+      case 'folhaNovoFuncionario': { var dd = args[2]; return r({ id: 'F904', recibo: args[1] ? { id: 'F904', nome: dd.nome, filial: dd.filial, inicio: '', ativo: true, ferias: [], linhas: [{ tipo: 'P', rubrica: 'SALARIO', descricao: 'Salário', valor: dd.salario, ordem: 1 }, { tipo: 'P', rubrica: 'PREMIACAO', descricao: 'Premiação', valor: null, ordem: 2 }, { tipo: 'D', rubrica: 'INSS', descricao: '(-) INSS', valor: null, ordem: 3 }], proventos: dd.salario || 0, descontos: 0, liquido: dd.salario || 0 } : null }); }
       case 'folhaImportarGravar': return r({ gravados: args[2].length, total: args[2].reduce(function (s, i) { return s + i.valor; }, 0) });
     }
     return { success: false, error: 'mock: ' + fn };

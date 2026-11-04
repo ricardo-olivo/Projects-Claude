@@ -48,7 +48,8 @@ const FOLHA_API = {
   folhaDesbloquear: folhaDesbloquear_, folhaBloquear: folhaBloquear_,
   folhaMeses: folhaMeses_, folhaDados: folhaDados_,
   folhaImportarPrevia: folhaImportarPrevia_, folhaImportarGravar: folhaImportarGravar_,
-  folhaSalvarRecibo: folhaSalvarRecibo_,
+  folhaSalvarRecibo: folhaSalvarRecibo_, folhaAbrirMes: folhaAbrirMes_,
+  folhaNovoFuncionario: folhaNovoFuncionario_,
 };
 
 function paginaFolha_() {
@@ -670,6 +671,140 @@ function folhaSalvarRecibo_(ft, mes, id, linhas, antes) {
 
       _folhaLog_(email, 'editar recibo', mes + ' · ' + id + ' · ' + String(base[FL.NOME] || '') + ' (' + novas.length + ' linhas)');
       return JSON.stringify({ success: true });
+    } finally { lock.releaseLock(); }
+  } catch (e) { return _err_(e.message); }
+}
+
+// ---------- abrir o mês seguinte (botão 📅 Abrir novo mês) ----------
+// Cria as linhas de `novo` (aaaa-mm) copiando o último mês anterior a ele, só para funcionários ATIVOS:
+//  · rubrica com "Recorrente = Sim" na aba Rubricas → repete descrição E valor (salário, INSS…);
+//  · as outras → repete a linha com o valor em branco (premiação, horas extras, conta farmácia…);
+//  · anotações de férias (FERIAS_OBS) não vêm — o recibo mostra as férias do painel; OBS (pix, conta) vem;
+//  · ativo sem recibo no mês anterior (admissão nova) → Salário, Premiação e INSS em branco.
+// Recusa se o mês já tiver qualquer linha (não duplica).
+function folhaAbrirMes_(ft, novo) {
+  try {
+    const email = _folhaSessao_(ft);
+    novo = _folhaMes_(novo);
+    if (!novo) return _err_('Mês inválido.');
+    const lock = LockService.getScriptLock();
+    lock.waitLock(20000);
+    try {
+      const rows = _folhaRows_(FOLHA_TAB.LANC);
+      const meses = {};
+      rows.forEach(function (r) { const m = _folhaMes_(r[FL.MES]); if (m) meses[m] = 1; });
+      if (meses[novo]) return _err_(_folhaNomeMes_(novo) + ' já existe na folha.');
+      const anteriores = Object.keys(meses).filter(function (m) { return m < novo; }).sort();
+      if (!anteriores.length) return _err_('Não há mês anterior a ' + _folhaNomeMes_(novo) + ' para copiar.');
+      const origem = anteriores[anteriores.length - 1];
+
+      const recorrente = {};
+      _folhaRows_(FOLHA_TAB.RUBRICAS).forEach(function (r) {
+        const cod = String(r[0] || '').trim();
+        if (cod) recorrente[cod] = /^s/i.test(String(r[3] || '').trim());
+      });
+      const func = _folhaFuncionarios_();
+      const porFunc = {};
+      rows.forEach(function (r) {
+        if (_folhaMes_(r[FL.MES]) !== origem) return;
+        const id = String(r[FL.ID] || '').trim();
+        (porFunc[id] = porFunc[id] || []).push(r);
+      });
+
+      const novas = [];
+      let nFunc = 0, nNovos = 0;
+      func.lista.forEach(function (f) {
+        if (!f.ativo) return;
+        const ls = (porFunc[f.id] || []).slice().sort(function (a, b) { return (Number(a[FL.ORDEM]) || 0) - (Number(b[FL.ORDEM]) || 0); });
+        let ordem = 0;
+        if (!ls.length) {
+          [['P', 'SALARIO', 'Salário'], ['P', 'PREMIACAO', 'Premiação'], ['D', 'INSS', '(-) INSS']].forEach(function (x) {
+            novas.push([novo, f.id, f.filial, f.nome, x[0], x[1], x[2], '', ++ordem]);
+          });
+          nFunc++; nNovos++;
+          return;
+        }
+        ls.forEach(function (r) {
+          const tipo = String(r[FL.TIPO] || '').trim().toUpperCase();
+          const rub = String(r[FL.RUB] || '').trim();
+          if (rub === 'FERIAS_OBS') return;
+          const valor = tipo !== 'I' && recorrente[rub] && r[FL.VALOR] !== '' ? r[FL.VALOR] : '';
+          novas.push([novo, f.id, f.filial || r[FL.FILIAL], f.nome || r[FL.NOME], tipo, rub, r[FL.DESC], valor, ++ordem]);
+        });
+        nFunc++;
+      });
+      if (!novas.length) return _err_('Nenhum funcionário ativo para lançar.');
+
+      const sh = _folhaAba_(FOLHA_TAB.LANC);
+      const ini = sh.getLastRow() + 1;
+      sh.getRange(ini, FL.MES + 1, novas.length, 1).setNumberFormat('@');   // "2026-11" como texto, não data
+      sh.getRange(ini, 1, novas.length, novas[0].length).setValues(novas);
+      _folhaLog_(email, 'abrir mês', novo + ' a partir de ' + origem + ': ' + nFunc + ' funcionários, ' + novas.length + ' linhas');
+      return JSON.stringify({ success: true, mes: novo, origem: origem, funcionarios: nFunc, novos: nNovos, linhas: novas.length });
+    } finally { lock.releaseLock(); }
+  } catch (e) { return _err_(e.message); }
+}
+function _folhaNomeMes_(m) {
+  const n = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+  const p = String(m).split('-');
+  return n[Number(p[1]) - 1] + '/' + p[0];
+}
+
+// ---------- cadastrar funcionário novo (botão + Novo funcionário) ----------
+// d = { nome, filial, inicio (aaaa-mm-dd), salario?, matFerias?, piso? }. Grava na aba Funcionarios
+// com o próximo ID (F###) e, se `mes` vier, já cria o recibo dele nesse mês (Salário, Premiação, INSS).
+function folhaNovoFuncionario_(ft, mes, d) {
+  try {
+    const email = _folhaSessao_(ft);
+    d = d || {};
+    const nome = String(d.nome || '').replace(/\s+/g, ' ').trim();
+    const filial = String(d.filial || '').trim();
+    if (!nome) return _err_('Informe o nome.');
+    if (!filial) return _err_('Informe a filial.');
+    const inicio = d.inicio ? toDate_(d.inicio) : null;
+    if (d.inicio && !inicio) return _err_('Data de início inválida.');
+    const num = function (v, rot) {
+      if (v === null || v === undefined || v === '') return '';
+      const n = Math.round(Number(v) * 100) / 100;
+      if (!isFinite(n) || n < 0) throw new Error(rot + ' inválido.');
+      return n;
+    };
+    const salario = num(d.salario, 'Salário'), piso = num(d.piso, 'Piso');
+    mes = mes ? _folhaMes_(mes) : '';
+
+    const lock = LockService.getScriptLock();
+    lock.waitLock(20000);
+    try {
+      const func = _folhaFuncionarios_();
+      const igual = func.lista.find(function (f) { return f.ativo && _folhaNorm_(f.nome) === _folhaNorm_(nome); });
+      if (igual) return _err_('Já existe um funcionário ativo com esse nome (' + igual.id + ', ' + igual.filial + ').');
+      let max = 0;
+      func.lista.forEach(function (f) { const m = /^F(\d+)$/i.exec(f.id); if (m) max = Math.max(max, Number(m[1])); });
+      const id = 'F' + String(max + 1).padStart(3, '0');
+
+      const shF = _folhaAba_(FOLHA_TAB.FUNC);
+      const nr = shF.getLastRow() + 1;
+      shF.getRange(nr, 1, 1, FOLHA_HEADERS.Funcionarios.length).setValues([[
+        id, nome, filial, inicio || '', 'Sim', String(d.matFerias || '').trim(), '', '',
+        'Cadastrado no painel ' + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd/MM/yyyy'), piso]]);
+      if (inicio) shF.getRange(nr, FU.INICIO + 1).setNumberFormat('dd/mm/yyyy');
+
+      let linhas = [];
+      if (mes) {
+        const sal = 'Salário' + (salario !== '' ? ' (' + salario.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) + ')' : '');
+        linhas = [['P', 'SALARIO', sal, salario], ['P', 'PREMIACAO', 'Premiação', ''], ['D', 'INSS', '(-) INSS', '']];
+        const sh = _folhaAba_(FOLHA_TAB.LANC);
+        const ini = sh.getLastRow() + 1;
+        sh.getRange(ini, FL.MES + 1, linhas.length, 1).setNumberFormat('@');
+        sh.getRange(ini, 1, linhas.length, 9).setValues(linhas.map(function (l, i) {
+          return [mes, id, filial, nome, l[0], l[1], l[2], l[3], i + 1];
+        }));
+      }
+      _folhaLog_(email, 'novo funcionário', id + ' · ' + nome + ' · ' + filial + (mes ? ' · recibo em ' + mes : ''));
+      return JSON.stringify({ success: true, id: id, recibo: mes ? {
+        id: id, nome: nome, filial: filial, inicio: inicio ? formatDateBR_(formatDate_(inicio)) : '', ativo: true, ferias: [],
+        linhas: linhas.map(function (l, i) { return { tipo: l[0], rubrica: l[1], descricao: l[2], valor: l[3] === '' ? null : l[3], ordem: i + 1 }; }),
+        proventos: salario || 0, descontos: 0, liquido: salario || 0 } : null });
     } finally { lock.releaseLock(); }
   } catch (e) { return _err_(e.message); }
 }
