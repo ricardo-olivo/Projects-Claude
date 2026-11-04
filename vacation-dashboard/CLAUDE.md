@@ -384,3 +384,4 @@ Módulo **isolado** dentro deste projeto (pode virar projeto próprio depois). P
   Toda função de dados recebe o `folhaToken` e chama `_folhaSessao_` (erro `FOLHA_BLOQUEADA`).
   Reset de acesso: apagar a propriedade `FOLHA_CRED_<email>` no editor.
 - Preview: `/Folha.html` com servidor de mentira (senha 10+ caracteres, código `123456`).
+- **Editar recibo** (2026-11-04): botão ✏ Editar em cada cartão (um por vez) → descrição/valor por linha, + provento/desconto/observação, ↑↓, ✕, totais ao vivo. `folhaSalvarRecibo_(ft, mes, id, linhas, antes)` reescreve as linhas (mês, ID) da aba Lancamentos (reaproveita as linhas da planilha, acrescenta/apaga o que sobrar); `antes` = `_folhaDigital_` das linhas carregadas — se a planilha mudou no meio, recusa. Linha nova = rubrica `MANUAL`; as existentes mantêm a rubrica (a PREMIACAO continua sendo achada pela importação). Registra em AcessosFolha.

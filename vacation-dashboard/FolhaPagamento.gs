@@ -48,6 +48,7 @@ const FOLHA_API = {
   folhaDesbloquear: folhaDesbloquear_, folhaBloquear: folhaBloquear_,
   folhaMeses: folhaMeses_, folhaDados: folhaDados_,
   folhaImportarPrevia: folhaImportarPrevia_, folhaImportarGravar: folhaImportarGravar_,
+  folhaSalvarRecibo: folhaSalvarRecibo_,
 };
 
 function paginaFolha_() {
@@ -601,4 +602,74 @@ function _folhaPontos_(a, b) {
   if (!prim && outros < 2) return 0;
   if (prim && (b.length === 1 || a.length === 1)) return Math.max(p, 4);   // um dos lados só com o 1º nome ("Clari")
   return p;
+}
+
+// ---------- edição manual de um recibo (botão ✏ Editar no cartão) ----------
+// "impressão digital" das linhas do recibo, na ordem — o navegador manda a que ele carregou
+// e o servidor confere com a planilha antes de gravar (não sobrescreve edição de outra pessoa)
+function _folhaDigital_(linhas) {
+  return JSON.stringify(linhas.map(function (l) { return [l.tipo, l.rubrica, l.descricao, l.valor]; }));
+}
+
+// linhas = [{ tipo: 'P'|'D'|'I', rubrica?, descricao, valor? }] na ordem do recibo; antes = _folhaDigital_ das
+// linhas que estavam na tela. Reescreve as linhas (mes, id) da aba Lancamentos: reaproveita as mesmas
+// linhas da planilha, acrescenta no fim se sobrar e apaga as que faltarem.
+function folhaSalvarRecibo_(ft, mes, id, linhas, antes) {
+  try {
+    const email = _folhaSessao_(ft);
+    mes = _folhaMes_(mes);
+    id = String(id || '').trim();
+    if (!mes || !id) return _err_('Recibo inválido.');
+    if (!Array.isArray(linhas)) return _err_('Nada para gravar.');
+    const novas = [];
+    for (let i = 0; i < linhas.length; i++) {
+      const l = linhas[i] || {};
+      const tipo = String(l.tipo || '').trim().toUpperCase();
+      if (['P', 'D', 'I'].indexOf(tipo) < 0) return _err_('Tipo de linha inválido: ' + tipo);
+      const desc = String(l.descricao || '').trim().slice(0, 120);
+      if (!desc) return _err_('Toda linha precisa de uma descrição.');
+      let valor = null;
+      if (tipo !== 'I' && l.valor !== null && l.valor !== '' && l.valor !== undefined) {
+        valor = Math.round(Number(l.valor) * 100) / 100;
+        if (!isFinite(valor) || valor < 0) return _err_('Valor inválido em "' + desc + '".');
+      }
+      novas.push({ tipo: tipo, rubrica: String(l.rubrica || '').trim() || 'MANUAL', descricao: desc, valor: valor });
+    }
+    if (!novas.length) return _err_('O recibo precisa de pelo menos uma linha.');
+
+    const lock = LockService.getScriptLock();
+    lock.waitLock(20000);
+    try {
+      const sh = _folhaAba_(FOLHA_TAB.LANC);
+      const atuais = [];
+      _folhaRows_(FOLHA_TAB.LANC).forEach(function (r, i) {
+        if (_folhaMes_(r[FL.MES]) !== mes || String(r[FL.ID] || '').trim() !== id) return;
+        atuais.push({ linha: i + 2, r: r, ordem: Number(r[FL.ORDEM]) || 0,
+          tipo: String(r[FL.TIPO] || '').trim().toUpperCase(), rubrica: String(r[FL.RUB] || ''),
+          descricao: String(r[FL.DESC] || ''), valor: _folhaNum_(r[FL.VALOR]) });
+      });
+      if (!atuais.length) return _err_('Recibo não encontrado na planilha.');
+      const ordenadas = atuais.slice().sort(function (a, b) { return a.ordem - b.ordem; });
+      if (antes && _folhaDigital_(ordenadas) !== String(antes))
+        return _err_('Este recibo foi alterado na planilha depois que a tela carregou. Recarregue o mês e edite de novo.');
+
+      const base = ordenadas[0].r;
+      const valores = novas.map(function (l, i) {
+        return [base[FL.MES], id, base[FL.FILIAL], base[FL.NOME], l.tipo, l.rubrica, l.descricao,
+          l.valor === null ? '' : l.valor, i + 1];
+      });
+      const pos = atuais.map(function (a) { return a.linha; }).sort(function (a, b) { return a - b; });
+      const usar = Math.min(pos.length, valores.length);
+      for (let i = 0; i < usar; i++) sh.getRange(pos[i], 1, 1, valores[i].length).setValues([valores[i]]);
+      if (valores.length > pos.length) {
+        const resto = valores.slice(pos.length);
+        sh.getRange(sh.getLastRow() + 1, 1, resto.length, resto[0].length).setValues(resto);
+      }
+      // apaga de baixo para cima para os números de linha não mudarem
+      pos.slice(usar).sort(function (a, b) { return b - a; }).forEach(function (n) { sh.deleteRow(n); });
+
+      _folhaLog_(email, 'editar recibo', mes + ' · ' + id + ' · ' + String(base[FL.NOME] || '') + ' (' + novas.length + ' linhas)');
+      return JSON.stringify({ success: true });
+    } finally { lock.releaseLock(); }
+  } catch (e) { return _err_(e.message); }
 }

@@ -75,6 +75,26 @@
       .recibo { display: flex; flex-direction: column; grid-row: auto; }
       .recibo .bi { flex: 1; }
     }
+    /* edição de recibo */
+    .recibo .rn { display: flex; align-items: center; gap: 6px; }
+    .btn-ed { margin-left: auto; border: 1px solid var(--gray-300); background: white; color: var(--gray-700); border-radius: 5px; font-size: 11px; padding: 2px 8px; cursor: pointer; font-weight: 600; }
+    .btn-ed:hover { background: var(--gray-100); }
+    .recibo.editando { border: 2px solid var(--folha); box-shadow: 0 2px 10px rgba(0,0,0,.12); }
+    .ed-selo { margin-left: auto; font-size: 10px; font-weight: 700; text-transform: uppercase; color: var(--folha); }
+    .recibo .ln.ed { align-items: center; padding: 3px 6px; gap: 4px; }
+    .recibo .ln.ed input { font: inherit; font-size: 12px; border: 1px solid var(--gray-300); border-radius: 4px; padding: 3px 5px; background: white; min-width: 0; }
+    .recibo .ln.ed .ed-desc { flex: 1; }
+    .recibo .ln.ed .ed-val { width: 92px; text-align: right; font-variant-numeric: tabular-nums; }
+    .recibo .ln.ed input.erro { border-color: var(--danger); background: #fef2f2; }
+    .ed-acoes { display: flex; gap: 1px; }
+    .ed-acoes button { border: none; background: none; cursor: pointer; color: var(--gray-500); font-size: 12px; padding: 0 3px; }
+    .ed-acoes .ed-x:hover { color: var(--danger); }
+    .ed-add { display: block; margin: 4px 8px; border: 1px dashed var(--gray-300); background: transparent; color: var(--gray-700); border-radius: 4px; font-size: 11px; padding: 2px 8px; cursor: pointer; }
+    .ed-botoes { display: flex; gap: 8px; justify-content: flex-end; padding: 8px 10px; }
+    .ed-botoes .btn { padding: 6px 14px; font-size: 13px; }
+    .ed-salvar { background: var(--folha); color: white; }
+    .ed-salvar:disabled { opacity: .6; }
+    .ed-msg { padding: 0 10px; font-size: 12px; }
     .selo-inativo { background: var(--gray-200); color: var(--gray-700); border-radius: 4px; padding: 0 5px; font-size: 10px; margin-left: 4px; }
     .aviso-sessao { font-size: 12px; color: var(--gray-500); margin-left: auto; }
     .imp-box { background: white; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,.08); padding: 20px; margin-bottom: 18px; }
@@ -364,7 +384,7 @@
     document.getElementById('recibos').textContent = 'Carregando…';
     chamarFolha('folhaDados', mes).then(function (j) {
       if (!j.success) { document.getElementById('recibos').textContent = j.error; return; }
-      folhaMesAtual = j.mes; folhaRecibos = j.recibos;
+      folhaMesAtual = j.mes; folhaRecibos = j.recibos; editId = null; editLinhas = [];
       var filiais = Array.from(new Set(folhaRecibos.map(function (r) { return r.filial; }))).sort();
       var sel = document.getElementById('sel-filial'), atual = sel.value;
       sel.innerHTML = '<option value="">Todas as filiais</option>';
@@ -426,8 +446,10 @@
         + ' (' + f.dias + (f.dias === 1 ? ' dia' : ' dias') + ')' + (f.pendente ? ' — aguardando aprovação' : '');
       return '<div class="ln fer" title="Do painel de férias"><span>🏖 ' + esc(txt) + '</span><span></span></div>';
     }).join('');
-    return '<div class="recibo">'
-      + '<div class="rh"><div class="rn">' + esc(r.nome) + (r.ativo ? '' : '<span class="selo-inativo">inativo</span>') + '</div>'
+    if (editId === r.id) return reciboEditHtml(r, ferHtml);
+    return '<div class="recibo" data-id="' + esc(r.id) + '">'
+      + '<div class="rh"><div class="rn">' + esc(r.nome) + (r.ativo ? '' : '<span class="selo-inativo">inativo</span>')
+        + '<button class="btn-ed no-print" title="Editar este recibo" onclick="editarRecibo(this)">✏ Editar</button></div>'
       + '<div class="rs">' + esc(r.filial) + ' · ' + esc(nomeMes(folhaMesAtual)) + (r.inicio ? ' · Início: ' + esc(r.inicio) : '') + ' · USO RESTRITO DA EMPRESA</div></div>'
       + '<div class="bp">' + p.map(function (l) { return ln('p', l.descricao, l.valor); }).join('')
       + ln('tot', 'Total', r.proventos) + '</div>'
@@ -436,6 +458,118 @@
       + '<div class="bf">' + ln('liq', 'Líquido a Receber', r.liquido)
       + '<div class="ass">Assinatura: ____________________________</div></div>'
       + '</div>';
+  }
+
+  // ── EDITAR UM RECIBO (um por vez) ─────────────────────────
+  // editLinhas = cópia das linhas do recibo; só vai para a planilha no "Salvar"
+  var editId = null, editLinhas = [], editAntes = '';
+  function digitalLinhas(ls) {   // igual ao _folhaDigital_ do servidor
+    return JSON.stringify(ls.map(function (l) { return [l.tipo, l.rubrica == null ? '' : l.rubrica, l.descricao, l.valor == null ? null : l.valor]; }));
+  }
+  function valorBR(v) { return v == null ? '' : Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+  function lerValor(s) {
+    s = String(s || '').replace(/R\$|\s/g, '');
+    if (!s) return null;
+    if (s.indexOf(',') >= 0) s = s.replace(/\./g, '').replace(',', '.');
+    var n = Number(s);
+    return isFinite(n) ? Math.round(n * 100) / 100 : NaN;
+  }
+  function editarRecibo(btn) {
+    if (editId && !confirm('Há outro recibo em edição. Descartar as alterações dele?')) return;
+    var id = btn.closest('.recibo').getAttribute('data-id');
+    var r = folhaRecibos.find(function (x) { return String(x.id) === id; });
+    if (!r) return;
+    editId = r.id;
+    editLinhas = r.linhas.map(function (l) { return { tipo: l.tipo, rubrica: l.rubrica == null ? '' : l.rubrica, descricao: l.descricao, valor: l.valor == null ? null : l.valor }; });
+    editAntes = digitalLinhas(r.linhas);
+    renderFolha();
+  }
+  function cancelarEdicao() { editId = null; editLinhas = []; renderFolha(); }
+  function cartaoEmEdicao() { return document.querySelector('.recibo.editando'); }
+  function redesenharEdicao() {
+    var r = folhaRecibos.find(function (x) { return x.id === editId; });
+    var el = cartaoEmEdicao();
+    if (!r || !el) return renderFolha();
+    var tmp = document.createElement('div');
+    tmp.innerHTML = reciboHtml(r);
+    el.replaceWith(tmp.firstChild);
+  }
+  function edCampo(inp) {
+    var i = Number(inp.getAttribute('data-i')), l = editLinhas[i];
+    if (!l) return;
+    if (inp.classList.contains('ed-desc')) l.descricao = inp.value;
+    else {
+      var v = lerValor(inp.value);
+      inp.classList.toggle('erro', v !== null && (isNaN(v) || v < 0));
+      l.valor = (v === null || isNaN(v)) ? null : v;
+    }
+    edTotais();
+  }
+  function edTotais() {
+    var soma = function (t) { return editLinhas.reduce(function (s, l) { return s + (l.tipo === t && l.valor ? l.valor : 0); }, 0); };
+    var p = soma('P'), d = soma('D'), el = cartaoEmEdicao();
+    if (!el) return;
+    el.querySelector('.ed-tot').textContent = brl(p);
+    el.querySelector('.ed-liq').textContent = brl(Math.round((p - d) * 100) / 100);
+  }
+  function edAdd(tipo) { editLinhas.push({ tipo: tipo, rubrica: '', descricao: '', valor: null }); redesenharEdicao();
+    var ins = cartaoEmEdicao().querySelectorAll('.ed-desc'); if (ins.length) ins[ins.length - 1].focus(); }
+  function edDel(i) { editLinhas.splice(i, 1); redesenharEdicao(); }
+  function edMover(i, dir) {
+    // troca com a linha vizinha do mesmo tipo
+    var t = editLinhas[i].tipo, j = i + dir;
+    while (j >= 0 && j < editLinhas.length && editLinhas[j].tipo !== t) j += dir;
+    if (j < 0 || j >= editLinhas.length) return;
+    var x = editLinhas[i]; editLinhas[i] = editLinhas[j]; editLinhas[j] = x;
+    redesenharEdicao();
+  }
+
+  function reciboEditHtml(r, ferHtml) {
+    var linha = function (l, i) {
+      var cls = l.tipo === 'P' ? 'p' : l.tipo === 'D' ? 'd' : 'i';
+      return '<div class="ln ' + cls + ' ed">'
+        + '<input class="ed-desc" data-i="' + i + '" value="' + esc(l.descricao) + '" placeholder="Descrição" oninput="edCampo(this)" maxlength="120">'
+        + (l.tipo === 'I' ? '' : '<input class="ed-val" data-i="' + i + '" value="' + esc(valorBR(l.valor)) + '" placeholder="0,00" inputmode="decimal" oninput="edCampo(this)">')
+        + '<span class="ed-acoes"><button title="Subir" onclick="edMover(' + i + ',-1)">↑</button><button title="Descer" onclick="edMover(' + i + ',1)">↓</button>'
+        + '<button title="Remover linha" class="ed-x" onclick="edDel(' + i + ')">✕</button></span></div>';
+    };
+    var grupo = function (t) {
+      return editLinhas.map(function (l, i) { return l.tipo === t ? linha(l, i) : ''; }).join('');
+    };
+    var add = function (t, txt) { return '<button class="ed-add" onclick="edAdd(\'' + t + '\')">+ ' + txt + '</button>'; };
+    var html = '<div class="recibo editando" data-id="' + esc(r.id) + '">'
+      + '<div class="rh"><div class="rn">' + esc(r.nome) + '<span class="ed-selo">editando</span></div>'
+      + '<div class="rs">' + esc(r.filial) + ' · ' + esc(nomeMes(folhaMesAtual)) + ' · valores em R$ (ex.: 1.234,56)</div></div>'
+      + '<div class="bp">' + grupo('P') + add('P', 'provento')
+      + '<div class="ln tot"><span>Total</span><span class="v ed-tot"></span></div></div>'
+      + '<div class="bd">' + grupo('D') + add('D', 'desconto') + '</div>'
+      + '<div class="bi">' + ferHtml + grupo('I') + add('I', 'observação') + '</div>'
+      + '<div class="bf"><div class="ln liq"><span>Líquido a Receber</span><span class="v ed-liq"></span></div>'
+      + '<div class="msg erro ed-msg"></div>'
+      + '<div class="ed-botoes"><button class="btn btn-sec" onclick="cancelarEdicao()">Cancelar</button>'
+      + '<button class="btn ed-salvar" onclick="salvarRecibo(this)">Salvar</button></div></div>'
+      + '</div>';
+    setTimeout(edTotais, 0);
+    return html;
+  }
+
+  function salvarRecibo(btn) {
+    var el = cartaoEmEdicao(), msgEl = el.querySelector('.ed-msg');
+    var falha = function (t) { msgEl.textContent = t; btn.disabled = false; btn.textContent = 'Salvar'; };
+    if (el.querySelector('.ed-val.erro')) return falha('Corrija os valores marcados em vermelho.');
+    var linhas = editLinhas.map(function (l) { return { tipo: l.tipo, rubrica: l.rubrica, descricao: String(l.descricao || '').trim(), valor: l.tipo === 'I' ? null : l.valor }; });
+    if (linhas.some(function (l) { return !l.descricao; })) return falha('Preencha a descrição de todas as linhas (ou remova as vazias).');
+    if (!linhas.length) return falha('O recibo precisa de pelo menos uma linha.');
+    btn.disabled = true; btn.textContent = 'Salvando…'; msgEl.textContent = '';
+    chamarFolha('folhaSalvarRecibo', folhaMesAtual, editId, linhas, editAntes).then(function (j) {
+      if (!j.success) return falha(j.error);
+      var r = folhaRecibos.find(function (x) { return x.id === editId; });
+      r.linhas = linhas.map(function (l, i) { return { tipo: l.tipo, rubrica: l.rubrica || 'MANUAL', descricao: l.descricao, valor: l.valor, ordem: i + 1 }; });
+      var soma = function (t) { return Math.round(r.linhas.reduce(function (s, l) { return s + (l.tipo === t && l.valor ? l.valor : 0); }, 0) * 100) / 100; };
+      r.proventos = soma('P'); r.descontos = soma('D'); r.liquido = Math.round((r.proventos - r.descontos) * 100) / 100;
+      editId = null; editLinhas = [];
+      renderFolha();
+    }).catch(function (e) { if (e && e.message !== 'bloqueada') falha('Erro: ' + e.message); });
   }
 
   function voltarPainel() {
@@ -776,6 +910,7 @@
         });
         return r({ mes: args[1], linhas: linhas, semFuncionario: sem, empates: [], funcionarios: func });
       }
+      case 'folhaSalvarRecibo': return r({});
       case 'folhaImportarGravar': return r({ gravados: args[2].length, total: args[2].reduce(function (s, i) { return s + i.valor; }, 0) });
     }
     return { success: false, error: 'mock: ' + fn };
