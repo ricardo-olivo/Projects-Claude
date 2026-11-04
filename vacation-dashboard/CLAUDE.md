@@ -364,3 +364,22 @@ Colunas `_seq` / `_chave` (cinza) ligam as abas e **não devem ser apagadas**.
 | Sem aba `Acessos` → todo mundo é RH | Permite implantar já e ligar o controle depois (migração suave). |
 | Perfil Gerente só marca férias (não edita/apaga/inclui período) | Abre espaço para o fluxo de aprovação (fase 3). |
 | Logo oficial embutido em base64 (`logo-liderfarma.png`) na Home e no Login | Apps Script não serve arquivos de imagem soltos; o data URI vai dentro do HTML. |
+
+---
+
+## Módulo Folha de Pagamento (2026-11-04)
+
+Módulo **isolado** dentro deste projeto (pode virar projeto próprio depois). Plano e decisões:
+`Área de Trabalho/Claude/folha-de-pagamento/PLANO.md`.
+
+- Arquivos: `FolhaPagamento.gs` (servidor, `FOLHA_API`) e `Folha.html` (tela). No Apps Script: criar
+  o script **FolhaPagamento** e o HTML **Folha**. Única ligação com o resto: `api()` também procura
+  em `FOLHA_API`, e o botão **💼 Folha** (rh-only) no header do Dashboard (`abrirFolha()` → `paginaFolha`).
+- Planilha própria `FOLHA_SHEET_ID` (Google Sheets **sem compartilhamento**); abas Funcionarios, Filiais,
+  Rubricas, Lancamentos (formato rubricas: 1 linha por item do recibo), Importacoes, AcessosFolha.
+- Segurança: perfil RH + **segunda senha** (hash, Script Properties `FOLHA_CRED_<email>`) + **TOTP**
+  (Google Authenticator, RFC 6238, testado com os vetores da RFC) + sessão da folha de 15 min
+  (`folha_<token>` no CacheService) + bloqueio 5 erros/30 min + log em AcessosFolha.
+  Toda função de dados recebe o `folhaToken` e chama `_folhaSessao_` (erro `FOLHA_BLOQUEADA`).
+  Reset de acesso: apagar a propriedade `FOLHA_CRED_<email>` no editor.
+- Preview: `/Folha.html` com servidor de mentira (senha 10+ caracteres, código `123456`).

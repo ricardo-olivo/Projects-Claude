@@ -143,7 +143,9 @@ let _SESSAO = null;   // { email, token }
 // Porta única: confere o token e chama a função pedida.
 // Sessão inválida/expirada => lança 'SESSAO_EXPIRADA' (o navegador volta ao login).
 function api(token, fn, args) {
-  const f = API[String(fn || '')];
+  // FOLHA_API vem do FolhaPagamento.gs (módulo da folha de pagamento, só RH)
+  const f = API[String(fn || '')]
+    || (typeof FOLHA_API !== 'undefined' && Object.prototype.hasOwnProperty.call(FOLHA_API, String(fn || '')) ? FOLHA_API[fn] : null);
   if (!f) throw new Error('Função não permitida: ' + fn);
   const s = _lerSessao_(token);
   if (!s) throw new Error('SESSAO_EXPIRADA');
