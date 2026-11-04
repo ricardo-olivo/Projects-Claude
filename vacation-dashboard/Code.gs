@@ -19,9 +19,13 @@ const TAB = {
   LOJAS:       'Lojas',     // opcional: Filial | Razão Social | CNPJ | Cidade
   ACESSOS:     'Acessos',   // E-mail | Filial | Perfil (RH | Gerente) | Senha — criada sozinha no 1º login
   PAGOS:       'Pagamentos', // Matrícula | Vencimento | Pago | Atualizado em | Por — criada sozinha na 1ª marcação
+  ATESTADOS:   'Atestados',  // Matrícula | Nome | Filial | Início | Fim | Dias | Observação | Registrado por | Registrado em — criada sozinha no 1º atestado
 };
 const PG = { MAT:0, VENC:1, PAGO:2, EM:3, POR:4 };
 const PAGOS_HEADERS = ['Matrícula', 'Vencimento', 'Pago', 'Atualizado em', 'Por'];
+// Atestados: NÃO descontam do banco de dias; só aparecem no Relatório Mensal
+const AT = { MAT:0, NOME:1, FILIAL:2, INICIO:3, FIM:4, DIAS:5, OBS:6, POR:7, EM:8 };
+const ATESTADOS_HEADERS = ['Matrícula', 'Nome', 'Filial', 'Início', 'Fim', 'Dias', 'Observação', 'Registrado por', 'Registrado em'];
 const AC = { EMAIL:0, FILIAL:1, PERFIL:2, SENHA:3 };
 const ACESSOS_HEADERS = ['E-mail', 'Filial', 'Perfil', 'Senha'];
 
@@ -135,6 +139,7 @@ const API = {
   addAjuste: addAjuste_, updateAjuste: updateAjuste_, deleteAjuste: deleteAjuste_,
   getAprovacoes: getAprovacoes_, decidirFerias: decidirFerias_,
   importarLote: importarLote_,
+  addAtestado: addAtestado_, deleteAtestado: deleteAtestado_,
 };
 
 // Sessão da execução atual (cada chamada do navegador é uma execução separada)
@@ -632,6 +637,7 @@ function getVacationData_() {
     totals: tot,
     employees: outEmp,
     feriasPagas: _feriasPagas_(outEmp),
+    atestados: _atestadosLista_(emp, scope),
     scope: { perfil: scope.perfil, filiais: scope.filiais, email: scope.email, aprova: scope.aprova },
   });
 }
@@ -2354,4 +2360,112 @@ function formatDateBR_(isoDate) {
   if (!isoDate) return '';
   const p = isoDate.split('-');
   return p.length === 3 ? `${p[2]}/${p[1]}/${p[0]}` : isoDate;
+}
+
+// ============================================================
+// ATESTADOS — aba Atestados (criada sozinha). NÃO mexem no banco de dias:
+// só aparecem no Relatório Mensal (e no getVacationData como `atestados[]`).
+// payload = { name, branch, startDate, endDate, obs? }
+// ============================================================
+function _ensureAtestados_() {
+  const ss = SpreadsheetApp.openById(MODEL_SHEET_ID);
+  let sh = ss.getSheetByName(TAB.ATESTADOS);
+  if (!sh) {
+    sh = ss.insertSheet(TAB.ATESTADOS);
+    sh.getRange(1, 1, 1, ATESTADOS_HEADERS.length).setValues([ATESTADOS_HEADERS]).setFontWeight('bold');
+    sh.setFrozenRows(1);
+  }
+  return sh;
+}
+
+function addAtestado_(payload) {
+  try {
+    payload = payload || {};
+    const name = String(payload.name || '').trim();
+    if (!name) return _err_('Nome do funcionário é obrigatório.');
+    const start = toDate_(payload.startDate);
+    const end   = toDate_(payload.endDate);
+    if (!start) return _err_('Data de início inválida.');
+    if (!end)   return _err_('Data de fim inválida.');
+    if (end < start) return _err_('Data de fim anterior ao início.');
+
+    const branch = String(payload.branch || '').trim();
+    const match = _rows_(TAB.FUNC).find(function (r) {
+      return String(r[F.NOME] || '').trim().toLowerCase() === name.toLowerCase()
+        && (!branch || String(r[F.FILIAL] || '').trim() === branch);
+    });
+    if (!match) return _err_('Funcionário não encontrado na aba Func: ' + name);
+    const scope = _scopeAtual_();
+    if (scope.perfil !== 'rh') return _err_('Só o RH pode incluir atestados.');
+    const matRaw = match[F.MAT];
+    const mat = _mk_(matRaw);
+    if (!mat) return _err_('O funcionário "' + name + '" está sem matrícula na aba Func.');
+
+    const lock = LockService.getScriptLock();
+    lock.waitLock(20000);
+    try {
+      const sh = _ensureAtestados_();
+      const last = sh.getLastRow();
+      const rows = last > 1 ? sh.getRange(2, 1, last - 1, ATESTADOS_HEADERS.length).getValues() : [];
+      const choque = rows.find(function (r) {
+        if (_mk_(r[AT.MAT]) !== mat) return false;
+        const s = toDate_(r[AT.INICIO]), e = toDate_(r[AT.FIM]);
+        return s && e && start <= e && end >= s;
+      });
+      if (choque) return _err_('Já existe atestado de ' + name + ' de ' + formatDateBR_(formatDate_(choque[AT.INICIO]))
+        + ' a ' + formatDateBR_(formatDate_(choque[AT.FIM])) + ' que se sobrepõe a este período.');
+
+      const total = Math.round((end - start) / 864e5) + 1;
+      const nr = last + 1;
+      sh.getRange(nr, 1, 1, ATESTADOS_HEADERS.length).setValues([[
+        matRaw, String(match[F.NOME] || '').trim(), String(match[F.FILIAL] || '').trim(),
+        start, end, total, String(payload.obs || '').trim(), scope.email || 'RH', new Date()
+      ]]);
+      sh.getRange(nr, AT.INICIO + 1, 1, 2).setNumberFormat('dd/mm/aaaa');
+      sh.getRange(nr, AT.EM + 1).setNumberFormat('dd/mm/aaaa hh:mm');
+      return JSON.stringify({ success: true, rowIndex: nr, total: total, matricula: mat });
+    } finally { lock.releaseLock(); }
+  } catch (e) { return _err_(e.message); }
+}
+
+// payload = { rowIndex, matricula, startDate } — só RH (confere a linha antes de apagar)
+function deleteAtestado_(payload) {
+  try {
+    const scope = _scopeAtual_();
+    if (scope.perfil !== 'rh') return _err_('Só o RH pode excluir atestados.');
+    payload = payload || {};
+    const row = Number(payload.rowIndex);
+    const sh = SpreadsheetApp.openById(MODEL_SHEET_ID).getSheetByName(TAB.ATESTADOS);
+    if (!sh || !(row >= 2) || row > sh.getLastRow()) return _err_('Atestado não encontrado.');
+    const r = sh.getRange(row, 1, 1, ATESTADOS_HEADERS.length).getValues()[0];
+    if (_mk_(r[AT.MAT]) !== _mk_(payload.matricula) || formatDate_(r[AT.INICIO]) !== String(payload.startDate || ''))
+      return _err_('A planilha mudou desde que o painel carregou. Atualize a página e tente de novo.');
+    sh.deleteRow(row);
+    return JSON.stringify({ success: true });
+  } catch (e) { return _err_(e.message); }
+}
+
+// lista para o painel: nome/filial atuais da aba Func (se a matrícula existir), filtrada pelo escopo
+function _atestadosLista_(emp, scope) {
+  const out = [];
+  try {
+    const sh = SpreadsheetApp.openById(MODEL_SHEET_ID).getSheetByName(TAB.ATESTADOS);
+    if (!sh || sh.getLastRow() < 2) return out;
+    sh.getRange(2, 1, sh.getLastRow() - 1, ATESTADOS_HEADERS.length).getValues().forEach(function (r, i) {
+      const mat = _mk_(r[AT.MAT]);
+      const s = toDate_(r[AT.INICIO]), e = toDate_(r[AT.FIM]);
+      if (!mat || !s || !e) return;
+      const f = emp[mat] || {};
+      const branch = f.branch || String(r[AT.FILIAL] || '').trim();
+      if (scope.filiais && scope.filiais.indexOf(branch) < 0) return;
+      out.push({
+        rowIndex: i + 2, matricula: mat,
+        name: f.name || String(r[AT.NOME] || '').trim(), branch: branch,
+        startDate: formatDate_(s), endDate: formatDate_(e),
+        total: Math.round((_midnight_(e) - _midnight_(s)) / 864e5) + 1,
+        obs: String(r[AT.OBS] || '').trim(),
+      });
+    });
+  } catch (e) { /* aba ilegível não derruba o painel */ }
+  return out;
 }

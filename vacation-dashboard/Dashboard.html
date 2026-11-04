@@ -546,6 +546,11 @@
       cursor: pointer; white-space: nowrap;
     }
     .btn-add-vacation:hover { background: #1648c0; }
+    .btn-add-atestado { background: #7c3aed; }
+    .btn-add-atestado:hover { background: #6d28d9; }
+    .badge-atestado { background: #ede9fe; color: #6d28d9; }
+    .btn-del-atest { border: none; background: none; color: var(--gray-500); cursor: pointer; font-size: 14px; padding: 0 4px; }
+    .btn-del-atest:hover { color: var(--danger); }
     /* FICHA (clique no funcionário) */
     .emp-link { color: var(--primary); cursor: pointer; text-decoration: none; font-weight: 600; }
     .emp-link:hover { text-decoration: underline; }
@@ -735,6 +740,7 @@
       body.printing-report .filters,
       body.printing-report .tabs,
       body.printing-report .report-toolbar { display: none !important; }
+      body.printing-report .btn-del-atest { display: none !important; }
       body.printing-report .container { padding: 0; max-width: 100%; }
       body.printing-report .table-wrap { box-shadow: none; }
     }
@@ -865,6 +871,7 @@
         <div style="display:flex;align-items:center;gap:12px">
           <span class="result-count" id="result-count"></span>
           <button class="btn-add-vacation" onclick="openAddModal()">+ Incluir Férias</button>
+          <button class="btn-add-vacation btn-add-atestado rh-only" onclick="openAddModal('atestado')">+ Incluir Atestado</button>
         </div>
       </div>
       <div id="table-loading" class="loading">
@@ -1048,7 +1055,7 @@
         </table>
       </div>
       <div id="report-empty" class="empty" style="display:none">
-        Nenhum funcionário em férias no mês selecionado.
+        Nenhum funcionário em férias ou de atestado no mês selecionado.
       </div>
     </div>
   </div>
@@ -1507,6 +1514,8 @@
   var totals = {};
   var allEmployees = [];
   var feriasPagas = {};   // "mat|yyyy-mm-dd" -> "Sim" | "Não" (aba Pagamentos)
+  var allAtestados = [];  // atestados (aba Atestados) — não descontam saldo; só no Relatório Mensal
+  var modalModo = 'ferias'; // o modal "Incluir Férias" também serve para "Incluir Atestado"
   var fichaMat = '', fichaNome = '', fichaData = null;
   var scope = { perfil: 'rh', filiais: null, email: '' };
   function ehRH() { return !scope || scope.perfil !== 'gerente'; }
@@ -1724,6 +1733,7 @@
     totals     = result.totals || {};
     allEmployees = result.employees || [];
     feriasPagas  = result.feriasPagas || {};
+    allAtestados = result.atestados || [];
     scope      = result.scope || { perfil: 'rh', filiais: null, email: '' };
     const errors = result.errors || [];
 
@@ -1756,8 +1766,7 @@
 
     if (scope.perfil === 'nenhum') {
       lbl.textContent = 'Acesso não liberado' + (scope.email ? ' — ' + scope.email : '');
-      const add = document.querySelector('.btn-add-vacation');
-      if (add) add.style.display = 'none';
+      document.querySelectorAll('.btn-add-vacation').forEach(b => { b.style.display = 'none'; });
       return;
     }
     if (scope.perfil === 'gerente') {
@@ -2498,6 +2507,7 @@
   }
   function fillPeriodoSelect() {
     const row = document.getElementById('m-periodo-row');
+    if (modalModo === 'atestado') { row.style.display = 'none'; return; }
     const sel = document.getElementById('m-periodo');
     const e = empDoModal();
     const ps = (e && e.periodos) || [];
@@ -2510,7 +2520,11 @@
     row.style.display = '';
   }
 
-  function openAddModal() {
+  function openAddModal(modo) {
+    modalModo = modo === 'atestado' ? 'atestado' : 'ferias';
+    const at = modalModo === 'atestado';
+    document.querySelector('label[for="m-start"]').textContent = at ? 'Início do Atestado' : 'Início das Férias';
+    document.querySelector('label[for="m-end"]').textContent   = at ? 'Fim do Atestado' : 'Fim das Férias';
     // Populate branch dropdown from live data
     const sel = document.getElementById('m-branch');
     const current = sel.value;
@@ -2540,6 +2554,10 @@
     // fase 3: gerente solicita (vai para a fila do RH); RH lança já aprovado
     document.getElementById('btn-save-vacation').textContent = aprovaTodasMinhas() ? 'Salvar Férias' : 'Enviar para aprovação';
     document.getElementById('modal-title').textContent = aprovaTodasMinhas() ? 'Incluir Férias' : 'Solicitar Férias';
+    if (at) {   // atestado não passa por aprovação nem tem período aquisitivo
+      document.getElementById('btn-save-vacation').textContent = 'Salvar Atestado';
+      document.getElementById('modal-title').textContent = 'Incluir Atestado';
+    }
     document.querySelectorAll('.form-error').forEach(el => el.textContent = '');
 
     document.getElementById('m-periodo').innerHTML = '';
@@ -3796,8 +3814,69 @@
     return valid;
   }
 
+  // ── ATESTADO (mesmo modal; aba Atestados; não mexe no saldo) ──
+  function submitAtestado() {
+    if (!ehRH()) return;   // só o RH lança atestado (o servidor também confere)
+    const payload = {
+      branch:    document.getElementById('m-branch').value,
+      name:      document.getElementById('m-name').value.trim(),
+      startDate: document.getElementById('m-start').value,
+      endDate:   document.getElementById('m-end').value,
+    };
+    const btn = document.getElementById('btn-save-vacation');
+    const errEl = document.getElementById('modal-save-error');
+    btn.disabled = true; btn.textContent = 'Salvando…'; errEl.style.display = 'none';
+    const falha = msg => {
+      btn.disabled = false; btn.textContent = 'Salvar Atestado';
+      errEl.textContent = msg; errEl.style.display = 'block';
+    };
+    const onSuccess = jsonStr => {
+      let r; try { r = JSON.parse(jsonStr); } catch (e) { return falha('Erro: resposta inválida do servidor.'); }
+      if (!r.success) return falha('Erro: ' + r.error);
+      btn.disabled = false; btn.textContent = 'Salvar Atestado';
+      closeAddModal();
+      allAtestados.push({ rowIndex: r.rowIndex, matricula: r.matricula || '', name: payload.name, branch: payload.branch,
+        startDate: payload.startDate, endDate: payload.endDate, total: r.total, obs: '' });
+      // mostra no Relatório Mensal, no mês do início do atestado
+      document.getElementById('report-month').value = payload.startDate.substring(0, 7);
+      const btnRel = Array.from(document.querySelectorAll('.tab')).find(b => b.textContent.trim() === 'Relatório Mensal');
+      if (btnRel && btnRel.offsetParent !== null) showTab('report', btnRel); else renderReportView();
+      alert('Atestado de ' + payload.name + ' registrado (' + r.total + ' dias).\nNão altera o saldo de férias.');
+    };
+    if (typeof google !== 'undefined' && google.script) {
+      gsRun().withSuccessHandler(onSuccess)
+        .withFailureHandler(e => falha('Erro de comunicação: ' + ((e && e.message) || e)))
+        .addAtestado(payload);
+    } else {
+      setTimeout(() => {   // preview
+        const s = new Date(payload.startDate), e = new Date(payload.endDate);
+        const mat = (allEmployees.find(x => x.nome === payload.name) || {}).matricula || '';
+        onSuccess(JSON.stringify({ success: true, rowIndex: allAtestados.length + 2,
+          total: Math.round((e - s) / 864e5) + 1, matricula: mat }));
+      }, 400);
+    }
+  }
+
+  function excluirAtestado(i) {
+    const a = allAtestados[i];
+    if (!a || !ehRH()) return;
+    if (!confirm('Excluir o atestado de ' + a.name + ' (' + fmtDateBR(a.startDate) + ' a ' + fmtDateBR(a.endDate) + ')?')) return;
+    const ok = jsonStr => {
+      const r = JSON.parse(jsonStr);
+      if (!r.success) return alert('Erro: ' + r.error);
+      allAtestados = allAtestados.filter(x => x !== a);
+      renderReportView();
+      if (typeof google !== 'undefined' && google.script) setTimeout(loadData, 600);   // rowIndex das outras linhas muda
+    };
+    if (typeof google !== 'undefined' && google.script) {
+      gsRun().withSuccessHandler(ok).withFailureHandler(e => alert('Erro: ' + ((e && e.message) || e)))
+        .deleteAtestado({ rowIndex: a.rowIndex, matricula: a.matricula, startDate: a.startDate });
+    } else ok(JSON.stringify({ success: true }));
+  }
+
   function submitAddVacation() {
     if (!validateModal()) return;
+    if (modalModo === 'atestado') return submitAtestado();
 
     const payload = {
       branch:    document.getElementById('m-branch').value,
@@ -4367,10 +4446,19 @@
     }
     const monthISO = monthInput.value;
 
-    const relevant = allData.filter(r => {
-      if (!r.startDate || !r.endDate) return false;
-      return r.startDate.substring(0, 7) <= monthISO && r.endDate.substring(0, 7) >= monthISO;
-    }).sort((a, b) => a.branch.localeCompare(b.branch) || a.name.localeCompare(b.name));
+    const noMes = r => r.startDate && r.endDate
+      && r.startDate.substring(0, 7) <= monthISO && r.endDate.substring(0, 7) >= monthISO;
+    // atestados entram com saldo/vencimento do funcionário (não descontam nada)
+    const atestados = allAtestados.map((a, i) => ({ a, i })).filter(x => noMes(x.a)).map(({ a, i }) => {
+      const e = allEmployees.find(x => String(x.matricula) === String(a.matricula))
+        || allEmployees.find(x => x.nome === a.name && x.filial === a.branch) || {};
+      const f = allData.find(r => String(r.matricula) === String(a.matricula) && r.branch === a.branch);
+      return { atestado: true, atIdx: i, branch: a.branch || '', name: a.name || '', matricula: a.matricula,
+        startDate: a.startDate, endDate: a.endDate, total: a.total,
+        availableDays: e.saldo, dueDate: e.vencimento || (f && f.dueDate) || '', _id: f ? f._id : null };
+    });
+    const relevant = allData.filter(noMes).concat(atestados)
+      .sort((a, b) => a.branch.localeCompare(b.branch) || a.name.localeCompare(b.name) || a.startDate.localeCompare(b.startDate));
 
     document.getElementById('report-count').textContent = relevant.length + ' registro(s)';
 
@@ -4396,16 +4484,21 @@
       const rows = g.rows.map(r => `
         <tr>
           <td>${escHtml(r.branch)}</td>
-          <td>${empLink(r)}</td>
-          <td>${fmtDateBR(r.startDate)} a ${fmtDateBR(r.endDate)}</td>
+          <td>${r.atestado && r._id == null && r.matricula
+                ? `<a href="#" class="emp-link" onclick="openFichaFor('${escHtml(String(r.matricula))}');return false">${escHtml(r.name)}</a>`
+                : empLink(r)}</td>
+          <td>${r.atestado ? '🩺 ' : ''}${fmtDateBR(r.startDate)} a ${fmtDateBR(r.endDate)}</td>
           <td style="text-align:center">${r.total || '—'}</td>
-          <td style="text-align:center">${r.availableDays !== '' && r.availableDays !== undefined ? r.availableDays : '—'}</td>
+          <td style="text-align:center">${r.availableDays !== '' && r.availableDays != null ? r.availableDays : '—'}</td>
           <td>${fmtMonthYear(r.dueDate)}</td>
-          <td>${statusBadge(getStatus(r))}</td>
+          <td>${r.atestado
+                ? '<span class="badge badge-atestado">Atestado</span>'
+                  + (ehRH() ? `<button class="btn-del-atest no-print" title="Excluir atestado" onclick="excluirAtestado(${r.atIdx})">✕</button>` : '')
+                : statusBadge(getStatus(r))}</td>
         </tr>`).join('');
       return `
         <tr class="month-group-header">
-          <td colspan="7">${escHtml(g.branch)} <span style="font-weight:400;opacity:.7">(${g.rows.length} funcionário${g.rows.length > 1 ? 's' : ''})</span></td>
+          <td colspan="7">${escHtml(g.branch)} <span style="font-weight:400;opacity:.7">(${new Set(g.rows.map(r => r.name)).size} funcionário${new Set(g.rows.map(r => r.name)).size > 1 ? 's' : ''})</span></td>
         </tr>
         ${rows}`;
     }).join('');

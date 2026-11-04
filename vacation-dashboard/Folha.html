@@ -59,12 +59,28 @@
     .recibo .ln.p { background: #f0fdf4; }
     .recibo .ln.d { background: #fff7ed; }
     .recibo .ln.i { color: var(--gray-500); font-style: italic; }
+    .recibo .ln.fer { background: #fef9c3; color: #713f12; font-weight: 600; }
     .recibo .ln .v { font-variant-numeric: tabular-nums; white-space: nowrap; }
     .recibo .ln.tot { font-weight: 700; color: var(--danger); background: white; }
     .recibo .ln.liq { font-weight: 700; color: var(--danger); border-top: 2px solid var(--gray-900); }
     .recibo .ass { padding: 14px 10px 8px; font-size: 12px; color: var(--gray-500); }
     .selo-inativo { background: var(--gray-200); color: var(--gray-700); border-radius: 4px; padding: 0 5px; font-size: 10px; margin-left: 4px; }
     .aviso-sessao { font-size: 12px; color: var(--gray-500); margin-left: auto; }
+    .imp-box { background: white; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,.08); padding: 20px; margin-bottom: 18px; }
+    .imp-box h2 { font-size: 18px; margin-bottom: 6px; }
+    .imp-box p { font-size: 14px; color: var(--gray-700); line-height: 1.5; }
+    .imp-arqs { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
+    .imp-arqs input[type=file] { font-size: 13px; }
+    .imp-acoes { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin: 6px 0 10px; flex-wrap: wrap; }
+    .imp-chk { display: flex; gap: 6px; align-items: center; font-weight: 400; margin: 0; }
+    .pend { background: #fffbeb; border: 1px solid #fcd34d; border-radius: 8px; padding: 12px 14px; margin-bottom: 14px; font-size: 13px; }
+    .pend h3 { font-size: 14px; margin-bottom: 8px; }
+    .pend table { width: 100%; border-collapse: collapse; }
+    .pend td { padding: 4px 6px; border-top: 1px solid #fde68a; vertical-align: middle; }
+    .pend select { font-size: 13px; padding: 4px 6px; }
+    table.resumo td.muda { color: var(--folha); font-weight: 700; }
+    .tag { display: inline-block; font-size: 10px; border-radius: 4px; padding: 0 5px; margin-left: 4px; background: var(--gray-100); color: var(--gray-700); }
+    .tag.piso { background: #e0f2fe; color: #075985; }
     @media (max-width: 600px) { .header { flex-direction: column; align-items: flex-start; } .recibos { grid-template-columns: 1fr; } }
     @media print {
       .header, .toolbar, .cards, table.resumo, .no-print { display: none !important; }
@@ -146,6 +162,7 @@
       <div><label for="sel-filial">Filial</label><select id="sel-filial" onchange="renderFolha()"></select></div>
       <div><label for="busca">Buscar funcionário</label><input type="text" id="busca" oninput="renderFolha()" placeholder="nome…"></div>
       <button class="btn btn-sec no-print" onclick="window.print()" title="Imprime os recibos que estão na tela">🖨 Imprimir recibos</button>
+      <button class="btn btn-sec no-print" onclick="abrirImportacao()" title="Lê o relatório de comissão e o PDF dos manipulados e preenche a Premiação do mês">⬆ Importar comissões</button>
       <span class="aviso-sessao" id="aviso-sessao"></span>
     </div>
     <div class="cards">
@@ -156,6 +173,34 @@
     </div>
     <table class="resumo" id="tab-resumo"></table>
     <div class="recibos" id="recibos"></div>
+  </div>
+
+  <!-- importação de comissões (fase 2) -->
+  <div class="hidden" id="tela-import">
+    <div class="imp-box">
+      <h2>⬆ Importar comissões — <span id="imp-mes"></span></h2>
+      <p>Premiação = comissão de vendas + comissão dos manipulados, <b>sem os centavos</b>. Quem tem
+        <b>piso</b> (mínimo garantido) recebe o piso se a soma não chegar nele. Vendedores que não são
+        funcionários (parceiros, farmácias) ficam de fora.</p>
+      <div class="imp-arqs">
+        <div><label for="imp-xlsx">Relatório de comissão (Rel_0038, .xlsx, todas as filiais)</label><input type="file" id="imp-xlsx" accept=".xlsx"></div>
+        <div><label for="imp-pdf">Vendas por vendedor — manipulados (.pdf)</label><input type="file" id="imp-pdf" accept=".pdf"></div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:12px">
+        <button class="btn btn-sec" onclick="fecharImportacao()">Cancelar</button>
+        <button class="btn btn-primary" style="width:auto;margin:0" id="imp-ler" onclick="lerArquivos()">Conferir</button>
+      </div>
+      <div class="msg" id="imp-msg"></div>
+    </div>
+    <div id="imp-res" class="hidden">
+      <div class="cards" id="imp-cards"></div>
+      <div id="imp-pend"></div>
+      <div class="imp-acoes">
+        <label class="imp-chk"><input type="checkbox" id="imp-so-dif" onchange="renderPrevia()"> Mostrar só quem muda</label>
+        <button class="btn btn-primary" style="width:auto;margin:0" id="imp-gravar" onclick="gravarImportacao()">Gravar premiação</button>
+      </div>
+      <table class="resumo" id="imp-tab"></table>
+    </div>
   </div>
 
 </div>
@@ -204,10 +249,10 @@
   }
 
   function mostrar(id) {
-    ['tela-carregando', 'tela-config1', 'tela-config2', 'tela-desbloq', 'tela-folha'].forEach(function (t) {
+    ['tela-carregando', 'tela-config1', 'tela-config2', 'tela-desbloq', 'tela-folha', 'tela-import'].forEach(function (t) {
       document.getElementById(t).classList.toggle('hidden', t !== id);
     });
-    document.getElementById('btn-bloquear').classList.toggle('hidden', id !== 'tela-folha');
+    document.getElementById('btn-bloquear').classList.toggle('hidden', id !== 'tela-folha' && id !== 'tela-import');
   }
   function msg(id, texto, erro) { var el = document.getElementById(id); el.textContent = texto || ''; el.className = 'msg' + (erro ? ' erro' : ''); }
   function ocupado(id, sim, texto) { var b = document.getElementById(id); b.disabled = sim; if (texto) b.textContent = texto; }
@@ -361,13 +406,22 @@
     var ln = function (cls, txt, val) { return '<div class="ln ' + cls + '"><span>' + esc(txt) + '</span><span class="v">' + brl(val) + '</span></div>'; };
     var p = r.linhas.filter(function (l) { return l.tipo === 'P'; });
     var d = r.linhas.filter(function (l) { return l.tipo === 'D'; });
-    var i = r.linhas.filter(function (l) { return l.tipo === 'I'; });
+    // férias do painel de férias (como no Relatório Mensal); com elas, a anotação "Férias:" digitada na folha sai
+    var fer = r.ferias || [];
+    var i = r.linhas.filter(function (l) { return l.tipo === 'I' && !(fer.length && l.rubrica === 'FERIAS_OBS' && /^\s*f[ée]rias/i.test(l.descricao)); });
+    var dbr = function (iso) { var p = String(iso).split('-'); return p[2] + '/' + p[1] + '/' + p[0]; };
+    var ferHtml = fer.map(function (f) {
+      var txt = (/abono/i.test(f.tipo) ? 'Abono (dias vendidos): ' : 'Férias: ') + dbr(f.inicio) + ' a ' + dbr(f.fim)
+        + ' (' + f.dias + (f.dias === 1 ? ' dia' : ' dias') + ')' + (f.pendente ? ' — aguardando aprovação' : '');
+      return '<div class="ln fer" title="Do painel de férias"><span>🏖 ' + esc(txt) + '</span><span></span></div>';
+    }).join('');
     return '<div class="recibo">'
       + '<div class="rh"><div class="rn">' + esc(r.nome) + (r.ativo ? '' : '<span class="selo-inativo">inativo</span>') + '</div>'
       + '<div class="rs">' + esc(r.filial) + ' · ' + esc(nomeMes(folhaMesAtual)) + (r.inicio ? ' · Início: ' + esc(r.inicio) : '') + ' · USO RESTRITO DA EMPRESA</div></div>'
       + p.map(function (l) { return ln('p', l.descricao, l.valor); }).join('')
       + ln('tot', 'Total', r.proventos)
       + d.map(function (l) { return ln('d', l.descricao, l.valor); }).join('')
+      + ferHtml
       + i.map(function (l) { return ln('i', l.descricao, null); }).join('')
       + ln('liq', 'Líquido a Receber', r.liquido)
       + '<div class="ass">Assinatura: ____________________________</div>'
@@ -389,6 +443,293 @@
     google.script.run.withSuccessHandler(function (html) { document.open(); document.write(html); document.close(); }).paginaLogin();
   }
 
+  // ── Importar comissões ─────────────────────────────────────────
+  // Os arquivos são lidos AQUI no navegador; para o servidor vão só as listas { nome, valor }.
+  var impPrevia = null;          // resposta de folhaImportarPrevia
+  var impArquivos = '';
+  var impLidos = null;           // { com, man } como saíram dos arquivos
+
+  function abrirImportacao() {
+    if (!folhaMesAtual) return alert('Escolha o mês primeiro.');
+    document.getElementById('imp-mes').textContent = nomeMes(folhaMesAtual);
+    document.getElementById('imp-res').classList.add('hidden');
+    msg('imp-msg', '');
+    mostrar('tela-import');
+  }
+  function fecharImportacao() {
+    impPrevia = null; impLidos = null;
+    document.getElementById('imp-xlsx').value = ''; document.getElementById('imp-pdf').value = '';
+    mostrar('tela-folha');
+  }
+
+  function lerArquivos() {
+    var fx = document.getElementById('imp-xlsx').files[0], fp = document.getElementById('imp-pdf').files[0];
+    if (!fx && !fp) return msg('imp-msg', 'Escolha pelo menos um dos arquivos.', true);
+    ocupado('imp-ler', true, 'Lendo…'); msg('imp-msg', '');
+    Promise.all([fx ? lerComissaoXlsx(fx) : [], fp ? lerManipuladosPdf(fp) : []]).then(function (res) {
+      var com = res[0], man = res[1];
+      if (fx && !com.length) throw new Error('Não achei vendedores no .xlsx (esperava as colunas Código, Vendedor e Valor Comissão).');
+      if (fp && !man.length) throw new Error('Não achei vendedores no PDF dos manipulados.');
+      impLidos = { com: com, man: man };
+      impArquivos = [fx && fx.name, fp && fp.name].filter(Boolean).join(' + ');
+      msg('imp-msg', 'Lidos: ' + com.length + ' vendedores na comissão, ' + man.length + ' nos manipulados. Conferindo…');
+      return chamarFolha('folhaImportarPrevia', folhaMesAtual, com, man);
+    }).then(function (j) {
+      ocupado('imp-ler', false, 'Conferir');
+      if (!j.success) return msg('imp-msg', j.error, true);
+      impPrevia = j;
+      impPrevia.escolhas = {};       // "tipo|nome" -> id do funcionário escolhido à mão
+      msg('imp-msg', '');
+      document.getElementById('imp-res').classList.remove('hidden');
+      renderPrevia();
+    }).catch(function (e) { ocupado('imp-ler', false, 'Conferir'); if (e.message !== 'bloqueada') msg('imp-msg', e.message, true); });
+  }
+
+  // linhas da prévia já com as escolhas manuais (empates / sem funcionário) somadas
+  function previaComEscolhas() {
+    var porId = {};
+    impPrevia.linhas.forEach(function (l) { porId[l.id] = JSON.parse(JSON.stringify(l)); });
+    var funcPorId = {};
+    impPrevia.funcionarios.forEach(function (f) { funcPorId[f.id] = f; });
+    impPrevia.empates.concat(impPrevia.semFuncionario).forEach(function (v) {
+      var id = impPrevia.escolhas[v.tipo + '|' + v.nome];
+      if (!id) return;
+      var f = funcPorId[id];
+      var l = porId[id] || (porId[id] = { id: id, nome: f.nome, filial: f.filial, comissao: null, manipulados: null,
+        piso: f.piso, atual: atualDoMes(id), comNomes: [], manNomes: [] });
+      if (v.tipo === 'com') { l.comissao = Math.round(((l.comissao || 0) + v.valor) * 100) / 100; l.comNomes.push(v.nome); }
+      else { l.manipulados = Math.round(((l.manipulados || 0) + v.valor) * 100) / 100; l.manNomes.push(v.nome); }
+    });
+    return Object.keys(porId).map(function (k) {
+      var l = porId[k];
+      l.soma = Math.round(((l.comissao || 0) + (l.manipulados || 0)) * 100) / 100;
+      var sc = Math.floor(l.soma + 1e-9);
+      l.usouPiso = l.piso > 0 && l.piso > sc;
+      l.nova = Math.max(sc, l.piso > 0 ? l.piso : 0);
+      return l;
+    });
+  }
+  function atualDoMes(id) {
+    var r = folhaRecibos.filter(function (x) { return x.id === id; })[0];
+    if (!r) return null;
+    var v = null;
+    r.linhas.forEach(function (l) { if (l.rubrica === 'PREMIACAO') v = (v || 0) + (l.valor || 0); });
+    return v;
+  }
+
+  function renderPrevia() {
+    var linhas = previaComEscolhas().sort(function (a, b) { return a.filial.localeCompare(b.filial) || a.nome.localeCompare(b.nome); });
+    var muda = function (l) { return l.atual === null || Math.abs(l.atual - l.nova) >= 0.005; };
+    var soDif = document.getElementById('imp-so-dif').checked;
+    var total = linhas.reduce(function (s, l) { return s + l.nova; }, 0);
+    document.getElementById('imp-cards').innerHTML =
+      '<div class="card"><div class="card-label">Funcionários com premiação</div><div class="card-value">' + linhas.length + '</div></div>'
+      + '<div class="card"><div class="card-label">Mudam em relação ao mês</div><div class="card-value">' + linhas.filter(muda).length + '</div></div>'
+      + '<div class="card"><div class="card-label">Total da premiação</div><div class="card-value">' + brl(total) + '</div></div>'
+      + '<div class="card"><div class="card-label">Ignorados / a decidir</div><div class="card-value">' + impPrevia.semFuncionario.length + ' / ' + impPrevia.empates.length + '</div></div>';
+
+    // pendências: empates (escolher) e vendedores sem funcionário (normalmente parceiros → ignorar)
+    var opcoesFunc = function (ids, sel) {
+      var lista = ids ? impPrevia.funcionarios.filter(function (f) { return ids.indexOf(f.id) >= 0; }) : impPrevia.funcionarios;
+      return '<option value="">— ignorar —</option>' + lista.slice().sort(function (a, b) { return a.nome.localeCompare(b.nome); })
+        .map(function (f) { return '<option value="' + esc(f.id) + '"' + (f.id === sel ? ' selected' : '') + '>' + esc(f.nome) + ' (' + esc(f.filial) + ')</option>'; }).join('');
+    };
+    var pendHtml = function (titulo, lista, comOpcoes) {
+      if (!lista.length) return '';
+      return '<div class="pend"><h3>' + titulo + '</h3><table>' + lista.map(function (v, i) {
+        var k = v.tipo + '|' + v.nome;
+        return '<tr><td>' + (v.tipo === 'com' ? 'Comissão' : 'Manipulados') + '</td><td><b>' + esc(v.nome) + '</b></td><td class="num">' + brl(v.valor)
+          + '</td><td><select data-k="' + esc(k) + '">' + opcoesFunc(comOpcoes ? v.opcoes : null, impPrevia.escolhas[k]) + '</select></td></tr>';
+      }).join('') + '</table></div>';
+    };
+    var pend = document.getElementById('imp-pend');
+    pend.innerHTML = pendHtml('⚠ Nome parecido com mais de um funcionário — escolha quem é', impPrevia.empates, true)
+      + pendHtml('Vendedores sem funcionário na folha (ficam de fora; ligue à mão se for funcionário)',
+        impPrevia.semFuncionario.filter(function (v) { return v.valor > 0; }), false);
+    pend.querySelectorAll('select').forEach(function (s) {
+      s.onchange = function () { impPrevia.escolhas[s.getAttribute('data-k')] = s.value; renderPrevia(); };
+    });
+
+    var vis = soDif ? linhas.filter(muda) : linhas;
+    document.getElementById('imp-tab').innerHTML = '<tr><th>Filial</th><th>Funcionário</th><th class="num">Comissão</th><th class="num">Manipulados</th>'
+      + '<th class="num">Soma</th><th class="num">Piso</th><th class="num">Nova premiação</th><th class="num">Atual no mês</th></tr>'
+      + vis.map(function (l) {
+        var nomes = l.comNomes.concat(l.manNomes).join(' · ');
+        return '<tr title="' + esc(nomes) + '"><td>' + esc(l.filial) + '</td><td>' + esc(l.nome) + '</td>'
+          + '<td class="num">' + brl(l.comissao) + '</td><td class="num">' + brl(l.manipulados) + '</td>'
+          + '<td class="num">' + brl(l.soma) + '</td><td class="num">' + brl(l.piso) + '</td>'
+          + '<td class="num' + (muda(l) ? ' muda' : '') + '">' + brl(l.nova) + (l.usouPiso ? '<span class="tag piso">piso</span>' : '') + '</td>'
+          + '<td class="num">' + brl(l.atual) + '</td></tr>';
+      }).join('');
+  }
+
+  function gravarImportacao() {
+    var linhas = previaComEscolhas();
+    if (!linhas.length) return alert('Nada para gravar.');
+    var total = linhas.reduce(function (s, l) { return s + l.nova; }, 0);
+    if (!confirm('Gravar a premiação de ' + linhas.length + ' funcionários em ' + nomeMes(folhaMesAtual) + '?\nTotal: ' + brl(total))) return;
+    var vinculos = [];
+    impPrevia.empates.concat(impPrevia.semFuncionario).forEach(function (v) {
+      var id = impPrevia.escolhas[v.tipo + '|' + v.nome];
+      if (id) vinculos.push({ id: id, tipo: v.tipo, nome: v.tipo === 'com' && v.cod ? String(v.cod) : v.nome });
+    });
+    ocupado('imp-gravar', true, 'Gravando…');
+    chamarFolha('folhaImportarGravar', folhaMesAtual, linhas.map(function (l) { return { id: l.id, valor: l.nova }; }), vinculos, impArquivos)
+      .then(function (j) {
+        ocupado('imp-gravar', false, 'Gravar premiação');
+        if (!j.success) return alert(j.error);
+        alert('Premiação gravada: ' + j.gravados + ' funcionários, total ' + brl(j.total) + '.');
+        fecharImportacao();
+        carregarMes();
+      }).catch(function (e) { ocupado('imp-gravar', false, 'Gravar premiação'); if (e.message !== 'bloqueada') alert(e.message); });
+  }
+
+  // ---- leitura do .xlsx (zip + XML) ----
+  function lerArquivoBytes(f) {
+    return new Promise(function (ok, falha) {
+      var r = new FileReader();
+      r.onload = function () { ok(new Uint8Array(r.result)); };
+      r.onerror = function () { falha(new Error('Não consegui ler ' + f.name)); };
+      r.readAsArrayBuffer(f);
+    });
+  }
+  function inflarRaw(bytes) {
+    var ds = new DecompressionStream('deflate-raw');
+    return new Response(new Blob([bytes]).stream().pipeThrough(ds)).arrayBuffer().then(function (b) { return new Uint8Array(b); });
+  }
+  // devolve { 'caminho/no/zip': Promise<Uint8Array> } só para os nomes pedidos
+  function lerZip(bytes, nomes) {
+    var dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    var fim = -1;
+    for (var i = bytes.length - 22; i >= Math.max(0, bytes.length - 65557); i--) if (dv.getUint32(i, true) === 0x06054b50) { fim = i; break; }
+    if (fim < 0) throw new Error('Arquivo .xlsx inválido.');
+    var n = dv.getUint16(fim + 10, true), p = dv.getUint32(fim + 16, true), out = {};
+    var dec = new TextDecoder('utf-8');
+    for (var k = 0; k < n; k++) {
+      var metodo = dv.getUint16(p + 10, true), tam = dv.getUint32(p + 20, true);
+      var ln = dv.getUint16(p + 28, true), le = dv.getUint16(p + 30, true), lc = dv.getUint16(p + 32, true);
+      var loc = dv.getUint32(p + 42, true);
+      var nome = dec.decode(bytes.subarray(p + 46, p + 46 + ln));
+      if (nomes.test(nome)) {
+        var ini = loc + 30 + dv.getUint16(loc + 26, true) + dv.getUint16(loc + 28, true);
+        var dados = bytes.subarray(ini, ini + tam);
+        out[nome] = metodo === 0 ? Promise.resolve(dados) : inflarRaw(dados);
+      }
+      p += 46 + ln + le + lc;
+    }
+    return out;
+  }
+  function lerComissaoXlsx(file) {
+    return lerArquivoBytes(file).then(function (bytes) {
+      var z = lerZip(bytes, /^xl\/(sharedStrings\.xml|worksheets\/sheet\d+\.xml)$/);
+      var abas = Object.keys(z).filter(function (k) { return /worksheets/.test(k); }).sort();
+      if (!abas.length) throw new Error('O .xlsx não tem planilhas.');
+      var dec = new TextDecoder('utf-8');
+      return Promise.all([z['xl/sharedStrings.xml'] || Promise.resolve(null), z[abas[0]]]).then(function (r) {
+        var dp = new DOMParser();
+        var ss = [];
+        if (r[0]) dp.parseFromString(dec.decode(r[0]), 'application/xml').querySelectorAll('si').forEach(function (si) {
+          ss.push(Array.from(si.getElementsByTagName('t')).map(function (t) { return t.textContent; }).join(''));
+        });
+        var linhas = {};
+        dp.parseFromString(dec.decode(r[1]), 'application/xml').querySelectorAll('c').forEach(function (c) {
+          var ref = c.getAttribute('r') || '', m = ref.match(/^([A-Z]+)(\d+)$/);
+          if (!m) return;
+          var t = c.getAttribute('t'), v = c.getElementsByTagName('v')[0], val;
+          if (t === 's') val = v ? ss[Number(v.textContent)] : '';
+          else if (t === 'inlineStr') val = Array.from(c.getElementsByTagName('t')).map(function (x) { return x.textContent; }).join('');
+          else val = v ? v.textContent : '';
+          (linhas[m[2]] || (linhas[m[2]] = {}))[m[1]] = String(val == null ? '' : val).trim();
+        });
+        return extrairComissao(linhas);
+      });
+    });
+  }
+  // acha a linha de cabeçalho (Código / Vendedor / Valor Comissão) e lê as linhas abaixo
+  function extrairComissao(linhas) {
+    var nums = Object.keys(linhas).map(Number).sort(function (a, b) { return a - b; });
+    var col = null, ini = 0;
+    for (var i = 0; i < nums.length && !col; i++) {
+      var l = linhas[nums[i]], c = {};
+      Object.keys(l).forEach(function (k) {
+        var t = semAcento(l[k]);
+        if (t === 'codigo') c.cod = k; else if (t === 'vendedor') c.nome = k; else if (t === 'valor comissao') c.valor = k;
+      });
+      if (c.cod && c.nome && c.valor) { col = c; ini = i + 1; }
+    }
+    if (!col) return [];
+    var out = [];
+    for (var j = ini; j < nums.length; j++) {
+      var r = linhas[nums[j]], cod = r[col.cod], nome = r[col.nome];
+      if (!/^\d+$/.test(cod || '') || !nome) continue;
+      out.push({ cod: cod, nome: nome, valor: numeroBR(r[col.valor]) });
+    }
+    return out;
+  }
+  function numeroBR(s) {
+    s = String(s || '').trim();
+    if (/^-?\d+(\.\d+)?$/.test(s)) return Number(s);                 // número puro do Excel
+    var n = Number(s.replace(/\./g, '').replace(',', '.'));
+    return isNaN(n) ? 0 : n;
+  }
+
+  // ---- leitura do PDF "Vendas por Vendedor - Geral" (texto em Tm/Tj) ----
+  function lerManipuladosPdf(file) {
+    return lerArquivoBytes(file).then(function (bytes) {
+      var s = new TextDecoder('latin1').decode(bytes);
+      var re = /stream\r?\n/g, m, partes = [];
+      while ((m = re.exec(s))) {
+        var ini = m.index + m[0].length, fim = s.indexOf('endstream', ini);
+        if (fim < 0) break;
+        var dict = s.slice(Math.max(0, s.lastIndexOf('<<', m.index)), m.index);
+        partes.push(/FlateDecode/.test(dict)
+          ? new Response(new Blob([bytes.subarray(ini, fim)]).stream().pipeThrough(new DecompressionStream('deflate')))
+              .arrayBuffer().then(function (b) { return new TextDecoder('latin1').decode(b); }).catch(function () { return ''; })
+          : Promise.resolve(s.slice(ini, fim)));
+        re.lastIndex = fim;
+      }
+      return Promise.all(partes).then(function (textos) { return extrairManipulados(textosParaLinhas(textos)); });
+    });
+  }
+  function textosParaLinhas(textos) {
+    var linhas = [];
+    textos.forEach(function (t) {
+      var itens = [], re = /1 0 0 1 ([\d.]+) ([\d.]+) Tm \(((?:\\.|[^\\)])*)\) Tj/g, m;
+      while ((m = re.exec(t))) itens.push({ x: +m[1], y: +m[2], s: desescapar(m[3]) });
+      var porY = {};
+      itens.forEach(function (it) { (porY[it.y] || (porY[it.y] = [])).push(it); });
+      Object.keys(porY).map(Number).sort(function (a, b) { return b - a; }).forEach(function (y) {
+        linhas.push(porY[y].sort(function (a, b) { return a.x - b.x; }).map(function (i) { return i.s.trim(); }).filter(String));
+      });
+    });
+    return linhas;
+  }
+  function desescapar(s) {
+    return s.replace(/\\([0-7]{1,3}|.)/g, function (_, c) {
+      if (/^[0-7]+$/.test(c)) return String.fromCharCode(parseInt(c, 8));
+      return { n: '\n', r: '', t: ' ' }[c] || c;
+    });
+  }
+  // por vendedor: soma a última coluna (comissão) das linhas de detalhe "qtde | Fórmulas | custo | bruto | valor | % | comissão"
+  function extrairManipulados(linhas) {
+    var out = [], cur = null, dinheiro = /^-?[\d.]+,\d{2}$/;
+    for (var i = 0; i < linhas.length; i++) {
+      var t = linhas[i];
+      if (t[0] === 'Vendedor:') {
+        if (cur) out.push(cur);
+        var nome = t.slice(1).join(' ').trim() || (linhas[i + 1] || []).join(' ').trim();
+        if (t.length === 1) i++;
+        cur = { nome: nome, valor: 0 };
+        continue;
+      }
+      if (!cur) continue;
+      if (t.length >= 4 && /^\d+$/.test(t[0]) && !dinheiro.test(t[1]) && dinheiro.test(t[t.length - 1]))
+        cur.valor = Math.round((cur.valor + numeroBR(t[t.length - 1])) * 100) / 100;
+    }
+    if (cur) out.push(cur);
+    return out;
+  }
+
   // ── preview local (sem Apps Script): servidor de mentira ─────────
   // Senha da folha no preview: qualquer uma com 10+ caracteres; código: 123456.
   var folhaMockEstado = { configurado: false };
@@ -406,6 +747,26 @@
       case 'folhaBloquear': return r({});
       case 'folhaMeses': return r({ meses: ['2026-08'] });
       case 'folhaDados': return r({ mes: '2026-08', recibos: FOLHA_MOCK });
+      case 'folhaImportarPrevia': {
+        // no preview casa por 1º nome igual (no servidor é _folhaCasar_ do FolhaPagamento.gs)
+        var func = FOLHA_MOCK.map(function (f) { return { id: f.id, nome: f.nome, filial: f.filial, piso: f.id === 'F903' ? 900 : null }; });
+        var por = {}, sem = [];
+        [['com', args[2]], ['man', args[3]]].forEach(function (par) {
+          (par[1] || []).forEach(function (v) {
+            var f = func.filter(function (x) { return semAcento(x.nome).split(' ')[0] === semAcento(v.nome).split(/[\s-]+/)[0]; })[0];
+            if (!f) return sem.push({ tipo: par[0], nome: v.nome, cod: v.cod, valor: v.valor });
+            var o = por[f.id] || (por[f.id] = { com: null, man: null, comNomes: [], manNomes: [] });
+            o[par[0]] = (o[par[0]] || 0) + v.valor; o[par[0] + 'Nomes'].push(v.nome);
+          });
+        });
+        var linhas = func.filter(function (f) { return por[f.id] || f.piso; }).map(function (f) {
+          var c = por[f.id] || { com: null, man: null, comNomes: [], manNomes: [] }, soma = (c.com || 0) + (c.man || 0);
+          return { id: f.id, nome: f.nome, filial: f.filial, comissao: c.com, manipulados: c.man, soma: soma, piso: f.piso,
+            nova: Math.max(Math.floor(soma), f.piso || 0), atual: atualDoMes(f.id), comNomes: c.comNomes, manNomes: c.manNomes };
+        });
+        return r({ mes: args[1], linhas: linhas, semFuncionario: sem, empates: [], funcionarios: func });
+      }
+      case 'folhaImportarGravar': return r({ gravados: args[2].length, total: args[2].reduce(function (s, i) { return s + i.valor; }, 0) });
     }
     return { success: false, error: 'mock: ' + fn };
   }
@@ -413,16 +774,16 @@
   var FOLHA_MOCK = [
     { id: 'F901', nome: 'Ana Exemplo da Silva', filial: 'Filial 05', inicio: '01/02/2021', ativo: true, proventos: 3600, descontos: 150, liquido: 3450, linhas: [
       { tipo: 'P', descricao: 'Salário', valor: 2000 }, { tipo: 'P', descricao: 'Gratificação (300,00)', valor: 300 },
-      { tipo: 'P', descricao: 'Horas Extras', valor: 300 }, { tipo: 'P', descricao: 'Premiação', valor: 1000 }, { tipo: 'P', descricao: 'Plantões', valor: null },
+      { tipo: 'P', descricao: 'Horas Extras', valor: 300 }, { tipo: 'P', rubrica: 'PREMIACAO', descricao: 'Premiação', valor: 1000 }, { tipo: 'P', descricao: 'Plantões', valor: null },
       { tipo: 'D', descricao: '(-) Conta Farmácia', valor: null }, { tipo: 'D', descricao: '(-) INSS', valor: 150 }, { tipo: 'D', descricao: '(-) Uniforme', valor: null },
-      { tipo: 'I', descricao: 'Férias: 10/08 - 11/08 (2 Dias)', valor: null }] },
+      { tipo: 'I', rubrica: 'FERIAS_OBS', descricao: 'Férias: 10/08 - 11/08 (2 Dias)', valor: null }], ferias: [{ inicio: '2026-07-28', fim: '2026-08-10', dias: 14, tipo: 'Gozo', pendente: false }] },
     { id: 'F902', nome: 'Bruno Teste Pereira', filial: 'Filial 05', inicio: '15/06/2019', ativo: true, proventos: 5500, descontos: 700, liquido: 4800, linhas: [
       { tipo: 'P', descricao: 'Salário (4.000,00)', valor: 4000 }, { tipo: 'P', descricao: 'Gratificação Gerência (500,00)', valor: 500 },
-      { tipo: 'P', descricao: 'Premiação', valor: 800 }, { tipo: 'P', descricao: 'Horas Extras', valor: 200 },
+      { tipo: 'P', rubrica: 'PREMIACAO', descricao: 'Premiação', valor: 800 }, { tipo: 'P', descricao: 'Horas Extras', valor: 200 },
       { tipo: 'D', descricao: '(-) Conta Farmácia', valor: 250 }, { tipo: 'D', descricao: '(-) INSS', valor: 450 }] },
     { id: 'F903', nome: 'Carla Modelo Souza', filial: 'Filial 06', inicio: '', ativo: true, proventos: 3000, descontos: 400, liquido: 2600, linhas: [
       { tipo: 'P', descricao: 'Salário (2.000,00)', valor: 2000 }, { tipo: 'P', descricao: 'Gratificação (200,00)', valor: 200 },
-      { tipo: 'P', descricao: 'Premiação', valor: 400 }, { tipo: 'P', descricao: 'Final de Semana (400,00)', valor: 400 },
+      { tipo: 'P', rubrica: 'PREMIACAO', descricao: 'Premiação', valor: 400 }, { tipo: 'P', descricao: 'Final de Semana (400,00)', valor: 400 },
       { tipo: 'D', descricao: '(-) Conta Farmácia', valor: 250 }, { tipo: 'D', descricao: '(-) INSS', valor: 150 }] },
   ];
 
