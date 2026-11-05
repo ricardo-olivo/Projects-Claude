@@ -26,14 +26,14 @@ const FOLHA_TAB = {
   IMPORT: 'Importacoes', ACESSOS: 'AcessosFolha',
 };
 const FOLHA_HEADERS = {
-  Funcionarios: ['ID', 'Nome', 'Filial', 'Início', 'Ativo', 'Matrícula (férias)', 'Nome na comissão', 'Nome nos manipulados', 'Origem (planilha antiga)', 'Piso premiação'],
+  Funcionarios: ['ID', 'Nome', 'Filial', 'Início', 'Ativo', 'Matrícula (férias)', 'Nome na comissão', 'Nome nos manipulados', 'Origem (planilha antiga)', 'Piso premiação', 'Nome na contabilidade'],
   Filiais: ['Filial', 'Código no sistema', 'Código nos manipulados'],
   Rubricas: ['Código', 'Nome', 'Tipo (P/D/I)', 'Recorrente', 'Origem'],
   Lancamentos: ['Mês', 'ID', 'Filial', 'Nome', 'Tipo', 'Rubrica', 'Descrição', 'Valor', 'Ordem'],
   Importacoes: ['Data', 'Por', 'Mês', 'Arquivo', 'Tipo', 'Linhas', 'Total', 'Observação'],
   AcessosFolha: ['Data', 'E-mail', 'Ação', 'Detalhe'],
 };
-const FU = { ID: 0, NOME: 1, FILIAL: 2, INICIO: 3, ATIVO: 4, MAT_FERIAS: 5, NOME_COM: 6, NOME_MAN: 7, PISO: 9 };
+const FU = { ID: 0, NOME: 1, FILIAL: 2, INICIO: 3, ATIVO: 4, MAT_FERIAS: 5, NOME_COM: 6, NOME_MAN: 7, PISO: 9, NOME_CONT: 10 };
 const FL = { MES: 0, ID: 1, FILIAL: 2, NOME: 3, TIPO: 4, RUB: 5, DESC: 6, VALOR: 7, ORDEM: 8 };
 
 const FOLHA_SESSAO_SEG   = 15 * 60;   // folha se fecha após 15 min sem uso
@@ -310,7 +310,7 @@ function folhaDados_(ft, mes) {
     });
     // férias do mês vindas do painel de férias (mesma regra do Relatório Mensal)
     let ferias = {};
-    try { ferias = _folhaFeriasDoMes_(mes, Object.keys(func).map(function (k) { return func[k]; })); }
+    try { if (!_folhaEh13_(mes)) ferias = _folhaFeriasDoMes_(mes, Object.keys(func).map(function (k) { return func[k]; })); }
     catch (e) { ferias = {}; }
     const recibos = {};
     _folhaRows_(FOLHA_TAB.LANC).forEach(function (r) {
@@ -405,6 +405,7 @@ function folhaImportarPrevia_(ft, mes, com, man) {
     const email = _folhaSessao_(ft);
     mes = _folhaMes_(mes);
     if (!mes) return _err_('Mês inválido.');
+    if (_folhaEh13_(mes)) return _err_('No 13º salário não há importação de comissões.');
     const func = _folhaFuncionarios_();
     let aus = {};
     try { aus = _folhaAusencias_(mes, func.lista); } catch (e) { aus = {}; }
@@ -445,6 +446,7 @@ function folhaImportarGravar_(ft, mes, itens, vinculos, arquivos) {
     const email = _folhaSessao_(ft);
     mes = _folhaMes_(mes);
     if (!mes) return _err_('Mês inválido.');
+    if (_folhaEh13_(mes)) return _err_('No 13º salário não há importação de comissões.');
     if (!Array.isArray(itens) || !itens.length) return _err_('Nada para gravar.');
     const lock = LockService.getScriptLock();
     lock.waitLock(20000);
@@ -501,7 +503,7 @@ function _folhaFuncionarios_() {
     const f = {
       id: id, nome: String(r[FU.NOME] || '').trim(), filial: String(r[FU.FILIAL] || '').trim(),
       ativo: String(r[FU.ATIVO] || 'Sim').trim().toLowerCase() !== 'não',
-      apelidosCom: _folhaApelidos_(r[FU.NOME_COM]), apelidosMan: _folhaApelidos_(r[FU.NOME_MAN]),
+      apelidosCom: _folhaApelidos_(r[FU.NOME_COM]), apelidosMan: _folhaApelidos_(r[FU.NOME_MAN]), apelidosCont: _folhaApelidos_(r[FU.NOME_CONT]),
       piso: _folhaNum_(r[FU.PISO]) || 0, linha: i + 2, row: r,
     };
     lista.push(f); porId[id] = f;
@@ -721,7 +723,7 @@ function folhaAbrirMes_(ft, novo) {
   try {
     const email = _folhaSessao_(ft);
     novo = _folhaMes_(novo);
-    if (!novo) return _err_('Mês inválido.');
+    if (!novo || _folhaEh13_(novo)) return _err_('Mês inválido.');
     const lock = LockService.getScriptLock();
     lock.waitLock(20000);
     try {
@@ -729,7 +731,7 @@ function folhaAbrirMes_(ft, novo) {
       const meses = {};
       rows.forEach(function (r) { const m = _folhaMes_(r[FL.MES]); if (m) meses[m] = 1; });
       if (meses[novo]) return _err_(_folhaNomeMes_(novo) + ' já existe na folha.');
-      const anteriores = Object.keys(meses).filter(function (m) { return m < novo; }).sort();
+      const anteriores = Object.keys(meses).filter(function (m) { return m < novo && !_folhaEh13_(m); }).sort();
       if (!anteriores.length) return _err_('Não há mês anterior a ' + _folhaNomeMes_(novo) + ' para copiar.');
       const origem = anteriores[anteriores.length - 1];
 
@@ -782,6 +784,7 @@ function folhaAbrirMes_(ft, novo) {
 function _folhaNomeMes_(m) {
   const n = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
   const p = String(m).split('-');
+  if (p[1] === '13') return '13º salário/' + p[0];
   return n[Number(p[1]) - 1] + '/' + p[0];
 }
 
@@ -806,6 +809,7 @@ function folhaNovoFuncionario_(ft, mes, d) {
     };
     const salario = num(d.salario, 'Salário'), piso = num(d.piso, 'Piso');
     mes = mes ? _folhaMes_(mes) : '';
+    if (_folhaEh13_(mes)) mes = '';   // no 13º o recibo vem do 🎄 Gerar 13º
 
     const lock = LockService.getScriptLock();
     lock.waitLock(20000);
@@ -821,7 +825,7 @@ function folhaNovoFuncionario_(ft, mes, d) {
       const nr = shF.getLastRow() + 1;
       shF.getRange(nr, 1, 1, FOLHA_HEADERS.Funcionarios.length).setValues([[
         id, nome, filial, inicio || '', 'Sim', String(d.matFerias || '').trim(), '', '',
-        'Cadastrado no painel ' + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd/MM/yyyy'), piso]]);
+        'Cadastrado no painel ' + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd/MM/yyyy'), piso, '']]);
       if (inicio) shF.getRange(nr, FU.INICIO + 1).setNumberFormat('dd/mm/yyyy');
 
       let linhas = [];
@@ -860,7 +864,7 @@ FOLHA_TAB.REGRAS = 'Regras';
 FOLHA_HEADERS.Regras = ['ID', 'Nome', 'Tipo', 'Rubrica', 'Descrição no recibo', 'Valor base', 'Proporcional',
   'Exige sem falta/atestado', 'Observação'];
 const FR = { ID: 0, NOME: 1, TIPO: 2, RUB: 3, DESC: 4, VALOR: 5, PROP: 6, SEMFALTA: 7, OBS: 8 };
-const FOLHA_TIPOS_REGRA = { fixo: 'Fixo', piso: 'Piso premiação', bonus: 'Bônus manipulação' };
+const FOLHA_TIPOS_REGRA = { fixo: 'Fixo', piso: 'Piso premiação', bonus: 'Bônus manipulação', decimo: 'Entra no 13º' };
 FOLHA_API.folhaRegras = folhaRegras_;
 FOLHA_API.folhaRegrasSalvar = folhaRegrasSalvar_;
 FOLHA_API.folhaRegrasPrevia = folhaRegrasPrevia_;
@@ -870,6 +874,7 @@ function _folhaTipoRegra_(v) {
   const s = _folhaNorm_(v);
   if (s.indexOf('PISO') === 0) return 'piso';
   if (s.indexOf('BONUS') === 0) return 'bonus';
+  if (s.indexOf('ENTRA') === 0 || s.indexOf('DECIMO') === 0 || s.indexOf('13') === 0) return 'decimo';
   return 'fixo';
 }
 function _folhaSim_(v) { return v === true || /^s/i.test(String(v || '').trim()); }
@@ -1010,7 +1015,7 @@ function _folhaRegrasPlano_(recibos, regras, aus, opt) {
     const usada = linhas.map(function () { return false; });
     const remover = {};
     const mud = [];
-    const minhas = porId[id] || [];
+    const minhas = (porId[id] || []).filter(function (g) { return g.tipo !== 'decimo'; });
     // 1ª passada: mesma rubrica e mesma descrição; 2ª: só a rubrica (1ª linha livre)
     const alvo = minhas.map(function () { return -1; });
     [true, false].forEach(function (exata) {
@@ -1085,6 +1090,7 @@ function _folhaPisos_(func, regras, aus) {
 function _folhaRegrasMontar_(mes, manip, semDireito) {
   mes = _folhaMes_(mes);
   if (!mes) throw new Error('Mês inválido.');
+  if (_folhaEh13_(mes)) throw new Error('As regras do mês não se aplicam ao 13º salário — ele é gerado pelo botão 🎄 Gerar 13º.');
   const func = _folhaFuncionarios_();
   const rows = _folhaRows_(FOLHA_TAB.LANC);
   const recibos = {}, pos = {};
@@ -1164,6 +1170,374 @@ function folhaRegrasAplicar_(ft, mes, manip, semDireito) {
       _folhaLog_(email, 'aplicar regras', x.mes + ': ' + nRec + ' recibos, ' + nMud + ' mudanças; manipulação ' + x.manip
         + (Object.keys(sd).length ? '; sem bônus por falta: ' + Object.keys(sd).join(',') : ''));
       return JSON.stringify({ success: true, recibos: nRec, mudancas: nMud });
+    } finally { lock.releaseLock(); }
+  } catch (e) { return _err_(e.message); }
+}
+
+// ============================================================
+// 13º SALÁRIO (botão 🎄 Gerar 13º)
+//   Parcela única em dezembro. Fica na aba Lancamentos como um "mês" especial "aaaa-13", e assim
+//   lista, ✏ Editar, totais por filial e impressão funcionam como num mês comum.
+//   Regras (modelo de 2025, confirmadas pelo RH):
+//   · valor = salário do recibo de dezembro (ou do último mês do ano) × avos ÷ 12, centavos cortados;
+//   · avos = meses do ano a partir da admissão; o mês da admissão conta se entrou até o dia 15.
+//     Faltas não tiram avos. Desligados ficam de fora (recebem na rescisão) — só ativos;
+//   · entram só as linhas SALARIO + as regras "Entra no 13º" (gratificações fixas, limpeza…);
+//   · INSS e IR vêm da contabilidade: as linhas saem em branco (só para quem tem INSS/IR no recibo-base);
+//   · afastamento pelo INSS (auxílio-doença) reduz avos — a prévia deixa trocar os avos e avisa
+//     quem tem atestado longo no ano; licença-maternidade NÃO reduz (a empresa paga e compensa no INSS).
+// ============================================================
+FOLHA_API.folha13Previa = folha13Previa_;
+FOLHA_API.folha13Gravar = folha13Gravar_;
+
+function _folhaEh13_(mes) { return /-13$/.test(String(mes || '')); }
+
+// avos do 13º: admissão antes do ano = 12; no ano = meses a partir da admissão (o mês conta se entrou até o dia 15)
+function _folha13Avos_(adm, ano) {
+  if (!(adm instanceof Date) || isNaN(adm.getTime())) return null;
+  const y = adm.getFullYear();
+  if (y < ano) return 12;
+  if (y > ano) return 0;
+  return Math.max(0, 12 - adm.getMonth() - (adm.getDate() > 15 ? 1 : 0));
+}
+function _folha13Valor_(base, avos) { return Math.floor(Number(base) * 100 * avos / 12 + 1e-6) / 100; }
+
+// ---------- cálculo (função pura) ----------
+// recibos = { id: [{ tipo, rubrica, descricao, valor }] } do mês-base; info = { id: { adm: Date|null, admTxt, atestadoMax } };
+// regras = _folhaRegras_(); ajuste = { id: avos } (trocado na prévia)
+// devolve { id: { avos, avosCalc, linhas: [{ tipo, rubrica, descricao, valor, base }], total, avisos: [] } }
+function _folha13Plano_(ano, recibos, info, regras, ajuste) {
+  const porId = {};
+  regras.forEach(function (g) { if (g.tipo === 'decimo') (porId[g.id] = porId[g.id] || []).push(g); });
+  const out = {};
+  Object.keys(recibos).forEach(function (id) {
+    const ls = recibos[id], inf = info[id] || {}, avisos = [];
+    let avosCalc = _folha13Avos_(inf.adm, ano);
+    if (avosCalc === null) { avosCalc = 12; avisos.push('sem data de admissão — contei 12 meses, confira'); }
+    else if (avosCalc < 12) avisos.push('entrou em ' + inf.admTxt + ' — proporcional');
+    const aj = ajuste && ajuste[id] !== undefined && ajuste[id] !== null && ajuste[id] !== '' ? Number(ajuste[id]) : null;
+    const avos = aj !== null && isFinite(aj) && aj >= 0 && aj <= 12 ? Math.floor(aj) : avosCalc;
+    if (avos !== avosCalc) avisos.push('meses trocados na prévia: ' + avosCalc + ' → ' + avos);
+    if (inf.atestadoMax > 15) avisos.push('atestado de ' + inf.atestadoMax + ' dias no ano — se foi afastamento pelo INSS, diminua os meses');
+
+    const prov = [];
+    const usada = ls.map(function () { return false; });
+    ls.forEach(function (l, i) {
+      if (String(l.rubrica).toUpperCase() !== 'SALARIO' || !(Number(l.valor) > 0)) return;
+      usada[i] = true;
+      prov.push({ descricao: l.descricao || 'Salário', base: Number(l.valor), origem: 'salário' });
+    });
+    (porId[id] || []).forEach(function (g) {
+      // acha a linha do recibo: descrição igual → mesmo começo da descrição (antes do "(", o valor pode ter mudado) → só a rubrica
+      const inicio = function (s) { return _folhaNorm_(String(s || '').split('(')[0]); };
+      let k = -1;
+      ['exata', 'inicio', 'rubrica'].forEach(function (modo) {
+        if (k >= 0) return;
+        for (let i = 0; i < ls.length; i++) {
+          if (usada[i] || String(ls[i].rubrica).toUpperCase() !== g.rubrica) continue;
+          if (modo === 'exata' && (!g.descricao || _folhaNorm_(ls[i].descricao) !== _folhaNorm_(g.descricao))) continue;
+          if (modo === 'inicio' && (!g.descricao || !inicio(g.descricao) || inicio(ls[i].descricao) !== inicio(g.descricao))) continue;
+          k = i; break;
+        }
+      });
+      if (k >= 0) usada[k] = true;
+      // valor 0 na regra = usa o valor da linha no recibo-base (acompanha reajuste)
+      const base = g.valor > 0 ? g.valor : (k >= 0 ? Number(ls[k].valor) || 0 : 0);
+      if (!(base > 0)) { avisos.push('regra "' + (g.descricao || g.rubrica) + '" sem valor — ficou de fora'); return; }
+      const desc = !(g.valor > 0) && k >= 0 ? ls[k].descricao : (g.descricao || (k >= 0 ? ls[k].descricao : g.rubrica));
+      prov.push({ descricao: desc, base: base, origem: 'regra' });
+    });
+    if (!prov.length || avos === 0) { avisos.push(!prov.length ? 'sem salário no recibo-base — não gerei o 13º' : '0 meses no ano — sem 13º'); out[id] = { avos: avos, avosCalc: avosCalc, linhas: [], total: 0, avisos: avisos }; return; }
+
+    const linhas = prov.map(function (p) {
+      return { tipo: 'P', rubrica: 'DECIMO_TERCEIRO', descricao: p.descricao + (avos < 12 ? ' — ' + avos + '/12' : ''),
+        valor: _folha13Valor_(p.base, avos), base: p.base, origem: p.origem };
+    });
+    const tem = function (rub) { return ls.some(function (l) { return String(l.rubrica).toUpperCase() === rub; }); };
+    if (tem('INSS')) linhas.push({ tipo: 'D', rubrica: 'INSS', descricao: '(-) INSS 13º', valor: null });
+    else avisos.push('sem INSS no recibo-base (sem registro?)');
+    if (tem('IRRF')) linhas.push({ tipo: 'D', rubrica: 'IRRF', descricao: '(-) IR 13º', valor: null });
+    const total = Math.round(linhas.reduce(function (s, l) { return s + (l.tipo === 'P' ? l.valor : 0); }, 0) * 100) / 100;
+    out[id] = { avos: avos, avosCalc: avosCalc, linhas: linhas, total: total, avisos: avisos };
+  });
+  return out;
+}
+
+// monta tudo a partir da planilha: mês-base, admissões (painel de férias, senão "Início" da folha), atestados do ano
+function _folha13Montar_(ano, ajuste) {
+  ano = Number(ano);
+  if (!(ano >= 2000 && ano <= 2100)) throw new Error('Ano inválido.');
+  const mes13 = ano + '-13';
+  const rows = _folhaRows_(FOLHA_TAB.LANC);
+  const meses = {};
+  rows.forEach(function (r) { const m = _folhaMes_(r[FL.MES]); if (m) meses[m] = 1; });
+  const doAno = Object.keys(meses).filter(function (m) { return m.indexOf(ano + '-') === 0 && !_folhaEh13_(m); }).sort();
+  if (!doAno.length) throw new Error('Não há nenhum mês de ' + ano + ' na folha para tirar os salários.');
+  const base = doAno[doAno.length - 1];
+  const func = _folhaFuncionarios_();
+  const pos = {};
+  rows.forEach(function (r, i) {
+    if (_folhaMes_(r[FL.MES]) !== base) return;
+    const id = String(r[FL.ID] || '').trim();
+    const f = func.porId[id];
+    if (!f || !f.ativo) return;
+    (pos[id] = pos[id] || []).push({ i: i, ordem: Number(r[FL.ORDEM]) || 0 });
+  });
+  const recibos = {};
+  Object.keys(pos).forEach(function (id) {
+    recibos[id] = pos[id].sort(function (a, b) { return a.ordem - b.ordem; }).map(function (p) {
+      const r = rows[p.i];
+      return { tipo: String(r[FL.TIPO] || '').trim().toUpperCase(), rubrica: String(r[FL.RUB] || '').trim(),
+        descricao: String(r[FL.DESC] || ''), valor: _folhaNum_(r[FL.VALOR]), filial: String(r[FL.FILIAL] || ''), nome: String(r[FL.NOME] || '') };
+    });
+  });
+  // admissão: painel de férias (Func.Admissão) pela ligação de sempre; sem ela, "Início" da folha
+  const info = {};
+  let liga = {}, admFer = {}, atest = {};
+  try {
+    liga = _folhaLigarFerias_(func.lista);
+    _rows_(TAB.FUNC).forEach(function (r) { const m = _mk_(r[F.MAT]); if (m) admFer[m] = toDate_(r[F.ADMISSAO]); });
+  } catch (e) { liga = {}; }
+  try {
+    const ini = new Date(ano, 0, 1), fim = new Date(ano, 11, 31);
+    const sh = SpreadsheetApp.openById(MODEL_SHEET_ID).getSheetByName(TAB.ATESTADOS);
+    if (sh && sh.getLastRow() > 1) sh.getRange(2, 1, sh.getLastRow() - 1, ATESTADOS_HEADERS.length).getValues().forEach(function (r) {
+      const m = _mk_(r[AT.MAT]), a = toDate_(r[AT.INICIO]), b = toDate_(r[AT.FIM]);
+      if (!m || !a || !b || b < ini || a > fim) return;
+      const d = Math.round((_midnight_(b > fim ? fim : b) - _midnight_(a < ini ? ini : a)) / 864e5) + 1;
+      atest[m] = Math.max(atest[m] || 0, d);
+    });
+  } catch (e) { atest = {}; }
+  Object.keys(recibos).forEach(function (id) {
+    const f = func.porId[id], mat = liga[id];
+    let adm = mat && admFer[mat] ? admFer[mat] : null, fonte = adm ? 'painel de férias' : '';
+    if (!adm) { const v = f.row[FU.INICIO]; adm = v instanceof Date ? v : (v ? toDate_(v) : null); if (adm) fonte = 'início na folha'; }
+    info[id] = { adm: adm, admTxt: adm ? formatDateBR_(formatDate_(adm)) : '', fonte: fonte, atestadoMax: mat ? (atest[mat] || 0) : 0 };
+  });
+  const plano = _folha13Plano_(ano, recibos, info, _folhaRegras_(), ajuste || {});
+  return { ano: ano, mes13: mes13, base: base, existe: !!meses[mes13], rows: rows, func: func, recibos: recibos, info: info, plano: plano };
+}
+
+function folha13Previa_(ft, ano, ajuste) {
+  try {
+    const email = _folhaSessao_(ft);
+    const x = _folha13Montar_(ano, ajuste);
+    const lista = Object.keys(x.plano).map(function (id) {
+      const f = x.func.porId[id], p = x.plano[id], inf = x.info[id];
+      return { id: id, nome: f.nome, filial: f.filial || x.recibos[id][0].filial, admissao: inf.admTxt, fonte: inf.fonte,
+        avos: p.avos, avosCalc: p.avosCalc, linhas: p.linhas, total: p.total, avisos: p.avisos };
+    }).sort(function (a, b) { return a.filial.localeCompare(b.filial) || a.nome.localeCompare(b.nome); });
+    const total = Math.round(lista.reduce(function (s, r) { return s + r.total; }, 0) * 100) / 100;
+    _folhaLog_(email, '13º (prévia)', x.ano + ' a partir de ' + x.base + ': ' + lista.length + ' funcionários');
+    return JSON.stringify({ success: true, ano: x.ano, mes: x.mes13, base: x.base, existe: x.existe, total: total, lista: lista });
+  } catch (e) { return _err_(e.message); }
+}
+
+// ajuste = { id: avos }; excluir = [id] (não gera o 13º desses); substituir = true apaga o 13º já gerado e grava de novo
+function folha13Gravar_(ft, ano, ajuste, excluir, substituir) {
+  try {
+    const email = _folhaSessao_(ft);
+    const fora = {};
+    (excluir || []).forEach(function (id) { fora[String(id).trim()] = true; });
+    const lock = LockService.getScriptLock();
+    lock.waitLock(30000);
+    try {
+      const x = _folha13Montar_(ano, ajuste);
+      if (x.existe && !substituir) return _err_('O 13º de ' + x.ano + ' já foi gerado. Marque "substituir" para gerar de novo (as edições feitas nele se perdem).');
+      const novas = [];
+      let nFunc = 0, total = 0;
+      Object.keys(x.plano).sort().forEach(function (id) {
+        const p = x.plano[id];
+        if (fora[id] || !p.linhas.length) return;
+        const f = x.func.porId[id], r0 = x.recibos[id][0];
+        const filial = f.filial || r0.filial, nome = f.nome || r0.nome;
+        p.linhas.forEach(function (l, k) {
+          novas.push([x.mes13, id, filial, nome, l.tipo, l.rubrica, l.descricao, l.valor === null ? '' : l.valor, k + 1]);
+        });
+        nFunc++; total += p.total;
+      });
+      if (!novas.length) return _err_('Nenhum 13º para gravar.');
+      const manter = x.rows.filter(function (r) { return _folhaMes_(r[FL.MES]) !== x.mes13; });
+      const todas = manter.concat(novas).map(function (r) { const c = r.slice(); c[FL.MES] = _folhaMes_(c[FL.MES]) || c[FL.MES]; return c; });
+      const sh = _folhaAba_(FOLHA_TAB.LANC);
+      const n = FOLHA_HEADERS.Lancamentos.length;
+      sh.getRange(2, FL.MES + 1, todas.length, 1).setNumberFormat('@');
+      sh.getRange(2, 1, todas.length, n).setValues(todas);
+      const sobra = x.rows.length - todas.length;
+      if (sobra > 0) sh.getRange(2 + todas.length, 1, sobra, n).clearContent();
+      total = Math.round(total * 100) / 100;
+      _folhaLog_(email, 'gerar 13º', x.ano + ' a partir de ' + x.base + ': ' + nFunc + ' recibos, total ' + total
+        + (x.existe ? ' (substituiu o anterior)' : '') + (Object.keys(fora).length ? '; fora: ' + Object.keys(fora).join(',') : ''));
+      return JSON.stringify({ success: true, mes: x.mes13, base: x.base, recibos: nFunc, total: total });
+    } finally { lock.releaseLock(); }
+  } catch (e) { return _err_(e.message); }
+}
+
+// ============================================================
+// IMPORTAR RECIBOS DA CONTABILIDADE (⬇ INSS/IR da contabilidade)
+// ============================================================
+// O navegador lê os PDFs do Domínio ("Recibo de Pagamento", 1 por empresa) e manda só
+// [{ nome, empresa, adm, inss, ir }] — o INSS/IR de cada recibo já com a regra aplicada
+// (mês normal: sem INSS/IRRF de férias e de 13º; no 13º: todos).
+// Grava nas linhas D INSS / D IRRF do recibo do mês (cria a linha se faltar). Vínculos de nome
+// ficam na coluna "Nome na contabilidade" de Funcionarios.
+FOLHA_API.folhaContabPrevia = folhaContabPrevia_;
+FOLHA_API.folhaContabGravar = folhaContabGravar_;
+
+function _folhaR2_(v) { return Math.round((Number(v) || 0) * 100) / 100; }
+// agrupa os recibos pelo nome (pessoa em duas empresas = soma)
+function _folhaContabGrupos_(lista) {
+  const g = {};
+  (lista || []).forEach(function (r) {
+    const k = _folhaNorm_(r && r.nome);
+    if (!k) return;
+    const o = g[k] || (g[k] = { nome: String(r.nome).trim(), inss: 0, ir: 0, empresas: [], adm: '' });
+    o.inss = _folhaR2_(o.inss + (Number(r.inss) || 0));
+    o.ir = _folhaR2_(o.ir + (Number(r.ir) || 0));
+    if (r.empresa && o.empresas.indexOf(String(r.empresa)) < 0) o.empresas.push(String(r.empresa));
+    if (!o.adm && r.adm) o.adm = String(r.adm);
+  });
+  return g;
+}
+// função pura: casa os recibos com os funcionários. func = lista de _folhaContabFunc_();
+// atual = { id: { inss, ir, recibo } } do mês (_folhaContabAtual_)
+function _folhaContabPlano_(func, lista, atual) {
+  const grupos = _folhaContabGrupos_(lista);
+  const fc = func.map(function (f) { return { id: f.id, nome: f.nome, ativo: f.ativo, filial: f.filial, apelidosCom: f.apelidosCont || [], apelidosMan: [] }; });
+  const itens = Object.keys(grupos).map(function (k) { return { nome: grupos[k].nome, valor: 0 }; });
+  const r = _folhaCasar_(fc, itens, []);
+  const porId = {};
+  func.forEach(function (f) { porId[f.id] = f; });
+  const linhas = Object.keys(r.porFunc).map(function (id) {
+    const f = porId[id], c = r.porFunc[id], a = atual[id] || { inss: null, ir: null, recibo: false };
+    let inss = 0, ir = 0, emp = [], adm = '';
+    c.comNomes.forEach(function (n) {
+      const gg = grupos[_folhaNorm_(n)];
+      inss += gg.inss; ir += gg.ir; emp = emp.concat(gg.empresas); if (!adm) adm = gg.adm;
+    });
+    return {
+      id: id, nome: f.nome, filial: f.filial, nomesCont: c.comNomes, vinculado: c.vinculado, empresas: emp,
+      inss: _folhaR2_(inss), ir: _folhaR2_(ir), inssAtual: a.inss, irAtual: a.ir, temRecibo: !!a.recibo, adm: adm,
+      inicio: f.inicioTxt || '',
+    };
+  });
+  const comValor = function (v) {
+    const gg = grupos[_folhaNorm_(v.nome)];
+    return { nome: v.nome, opcoes: v.opcoes, inss: gg.inss, ir: gg.ir, empresas: gg.empresas, adm: gg.adm };
+  };
+  return { linhas: linhas, semFuncionario: r.semFuncionario.map(comValor), empates: r.empates.map(comValor) };
+}
+// INSS/IR atuais do mês por funcionário (soma das linhas D INSS / D IRRF)
+function _folhaContabAtual_(mes, rows) {
+  const out = {};
+  rows.forEach(function (r) {
+    if (_folhaMes_(r[FL.MES]) !== mes) return;
+    const id = String(r[FL.ID] || '').trim();
+    const o = out[id] || (out[id] = { inss: null, ir: null, recibo: true });
+    if (String(r[FL.TIPO]).trim() !== 'D') return;
+    const rub = String(r[FL.RUB]).trim().toUpperCase(), v = _folhaNum_(r[FL.VALOR]);
+    if (rub === 'INSS') o.inss = _folhaR2_((o.inss || 0) + (v || 0));
+    else if (rub === 'IRRF') o.ir = _folhaR2_((o.ir || 0) + (v || 0));
+  });
+  return out;
+}
+function _folhaContabFunc_() {
+  const func = _folhaFuncionarios_();
+  func.lista.forEach(function (f) {
+    const v = f.row[FU.INICIO];
+    f.inicioTxt = v instanceof Date ? Utilities.formatDate(v, Session.getScriptTimeZone(), 'dd/MM/yyyy') : String(v || '').trim();
+  });
+  return func;
+}
+
+function folhaContabPrevia_(ft, mes, lista) {
+  try {
+    const email = _folhaSessao_(ft);
+    mes = _folhaMes_(mes);
+    if (!mes) return _err_('Mês inválido.');
+    if (!Array.isArray(lista) || !lista.length) return _err_('Nenhum recibo lido.');
+    const func = _folhaContabFunc_();
+    const p = _folhaContabPlano_(func.lista, lista, _folhaContabAtual_(mes, _folhaRows_(FOLHA_TAB.LANC)));
+    _folhaLog_(email, 'contabilidade (prévia)', mes + ': ' + lista.length + ' recibos, ' + p.linhas.length + ' funcionários');
+    return JSON.stringify({
+      success: true, mes: mes, linhas: p.linhas, semFuncionario: p.semFuncionario, empates: p.empates,
+      funcionarios: func.lista.filter(function (f) { return f.ativo; }).map(function (f) { return { id: f.id, nome: f.nome, filial: f.filial, inicio: f.inicioTxt }; }),
+    });
+  } catch (e) { return _err_(e.message); }
+}
+
+// itens = [{ id, inss, ir, adm }]; vinculos = [{ id, nome }]; adm = true para preencher o "Início" de quem está sem
+function folhaContabGravar_(ft, mes, itens, vinculos, arquivos, adm) {
+  try {
+    const email = _folhaSessao_(ft);
+    mes = _folhaMes_(mes);
+    if (!mes) return _err_('Mês inválido.');
+    if (!Array.isArray(itens) || !itens.length) return _err_('Nada para gravar.');
+    const eh13 = _folhaEh13_(mes);
+    const lock = LockService.getScriptLock();
+    lock.waitLock(20000);
+    try {
+      const func = _folhaContabFunc_();
+      const sh = _folhaAba_(FOLHA_TAB.LANC);
+      const rows = _folhaRows_(FOLHA_TAB.LANC);
+      const pos = {};   // id -> { INSS: [índices], IRRF: [índices], ordem, filial, nome }
+      rows.forEach(function (r, i) {
+        if (_folhaMes_(r[FL.MES]) !== mes) return;
+        const id = String(r[FL.ID] || '').trim();
+        const o = pos[id] || (pos[id] = { INSS: [], IRRF: [], ordem: 0, filial: r[FL.FILIAL], nome: r[FL.NOME] });
+        o.ordem = Math.max(o.ordem, Number(r[FL.ORDEM]) || 0);
+        const rub = String(r[FL.RUB]).trim().toUpperCase();
+        if (String(r[FL.TIPO]).trim() === 'D' && (rub === 'INSS' || rub === 'IRRF')) o[rub].push(i);
+      });
+      const vals = rows.map(function (r) { return [r[FL.VALOR]]; });
+      const novas = [], semRecibo = [];
+      let n = 0, tInss = 0, tIr = 0, mudou = false;
+      itens.forEach(function (it) {
+        const id = String(it && it.id || '').trim();
+        const f = func.porId[id], o = pos[id];
+        if (!f) return;
+        if (!o) { semRecibo.push(f.nome); return; }
+        [['INSS', _folhaR2_(it.inss), eh13 ? '(-) INSS 13º' : '(-) INSS'], ['IRRF', _folhaR2_(it.ir), eh13 ? '(-) IR 13º' : '(-) IR']].forEach(function (c) {
+          const v = c[1];
+          if (!isFinite(v) || v < 0) return;
+          if (o[c[0]].length) {
+            o[c[0]].forEach(function (i, k) { vals[i][0] = k === 0 && v > 0 ? v : ''; });   // 1ª linha recebe; as outras zeram
+            mudou = true;
+          } else if (v > 0) {
+            o.ordem++;
+            novas.push([mes, id, o.filial, o.nome, 'D', c[0], c[2], v, o.ordem]);
+          }
+        });
+        tInss += _folhaR2_(it.inss); tIr += _folhaR2_(it.ir); n++;
+      });
+      if (mudou && rows.length) sh.getRange(2, FL.VALOR + 1, rows.length, 1).setValues(vals);
+      if (novas.length) {
+        const ini = sh.getLastRow() + 1;
+        sh.getRange(ini, FL.MES + 1, novas.length, 1).setNumberFormat('@');
+        sh.getRange(ini, 1, novas.length, novas[0].length).setValues(novas);
+      }
+      // vínculos de nome e data de admissão no cadastro
+      const shF = _folhaAba_(FOLHA_TAB.FUNC);
+      (vinculos || []).forEach(function (vk) {
+        const f = func.porId[String(vk && vk.id || '').trim()];
+        const nome = String(vk && vk.nome || '').trim();
+        if (!f || !nome || _folhaApelidos_(f.row[FU.NOME_CONT]).indexOf(_folhaNorm_(nome)) >= 0) return;
+        const novo = [String(f.row[FU.NOME_CONT] || '').trim(), nome].filter(String).join(' ; ');
+        shF.getRange(f.linha, FU.NOME_CONT + 1).setValue(novo);
+        f.row[FU.NOME_CONT] = novo;
+      });
+      let nAdm = 0;
+      if (adm) itens.forEach(function (it) {
+        const f = func.porId[String(it && it.id || '').trim()];
+        const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(String(it && it.adm || '').trim());
+        if (!f || !m || f.inicioTxt) return;
+        shF.getRange(f.linha, FU.INICIO + 1).setValue(new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1]))).setNumberFormat('dd/mm/yyyy');
+        f.inicioTxt = it.adm; nAdm++;
+      });
+      _folhaAba_(FOLHA_TAB.IMPORT).appendRow([new Date(), email, mes, String(arquivos || '').slice(0, 500), 'INSS/IR contabilidade', n, _folhaR2_(tInss + tIr),
+        'INSS ' + _folhaR2_(tInss) + ' · IR ' + _folhaR2_(tIr) + ((vinculos || []).length ? ' · ' + vinculos.length + ' vínculo(s)' : '') + (nAdm ? ' · ' + nAdm + ' admissão(ões)' : '')]);
+      _folhaLog_(email, 'contabilidade (gravar)', mes + ': ' + n + ' recibos, INSS ' + _folhaR2_(tInss) + ', IR ' + _folhaR2_(tIr));
+      return JSON.stringify({ success: true, gravados: n, inss: _folhaR2_(tInss), ir: _folhaR2_(tIr), novas: novas.length, semRecibo: semRecibo, admissoes: nAdm });
     } finally { lock.releaseLock(); }
   } catch (e) { return _err_(e.message); }
 }
