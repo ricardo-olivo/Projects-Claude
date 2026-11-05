@@ -120,6 +120,24 @@
     table.resumo td.muda { color: var(--folha); font-weight: 700; }
     .tag { display: inline-block; font-size: 10px; border-radius: 4px; padding: 0 5px; margin-left: 4px; background: var(--gray-100); color: var(--gray-700); }
     .tag.piso { background: #e0f2fe; color: #075985; }
+    /* regras por funcionário */
+    .rg-topo { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; margin-top: 10px; }
+    .rg-topo > div { min-width: 180px; }
+    .rg-topo input, .rg-topo select { width: 100%; }
+    .rg-conta { font-size: 12px; color: var(--gray-500); margin: 8px 0 4px; }
+    .rg-wrap { overflow-x: auto; }
+    table.rg-tab td { vertical-align: middle; padding: 3px 6px; }
+    table.rg-tab select, table.rg-tab input[type=text] { font-size: 12px; padding: 3px 5px; border: 1px solid var(--gray-300); border-radius: 4px; width: 100%; min-width: 0; }
+    table.rg-tab .rg-desc { min-width: 220px; }
+    table.rg-tab .rg-val { width: 96px; text-align: right; }
+    table.rg-tab .rg-obs { min-width: 140px; }
+    table.rg-tab input.erro { border-color: var(--danger); background: #fef2f2; }
+    table.rg-tab tr.rg-func td { background: var(--gray-100); padding-top: 8px; }
+    .rg-c { text-align: center; }
+    .rg-mais { display: inline-block; margin: 0 0 0 8px; }
+    .rg-x { border: none; background: none; cursor: pointer; color: var(--gray-500); }
+    .rg-x:hover { color: var(--danger); }
+    #rg-colar textarea { width: 100%; min-height: 120px; font-family: monospace; font-size: 12px; margin-top: 6px; }
     @media (max-width: 600px) { .header { flex-direction: column; align-items: flex-start; } .recibos { grid-template-columns: 1fr; } }
     @media print {
       .header, .toolbar, .cards, table.resumo, .no-print { display: none !important; }
@@ -203,6 +221,7 @@
       <button class="btn btn-sec no-print" onclick="window.print()" title="Imprime os recibos que estão na tela">🖨 Imprimir recibos</button>
       <button class="btn btn-sec no-print" onclick="abrirImportacao()" title="Lê o relatório de comissão e o PDF dos manipulados e preenche a Premiação do mês">⬆ Importar comissões</button>
       <button class="btn btn-sec no-print" onclick="abrirNovoMes()" title="Cria o mês seguinte copiando o último: valores fixos repetem, variáveis vêm em branco">📅 Abrir novo mês</button>
+      <button class="btn btn-sec no-print" onclick="abrirRegras()" title="Gratificações, auxílios, pisos de premiação e bônus de cada funcionário — e aplicar no mês aberto">📋 Regras por funcionário</button>
       <button class="btn btn-sec no-print" onclick="abrirNovoFunc()" title="Cadastra um funcionário na folha e cria o recibo dele no mês aberto">+ Novo funcionário</button>
       <span class="aviso-sessao" id="aviso-sessao"></span>
     </div>
@@ -241,7 +260,8 @@
     <div class="imp-box">
       <h2>⬆ Importar comissões — <span id="imp-mes"></span></h2>
       <p>Premiação = comissão de vendas + comissão dos manipulados, <b>sem os centavos</b>. Quem tem
-        <b>piso</b> (mínimo garantido) recebe o piso se a soma não chegar nele. Vendedores que não são
+        <b>piso</b> (📋 Regras por funcionário) recebe o maior entre a soma e o piso — o piso proporcional aos dias
+        trabalhados, descontando férias e atestados do mês. Vendedores que não são
         funcionários (parceiros, farmácias) ficam de fora.</p>
       <div class="imp-arqs">
         <div><label for="imp-xlsx">Relatório de comissão (Rel_0038, .xlsx, todas as filiais)</label><input type="file" id="imp-xlsx" accept=".xlsx"></div>
@@ -261,6 +281,53 @@
         <button class="btn btn-primary" style="width:auto;margin:0" id="imp-gravar" onclick="gravarImportacao()">Gravar premiação</button>
       </div>
       <table class="resumo" id="imp-tab"></table>
+    </div>
+  </div>
+
+  <!-- regras por funcionário -->
+  <div class="hidden" id="tela-regras">
+    <div class="imp-box">
+      <h2>📋 Regras por funcionário</h2>
+      <p><b>Fixo</b>: a linha do recibo recebe o valor base; se <b>proporcional</b>, base × dias trabalhados ÷ 30
+        (férias e atestados do mês descontam, centavos cortados). <b>Piso premiação</b>: ao importar comissões vale o
+        <b>maior</b> entre a comissão e o piso (proporcional). <b>Bônus manipulação</b>: só se a venda geral da manipulação
+        passar do limite; com "sem falta", perde quem teve atestado ou falta. Gratificações sem regra própria, com o valor
+        na descrição — "Gratificação (650,00)" — também ficam proporcionais.</p>
+      <div class="rg-topo">
+        <div><label for="rg-busca">Buscar</label><input type="text" id="rg-busca" oninput="renderRegras()" placeholder="nome ou filial…"></div>
+        <div><label for="rg-add-func">Incluir regra para</label><select id="rg-add-func" onchange="rgAddFunc()"></select></div>
+        <div><label for="rg-limite">Limite do bônus manipulação (R$)</label><input type="text" id="rg-limite" inputmode="decimal" onchange="rgMarcar()"></div>
+        <button class="btn btn-sec" onclick="rgColarAbrir()" title="Colar linhas copiadas de uma planilha">📋 Colar lista</button>
+        <button class="btn btn-sec" onclick="fecharRegras()">Voltar</button>
+        <button class="btn ed-salvar" id="rg-salvar" onclick="salvarRegras()">Salvar regras</button>
+      </div>
+      <div id="rg-colar" class="hidden pend" style="margin-top:10px">
+        <h3>Colar lista (copie da planilha, uma regra por linha, colunas separadas por TAB)</h3>
+        <div class="ov-hint">ID · Nome · Tipo (Fixo / Piso premiação / Bônus manipulação) · Rubrica · Descrição no recibo · Valor base · Proporcional (Sim/Não) · Exige sem falta (Sim/Não) · Observação.
+          Quem estiver na lista tem as regras atuais substituídas.</div>
+        <textarea id="rg-colar-txt" placeholder="F001&#9;Nome&#9;Fixo&#9;GRATIFICACAO&#9;Gratificação (500,00)&#9;500,00&#9;Sim&#9;Não&#9;"></textarea>
+        <div class="ed-botoes"><button class="btn btn-sec" onclick="rgColarAbrir()">Fechar</button><button class="btn ed-salvar" onclick="rgColar()">Incluir na lista</button></div>
+      </div>
+      <div class="msg" id="rg-msg"></div>
+      <div class="rg-conta" id="rg-conta"></div>
+      <div class="rg-wrap" id="rg-lista"></div>
+    </div>
+
+    <div class="imp-box">
+      <h2>Aplicar as regras em <span id="rg-mes"></span></h2>
+      <p>Recalcula as linhas com regra a partir das férias e atestados lançados no painel. Confira a prévia antes de gravar.
+        A premiação com piso é calculada no <b>⬆ Importar comissões</b> — importe depois de lançar férias e atestados do mês.</p>
+      <div class="rg-topo">
+        <div><label for="rg-manip">Venda geral da manipulação no mês (R$)</label><input type="text" id="rg-manip" inputmode="decimal" placeholder="0,00"></div>
+        <button class="btn btn-sec" id="rg-prev" onclick="previaRegras()">Calcular prévia</button>
+      </div>
+      <div class="msg" id="rg-prev-msg"></div>
+      <div id="rg-prev-res" class="hidden" style="margin-top:12px">
+        <div class="cards" id="rg-cards"></div>
+        <div id="rg-bonus"></div>
+        <div class="rg-wrap"><table class="resumo" id="rg-prev-tab"></table></div>
+        <div class="ed-botoes"><button class="btn ed-salvar" id="rg-aplicar" onclick="aplicarRegras()">Gravar nos recibos</button></div>
+      </div>
     </div>
   </div>
 
@@ -310,10 +377,10 @@
   }
 
   function mostrar(id) {
-    ['tela-carregando', 'tela-config1', 'tela-config2', 'tela-desbloq', 'tela-folha', 'tela-import'].forEach(function (t) {
+    ['tela-carregando', 'tela-config1', 'tela-config2', 'tela-desbloq', 'tela-folha', 'tela-import', 'tela-regras'].forEach(function (t) {
       document.getElementById(t).classList.toggle('hidden', t !== id);
     });
-    document.getElementById('btn-bloquear').classList.toggle('hidden', id !== 'tela-folha' && id !== 'tela-import');
+    document.getElementById('btn-bloquear').classList.toggle('hidden', ['tela-folha', 'tela-import', 'tela-regras'].indexOf(id) < 0);
   }
   function msg(id, texto, erro) { var el = document.getElementById(id); el.textContent = texto || ''; el.className = 'msg' + (erro ? ' erro' : ''); }
   function ocupado(id, sim, texto) { var b = document.getElementById(id); b.disabled = sim; if (texto) b.textContent = texto; }
@@ -688,6 +755,242 @@
     google.script.run.withSuccessHandler(function (html) { document.open(); document.write(html); document.close(); }).paginaLogin();
   }
 
+  // ── REGRAS POR FUNCIONÁRIO ─────────────────────────────────
+  // Editor da aba "Regras" (tudo é gravado de uma vez no "Salvar regras") + aplicar as regras no mês aberto.
+  var rgDados = null;            // { regras, antes, limite, rubricas, funcionarios }
+  var rgLista = [];              // regras em edição
+  var rgSujo = false;
+  var rgPrevia = null;           // resposta de folhaRegrasPrevia
+  var rgFaltas = {};             // id -> true (perde o bônus por falta)
+  var RG_TIPOS = { fixo: 'Fixo', piso: 'Piso premiação', bonus: 'Bônus manipulação' };
+
+  function abrirRegras() {
+    if (editId && !confirm('Há um recibo em edição. Descartar as alterações dele?')) return;
+    editId = null;
+    mostrar('tela-regras');
+    document.getElementById('rg-mes').textContent = folhaMesAtual ? nomeMes(folhaMesAtual) : '—';
+    document.getElementById('rg-prev-res').classList.add('hidden');
+    document.getElementById('rg-lista').textContent = 'Carregando…';
+    msg('rg-msg', ''); msg('rg-prev-msg', '');
+    rgPrevia = null; rgFaltas = {};
+    chamarFolha('folhaRegras').then(function (j) {
+      if (!j.success) { document.getElementById('rg-lista').textContent = ''; return msg('rg-msg', j.error, true); }
+      rgDados = j;
+      rgLista = j.regras.map(function (g) { return Object.assign({}, g); });
+      rgSujo = false;
+      document.getElementById('rg-limite').value = valorBR(j.limite);
+      document.getElementById('rg-add-func').innerHTML = '<option value="">— escolha o funcionário —</option>'
+        + j.funcionarios.slice().sort(function (a, b) { return a.nome.localeCompare(b.nome); })
+          .map(function (f) { return '<option value="' + esc(f.id) + '">' + esc(f.nome) + ' (' + esc(f.filial) + ')</option>'; }).join('');
+      renderRegras();
+    }).catch(function (e) { if (e.message !== 'bloqueada') msg('rg-msg', e.message, true); });
+  }
+  function fecharRegras() {
+    if (rgSujo && !confirm('Há regras alteradas que não foram salvas. Sair mesmo assim?')) return;
+    rgSujo = false;
+    mostrar('tela-folha');
+  }
+  function rgFunc(id) { return (rgDados.funcionarios.filter(function (f) { return f.id === id; })[0]) || { id: id, nome: id + ' (inativo?)', filial: '' }; }
+  function rgRubOpcoes(sel) {
+    var lista = rgDados.rubricas.filter(function (r) { return r.tipo === 'P'; });
+    if (sel && !lista.some(function (r) { return r.cod === sel; })) lista = lista.concat([{ cod: sel, nome: sel }]);
+    return '<option value="">—</option>' + lista.map(function (r) {
+      return '<option value="' + esc(r.cod) + '"' + (r.cod === sel ? ' selected' : '') + '>' + esc(r.nome) + '</option>';
+    }).join('');
+  }
+  function renderRegras() {
+    var busca = semAcento(document.getElementById('rg-busca').value || '').toLowerCase();
+    var grupos = {}, ordem = [];
+    rgLista.forEach(function (g, i) {
+      if (!grupos[g.id]) { grupos[g.id] = []; ordem.push(g.id); }
+      grupos[g.id].push(i);
+    });
+    ordem.sort(function (a, b) { var fa = rgFunc(a), fb = rgFunc(b); return fa.filial.localeCompare(fb.filial) || fa.nome.localeCompare(fb.nome); });
+    var vis = ordem.filter(function (id) { var f = rgFunc(id); return !busca || semAcento(f.nome + ' ' + f.filial).toLowerCase().indexOf(busca) >= 0; });
+    document.getElementById('rg-conta').textContent = rgLista.length + ' regras · ' + ordem.length + ' funcionários' + (rgSujo ? ' · não salvas' : '');
+    if (!vis.length) { document.getElementById('rg-lista').innerHTML = '<p class="ov-hint">Nenhuma regra' + (busca ? ' para essa busca' : ' ainda') + '.</p>'; return; }
+    document.getElementById('rg-lista').innerHTML = '<table class="resumo rg-tab"><tr><th>Tipo</th><th>Rubrica</th><th>Descrição no recibo</th>'
+      + '<th class="num">Valor base</th><th title="Desconta férias e atestados do mês (base 30 dias)">Proporc.</th><th title="Perde se tiver falta ou atestado no mês">Sem falta</th><th>Observação</th><th></th></tr>'
+      + vis.map(function (id) {
+        var f = rgFunc(id);
+        return '<tr class="rg-func"><td colspan="8"><b>' + esc(f.nome) + '</b> <span class="tag">' + esc(f.filial) + '</span>'
+          + ' <button class="ed-add rg-mais" onclick="rgNova(\'' + esc(id) + '\')">+ regra</button></td></tr>'
+          + grupos[id].map(function (i) {
+            var g = rgLista[i];
+            return '<tr data-i="' + i + '">'
+              + '<td><select onchange="rgCampo(' + i + ',\'tipo\',this.value)">' + Object.keys(RG_TIPOS).map(function (t) {
+                return '<option value="' + t + '"' + (g.tipo === t ? ' selected' : '') + '>' + RG_TIPOS[t] + '</option>'; }).join('') + '</select></td>'
+              + '<td><select onchange="rgCampo(' + i + ',\'rubrica\',this.value)">' + rgRubOpcoes(g.rubrica) + '</select></td>'
+              + '<td><input type="text" class="rg-desc" value="' + esc(g.descricao) + '" oninput="rgCampo(' + i + ',\'descricao\',this.value)" placeholder="como está no recibo"></td>'
+              + '<td><input type="text" class="rg-val" inputmode="decimal" value="' + esc(valorBR(g.valor)) + '" onchange="rgValor(' + i + ',this)"></td>'
+              + '<td class="rg-c"><input type="checkbox"' + (g.proporcional ? ' checked' : '') + ' onchange="rgCampo(' + i + ',\'proporcional\',this.checked)"></td>'
+              + '<td class="rg-c"><input type="checkbox"' + (g.semFalta ? ' checked' : '') + (g.tipo !== 'bonus' ? ' disabled' : '') + ' onchange="rgCampo(' + i + ',\'semFalta\',this.checked)"></td>'
+              + '<td><input type="text" class="rg-obs" value="' + esc(g.obs) + '" oninput="rgCampo(' + i + ',\'obs\',this.value)"></td>'
+              + '<td><button class="ed-x rg-x" title="Apagar regra" onclick="rgApagar(' + i + ')">✕</button></td></tr>';
+          }).join('');
+      }).join('') + '</table>';
+  }
+  function rgMarcar() { rgSujo = true; document.getElementById('rg-conta').textContent = rgLista.length + ' regras · não salvas'; }
+  function rgCampo(i, campo, v) {
+    rgLista[i][campo] = v;
+    if (campo === 'tipo') {
+      if (v === 'bonus') { rgLista[i].rubrica = rgLista[i].rubrica || 'BONUS_MANIPULACAO'; }
+      if (v === 'piso') { rgLista[i].rubrica = rgLista[i].rubrica || 'PREMIACAO'; }
+      if (v !== 'bonus') rgLista[i].semFalta = false;
+      rgMarcar(); return renderRegras();
+    }
+    rgMarcar();
+  }
+  function rgValor(i, el) {
+    var n = lerValor(el.value);
+    el.classList.toggle('erro', n === null || isNaN(n) || n < 0);
+    rgLista[i].valor = (n === null || isNaN(n)) ? null : n;
+    if (n !== null && !isNaN(n)) el.value = valorBR(n);
+    rgMarcar();
+  }
+  function rgApagar(i) { rgLista.splice(i, 1); rgMarcar(); renderRegras(); }
+  function rgNova(id) {
+    if (!id) return;
+    rgLista.push({ id: id, nome: rgFunc(id).nome, tipo: 'fixo', rubrica: 'GRATIFICACAO', descricao: '', valor: null, proporcional: true, semFalta: false, obs: '' });
+    rgMarcar(); renderRegras();
+  }
+  function rgAddFunc() {
+    var s = document.getElementById('rg-add-func');
+    if (!s.value) return;
+    document.getElementById('rg-busca').value = '';
+    rgNova(s.value); s.value = '';
+  }
+
+  // colar lista (TSV, na ordem das colunas da aba Regras: ID, Nome, Tipo, Rubrica, Descrição, Valor, Proporcional, Sem falta, Obs)
+  function rgColarAbrir() { document.getElementById('rg-colar').classList.toggle('hidden'); document.getElementById('rg-colar-txt').focus(); }
+  function rgColar() {
+    var txt = document.getElementById('rg-colar-txt').value;
+    var porId = {};
+    rgDados.funcionarios.forEach(function (f) { porId[f.id] = f; });
+    var novas = [], erros = [];
+    txt.split(/\r?\n/).forEach(function (ln, k) {
+      if (!ln.trim()) return;
+      var c = ln.split('\t').map(function (x) { return x.trim(); });
+      if (/^id$/i.test(c[0])) return;                       // cabeçalho
+      var id = c[0].toUpperCase();
+      if (!porId[id]) return erros.push('linha ' + (k + 1) + ': funcionário ' + (c[0] || '?') + ' não encontrado (ou inativo)');
+      var t = semAcento(c[2] || '').toLowerCase();
+      var tipo = t.indexOf('piso') === 0 ? 'piso' : t.indexOf('bonus') === 0 ? 'bonus' : 'fixo';
+      var v = lerValor(c[5] || '');
+      if (v === null || isNaN(v) || v < 0) return erros.push('linha ' + (k + 1) + ': valor inválido "' + (c[5] || '') + '"');
+      novas.push({ id: id, nome: porId[id].nome, tipo: tipo, rubrica: (c[3] || '').toUpperCase(), descricao: c[4] || '', valor: v,
+        proporcional: /^s/i.test(c[6] || ''), semFalta: tipo === 'bonus' && /^s/i.test(c[7] || ''), obs: c[8] || '' });
+    });
+    if (erros.length && !confirm(erros.length + ' linha(s) com problema:\n\n' + erros.slice(0, 12).join('\n') + '\n\nIncluir só as ' + novas.length + ' linhas boas?')) return;
+    if (!novas.length) return alert('Nenhuma linha válida.');
+    // quem veio na lista tem as regras substituídas pelas da lista
+    var ids = {}; novas.forEach(function (g) { ids[g.id] = 1; });
+    rgLista = rgLista.filter(function (g) { return !ids[g.id]; }).concat(novas);
+    document.getElementById('rg-colar-txt').value = '';
+    document.getElementById('rg-colar').classList.add('hidden');
+    rgMarcar(); renderRegras();
+    alert(novas.length + ' regras de ' + Object.keys(ids).length + ' funcionários incluídas. Confira e clique em "Salvar regras".');
+  }
+
+  function salvarRegras() {
+    for (var i = 0; i < rgLista.length; i++) {
+      var g = rgLista[i];
+      if (!g.rubrica) return msg('rg-msg', rgFunc(g.id).nome + ': escolha a rubrica.', true);
+      if (g.valor === null || g.valor === undefined || isNaN(g.valor) || g.valor < 0) return msg('rg-msg', rgFunc(g.id).nome + ': valor inválido.', true);
+    }
+    var lim = lerValor(document.getElementById('rg-limite').value);
+    if (lim === null || isNaN(lim) || lim <= 0) return msg('rg-msg', 'Limite do bônus inválido.', true);
+    ocupado('rg-salvar', true, 'Salvando…');
+    chamarFolha('folhaRegrasSalvar', rgLista, rgDados.antes, lim).then(function (j) {
+      ocupado('rg-salvar', false, 'Salvar regras');
+      if (!j.success) return msg('rg-msg', j.error, true);
+      rgDados.antes = j.antes; rgDados.limite = lim; rgSujo = false;
+      msg('rg-msg', 'Regras salvas (' + rgLista.length + ').');
+      renderRegras();
+    }).catch(function (e) { ocupado('rg-salvar', false, 'Salvar regras'); if (e.message !== 'bloqueada') msg('rg-msg', e.message, true); });
+  }
+
+  // ---- aplicar no mês ----
+  function previaRegras() {
+    if (!folhaMesAtual) return msg('rg-prev-msg', 'Escolha o mês na folha primeiro.', true);
+    if (rgSujo) return msg('rg-prev-msg', 'Salve as regras antes de aplicar.', true);
+    var m = lerValor(document.getElementById('rg-manip').value || '0');
+    if (m === null || isNaN(m) || m < 0) return msg('rg-prev-msg', 'Venda da manipulação inválida.', true);
+    ocupado('rg-prev', true, 'Calculando…'); msg('rg-prev-msg', '');
+    chamarFolha('folhaRegrasPrevia', folhaMesAtual, m).then(function (j) {
+      ocupado('rg-prev', false, 'Calcular prévia');
+      if (!j.success) return msg('rg-prev-msg', j.error, true);
+      rgPrevia = j; rgFaltas = {};
+      document.getElementById('rg-prev-res').classList.remove('hidden');
+      renderPreviaRegras();
+    }).catch(function (e) { ocupado('rg-prev', false, 'Calcular prévia'); if (e.message !== 'bloqueada') msg('rg-prev-msg', e.message, true); });
+  }
+  function rgRecebe(l) {
+    var b = l.bonus;
+    return !!b && rgPrevia.bonusLiberado && !(b.semFalta && (b.atestado > 0 || rgFaltas[l.id]));
+  }
+  function renderPreviaRegras() {
+    var p = rgPrevia;
+    var mud = 0, afet = 0;
+    p.lista.forEach(function (l) {
+      var n = l.mudancas.filter(function (m) { return m.origem !== 'bônus'; }).length;
+      if (n) { mud += n; afet++; }
+    });
+    var bon = p.lista.filter(function (l) { return l.bonus; });
+    var totBonus = bon.reduce(function (s, l) { return s + (rgRecebe(l) ? l.bonus.valor : 0); }, 0);
+    document.getElementById('rg-cards').innerHTML =
+      '<div class="card"><div class="card-label">Recibos que mudam</div><div class="card-value">' + afet + '</div></div>'
+      + '<div class="card"><div class="card-label">Linhas alteradas</div><div class="card-value">' + mud + '</div></div>'
+      + '<div class="card"><div class="card-label">Bônus manipulação</div><div class="card-value">' + (p.bonusLiberado ? brl(totBonus) : 'não atingido') + '</div></div>';
+    var bhtml = '';
+    if (bon.length) {
+      bhtml = '<div class="pend"><h3>Bônus manipulação — venda geral ' + brl(p.manip) + (p.bonusLiberado ? ' passou de ' : ' não passou de ') + brl(p.limite)
+        + (p.bonusLiberado ? '. Marque quem teve <b>falta</b> (informado pela gestora):' : ' — ninguém recebe; linhas de bônus existentes saem do recibo.') + '</h3><table>'
+        + bon.map(function (l) {
+          var b = l.bonus, rec = rgRecebe(l);
+          var motivo = !p.bonusLiberado ? 'meta não atingida' : (b.semFalta && b.atestado > 0) ? 'atestado no mês (' + b.atestado + ' dia' + (b.atestado > 1 ? 's' : '') + ')' : (b.semFalta && rgFaltas[l.id]) ? 'falta' : '';
+          return '<tr><td><b>' + esc(l.nome) + '</b></td><td>' + esc(l.filial) + '</td><td class="num">' + brl(b.valor) + '</td>'
+            + '<td>' + (b.semFalta && p.bonusLiberado && !b.atestado ? '<label class="imp-chk"><input type="checkbox" data-id="' + esc(l.id) + '"' + (rgFaltas[l.id] ? ' checked' : '') + '> teve falta</label>' : (b.semFalta ? '' : '<span class="ov-hint">sem exigência de falta</span>')) + '</td>'
+            + '<td>' + (rec ? '<span class="tag piso">recebe</span>' : '<span class="tag">não recebe' + (motivo ? ' — ' + esc(motivo) : '') + '</span>') + '</td></tr>';
+        }).join('') + '</table></div>';
+    }
+    var box = document.getElementById('rg-bonus');
+    box.innerHTML = bhtml;
+    box.querySelectorAll('input[type=checkbox]').forEach(function (c) {
+      c.onchange = function () { if (c.checked) rgFaltas[c.getAttribute('data-id')] = true; else delete rgFaltas[c.getAttribute('data-id')]; renderPreviaRegras(); };
+    });
+    var linhas = [];
+    p.lista.forEach(function (l) {
+      l.mudancas.forEach(function (m) { if (m.origem !== 'bônus') linhas.push({ l: l, m: m }); });
+    });
+    var ORIG = { regra: 'regra', geral: 'gratificação proporcional' };
+    document.getElementById('rg-prev-tab').innerHTML = linhas.length
+      ? '<tr><th>Filial</th><th>Funcionário</th><th class="num">Dias fora</th><th>Linha do recibo</th><th class="num">Atual</th><th class="num">Novo</th><th>Por quê</th></tr>'
+        + linhas.map(function (x) {
+          var a = x.l.aus || {};
+          var fora = a.fora ? a.fora + ' (' + [a.ferias ? a.ferias + ' férias' : '', a.atestado ? a.atestado + ' atest.' : ''].filter(String).join(', ') + ')' : '—';
+          return '<tr><td>' + esc(x.l.filial) + '</td><td>' + esc(x.l.nome) + '</td><td class="num">' + fora + '</td>'
+            + '<td>' + esc(x.m.descricao) + (x.m.acao === 'incluir' ? ' <span class="tag">nova linha</span>' : '') + '</td>'
+            + '<td class="num">' + brl(x.m.de) + '</td><td class="num muda">' + brl(x.m.para) + '</td><td>' + esc(ORIG[x.m.origem] || x.m.origem) + '</td></tr>';
+        }).join('')
+      : '<tr><td>Nenhum valor muda fora o bônus — os recibos já estão de acordo com as regras.</td></tr>';
+  }
+  function aplicarRegras() {
+    if (!rgPrevia) return;
+    var faltas = Object.keys(rgFaltas);
+    if (!confirm('Gravar as regras nos recibos de ' + nomeMes(rgPrevia.mes) + '?'
+      + (faltas.length ? '\n\nSem bônus por falta: ' + faltas.length + ' funcionário(s).' : ''))) return;
+    ocupado('rg-aplicar', true, 'Gravando…');
+    chamarFolha('folhaRegrasAplicar', rgPrevia.mes, rgPrevia.manip, faltas).then(function (j) {
+      ocupado('rg-aplicar', false, 'Gravar nos recibos');
+      if (!j.success) return msg('rg-prev-msg', j.error, true);
+      alert(j.recibos ? 'Regras aplicadas: ' + j.recibos + ' recibos, ' + j.mudancas + ' linhas.' : 'Nada mudou — os recibos já estavam de acordo.');
+      rgSujo = false;
+      mostrar('tela-folha');
+      carregarMes();
+    }).catch(function (e) { ocupado('rg-aplicar', false, 'Gravar nos recibos'); if (e.message !== 'bloqueada') msg('rg-prev-msg', e.message, true); });
+  }
+
   // ── Importar comissões ─────────────────────────────────────────
   // Os arquivos são lidos AQUI no navegador; para o servidor vão só as listas { nome, valor }.
   var impPrevia = null;          // resposta de folhaImportarPrevia
@@ -1014,11 +1317,34 @@
       case 'folhaSalvarRecibo': return r({});
       case 'folhaAbrirMes': return r({ mes: args[1], origem: '2026-08', funcionarios: FOLHA_MOCK.length, novos: 0, linhas: 20 });
       case 'folhaNovoFuncionario': { var dd = args[2]; return r({ id: 'F904', recibo: args[1] ? { id: 'F904', nome: dd.nome, filial: dd.filial, inicio: '', ativo: true, ferias: [], linhas: [{ tipo: 'P', rubrica: 'SALARIO', descricao: 'Salário', valor: dd.salario, ordem: 1 }, { tipo: 'P', rubrica: 'PREMIACAO', descricao: 'Premiação', valor: null, ordem: 2 }, { tipo: 'D', rubrica: 'INSS', descricao: '(-) INSS', valor: null, ordem: 3 }], proventos: dd.salario || 0, descontos: 0, liquido: dd.salario || 0 } : null }); }
+      case 'folhaRegras': return r({ regras: folhaMockRegras, antes: 'x', limite: 200000, funcionarios: FOLHA_MOCK.map(function (f) { return { id: f.id, nome: f.nome, filial: f.filial }; }),
+        rubricas: [{ cod: 'SALARIO', nome: 'Salário', tipo: 'P' }, { cod: 'GRATIFICACAO', nome: 'Gratificação', tipo: 'P' }, { cod: 'PREMIACAO', nome: 'Premiação', tipo: 'P' },
+          { cod: 'BONUS_MANIPULACAO', nome: 'Bônus manipulação', tipo: 'P' }, { cod: 'AUXILIOS', nome: 'Auxílios', tipo: 'P' }, { cod: 'INSS', nome: 'INSS', tipo: 'D' }] });
+      case 'folhaRegrasSalvar': folhaMockRegras = args[1]; return r({ antes: 'x' });
+      case 'folhaRegrasPrevia': return r({ mes: args[1], limite: 200000, manip: args[2], bonusLiberado: args[2] > 200000, lista: [
+        { id: 'F901', nome: 'Ana Exemplo da Silva', filial: 'Filial 05', aus: { ferias: 10, atestado: 0, fora: 10, trab: 20 },
+          mudancas: [{ acao: 'alterar', rubrica: 'GRATIFICACAO', descricao: 'Gratificação (300,00)', de: 300, para: 200, origem: 'geral' }],
+          bonus: { valor: 180, semFalta: true, atestado: 0, falta: false, recebe: args[2] > 200000 } },
+        { id: 'F902', nome: 'Bruno Teste Pereira', filial: 'Filial 05', aus: { ferias: 0, atestado: 2, fora: 2, trab: 28 },
+          mudancas: [{ acao: 'alterar', rubrica: 'GRATIFICACAO', descricao: 'Gratificação Gerência (500,00)', de: 500, para: 466.66, origem: 'regra' },
+            { acao: 'incluir', rubrica: 'AUXILIOS', descricao: 'Aux. Alimentação (200,00)', de: null, para: 186.66, origem: 'regra' }],
+          bonus: { valor: 180, semFalta: true, atestado: 2, falta: false, recebe: false } },
+        { id: 'F903', nome: 'Carla Modelo Souza', filial: 'Filial 06', aus: { ferias: 0, atestado: 0, fora: 0, trab: 30 }, mudancas: [],
+          bonus: { valor: 500, semFalta: false, atestado: 0, falta: false, recebe: args[2] > 200000 } }] });
+      case 'folhaRegrasAplicar': return r({ recibos: 2, mudancas: 3 });
       case 'folhaImportarGravar': return r({ gravados: args[2].length, total: args[2].reduce(function (s, i) { return s + i.valor; }, 0) });
     }
     return { success: false, error: 'mock: ' + fn };
   }
   // dados FICTÍCIOS (nunca pôr nomes/valores reais aqui: este arquivo vai para o GitHub)
+  var folhaMockRegras = [
+    { id: 'F901', nome: 'Ana Exemplo da Silva', tipo: 'bonus', rubrica: 'BONUS_MANIPULACAO', descricao: 'Bônus Manipulação', valor: 180, proporcional: false, semFalta: true, obs: '' },
+    { id: 'F902', nome: 'Bruno Teste Pereira', tipo: 'fixo', rubrica: 'GRATIFICACAO', descricao: 'Gratificação Gerência (500,00)', valor: 500, proporcional: true, semFalta: false, obs: '' },
+    { id: 'F902', nome: 'Bruno Teste Pereira', tipo: 'fixo', rubrica: 'AUXILIOS', descricao: 'Aux. Alimentação (200,00)', valor: 200, proporcional: true, semFalta: false, obs: '' },
+    { id: 'F902', nome: 'Bruno Teste Pereira', tipo: 'piso', rubrica: 'PREMIACAO', descricao: 'Premiação', valor: 1000, proporcional: true, semFalta: false, obs: 'maior entre comissão e piso' },
+    { id: 'F902', nome: 'Bruno Teste Pereira', tipo: 'bonus', rubrica: 'BONUS_MANIPULACAO', descricao: 'Bônus Manipulação', valor: 180, proporcional: false, semFalta: true, obs: '' },
+    { id: 'F903', nome: 'Carla Modelo Souza', tipo: 'bonus', rubrica: 'BONUS_MANIPULACAO', descricao: 'Bônus Manipulação', valor: 500, proporcional: false, semFalta: false, obs: '' },
+  ];
   var FOLHA_MOCK = [
     { id: 'F901', nome: 'Ana Exemplo da Silva', filial: 'Filial 05', inicio: '01/02/2021', ativo: true, proventos: 3600, descontos: 150, liquido: 3450, linhas: [
       { tipo: 'P', descricao: 'Salário', valor: 2000 }, { tipo: 'P', descricao: 'Gratificação (300,00)', valor: 300 },
