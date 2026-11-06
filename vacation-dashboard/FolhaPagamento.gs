@@ -1377,9 +1377,9 @@ function folha13Gravar_(ft, ano, ajuste, excluir, substituir) {
 // IMPORTAR RECIBOS DA CONTABILIDADE (⬇ INSS/IR da contabilidade)
 // ============================================================
 // O navegador lê os PDFs do Domínio ("Recibo de Pagamento", 1 por empresa) e manda só
-// [{ nome, empresa, adm, inss, ir }] — o INSS/IR de cada recibo já com a regra aplicada
-// (mês normal: sem INSS/IRRF de férias e de 13º; no 13º: todos).
-// Grava nas linhas D INSS / D IRRF do recibo do mês (cria a linha se faltar). Vínculos de nome
+// [{ nome, empresa, adm, inss, ir, cons }] — o INSS/IR de cada recibo já com a regra aplicada
+// (mês normal: sem INSS/IRRF de férias e de 13º; no 13º: todos) e o consignado (DESC. EMP. CRED. TRAB).
+// Grava nas linhas D INSS / D IRRF / D CONSIGNADO do recibo do mês (cria a linha se faltar). Vínculos de nome
 // ficam na coluna "Nome na contabilidade" de Funcionarios.
 FOLHA_API.folhaContabPrevia = folhaContabPrevia_;
 FOLHA_API.folhaContabGravar = folhaContabGravar_;
@@ -1391,8 +1391,9 @@ function _folhaContabGrupos_(lista) {
   (lista || []).forEach(function (r) {
     const k = _folhaNorm_(r && r.nome);
     if (!k) return;
-    const o = g[k] || (g[k] = { nome: String(r.nome).trim(), inss: 0, ir: 0, empresas: [], adm: '' });
+    const o = g[k] || (g[k] = { nome: String(r.nome).trim(), inss: 0, ir: 0, cons: 0, empresas: [], adm: '' });
     o.inss = _folhaR2_(o.inss + (Number(r.inss) || 0));
+    o.cons = _folhaR2_(o.cons + (Number(r.cons) || 0));
     o.ir = _folhaR2_(o.ir + (Number(r.ir) || 0));
     if (r.empresa && o.empresas.indexOf(String(r.empresa)) < 0) o.empresas.push(String(r.empresa));
     if (!o.adm && r.adm) o.adm = String(r.adm);
@@ -1409,35 +1410,36 @@ function _folhaContabPlano_(func, lista, atual) {
   const porId = {};
   func.forEach(function (f) { porId[f.id] = f; });
   const linhas = Object.keys(r.porFunc).map(function (id) {
-    const f = porId[id], c = r.porFunc[id], a = atual[id] || { inss: null, ir: null, recibo: false };
-    let inss = 0, ir = 0, emp = [], adm = '';
+    const f = porId[id], c = r.porFunc[id], a = atual[id] || { inss: null, ir: null, cons: null, recibo: false };
+    let inss = 0, ir = 0, cons = 0, emp = [], adm = '';
     c.comNomes.forEach(function (n) {
       const gg = grupos[_folhaNorm_(n)];
-      inss += gg.inss; ir += gg.ir; emp = emp.concat(gg.empresas); if (!adm) adm = gg.adm;
+      inss += gg.inss; ir += gg.ir; cons += gg.cons; emp = emp.concat(gg.empresas); if (!adm) adm = gg.adm;
     });
     return {
       id: id, nome: f.nome, filial: f.filial, nomesCont: c.comNomes, vinculado: c.vinculado, empresas: emp,
-      inss: _folhaR2_(inss), ir: _folhaR2_(ir), inssAtual: a.inss, irAtual: a.ir, temRecibo: !!a.recibo, adm: adm,
+      inss: _folhaR2_(inss), ir: _folhaR2_(ir), cons: _folhaR2_(cons), inssAtual: a.inss, irAtual: a.ir, consAtual: a.cons, temRecibo: !!a.recibo, adm: adm,
       inicio: f.inicioTxt || '',
     };
   });
   const comValor = function (v) {
     const gg = grupos[_folhaNorm_(v.nome)];
-    return { nome: v.nome, opcoes: v.opcoes, inss: gg.inss, ir: gg.ir, empresas: gg.empresas, adm: gg.adm };
+    return { nome: v.nome, opcoes: v.opcoes, inss: gg.inss, ir: gg.ir, cons: gg.cons, empresas: gg.empresas, adm: gg.adm };
   };
   return { linhas: linhas, semFuncionario: r.semFuncionario.map(comValor), empates: r.empates.map(comValor) };
 }
-// INSS/IR atuais do mês por funcionário (soma das linhas D INSS / D IRRF)
+// INSS/IR/consignado atuais do mês por funcionário (soma das linhas D INSS / D IRRF / D CONSIGNADO)
 function _folhaContabAtual_(mes, rows) {
   const out = {};
   rows.forEach(function (r) {
     if (_folhaMes_(r[FL.MES]) !== mes) return;
     const id = String(r[FL.ID] || '').trim();
-    const o = out[id] || (out[id] = { inss: null, ir: null, recibo: true });
+    const o = out[id] || (out[id] = { inss: null, ir: null, cons: null, recibo: true });
     if (String(r[FL.TIPO]).trim() !== 'D') return;
     const rub = String(r[FL.RUB]).trim().toUpperCase(), v = _folhaNum_(r[FL.VALOR]);
     if (rub === 'INSS') o.inss = _folhaR2_((o.inss || 0) + (v || 0));
     else if (rub === 'IRRF') o.ir = _folhaR2_((o.ir || 0) + (v || 0));
+    else if (rub === 'CONSIGNADO') o.cons = _folhaR2_((o.cons || 0) + (v || 0));
   });
   return out;
 }
@@ -1466,7 +1468,7 @@ function folhaContabPrevia_(ft, mes, lista) {
   } catch (e) { return _err_(e.message); }
 }
 
-// itens = [{ id, inss, ir, adm }]; vinculos = [{ id, nome }]; adm = true para preencher o "Início" de quem está sem
+// itens = [{ id, inss, ir, cons, adm }]; vinculos = [{ id, nome }]; adm = true para preencher o "Início" de quem está sem
 function folhaContabGravar_(ft, mes, itens, vinculos, arquivos, adm) {
   try {
     const email = _folhaSessao_(ft);
@@ -1480,24 +1482,24 @@ function folhaContabGravar_(ft, mes, itens, vinculos, arquivos, adm) {
       const func = _folhaContabFunc_();
       const sh = _folhaAba_(FOLHA_TAB.LANC);
       const rows = _folhaRows_(FOLHA_TAB.LANC);
-      const pos = {};   // id -> { INSS: [índices], IRRF: [índices], ordem, filial, nome }
+      const pos = {};   // id -> { INSS: [índices], IRRF: [índices], CONSIGNADO: [índices], ordem, filial, nome }
       rows.forEach(function (r, i) {
         if (_folhaMes_(r[FL.MES]) !== mes) return;
         const id = String(r[FL.ID] || '').trim();
-        const o = pos[id] || (pos[id] = { INSS: [], IRRF: [], ordem: 0, filial: r[FL.FILIAL], nome: r[FL.NOME] });
+        const o = pos[id] || (pos[id] = { INSS: [], IRRF: [], CONSIGNADO: [], ordem: 0, filial: r[FL.FILIAL], nome: r[FL.NOME] });
         o.ordem = Math.max(o.ordem, Number(r[FL.ORDEM]) || 0);
         const rub = String(r[FL.RUB]).trim().toUpperCase();
-        if (String(r[FL.TIPO]).trim() === 'D' && (rub === 'INSS' || rub === 'IRRF')) o[rub].push(i);
+        if (String(r[FL.TIPO]).trim() === 'D' && (rub === 'INSS' || rub === 'IRRF' || rub === 'CONSIGNADO')) o[rub].push(i);
       });
       const vals = rows.map(function (r) { return [r[FL.VALOR]]; });
       const novas = [], semRecibo = [];
-      let n = 0, tInss = 0, tIr = 0, mudou = false;
+      let n = 0, tInss = 0, tIr = 0, tCons = 0, mudou = false;
       itens.forEach(function (it) {
         const id = String(it && it.id || '').trim();
         const f = func.porId[id], o = pos[id];
         if (!f) return;
         if (!o) { semRecibo.push(f.nome); return; }
-        [['INSS', _folhaR2_(it.inss), eh13 ? '(-) INSS 13º' : '(-) INSS'], ['IRRF', _folhaR2_(it.ir), eh13 ? '(-) IR 13º' : '(-) IR']].forEach(function (c) {
+        [['INSS', _folhaR2_(it.inss), eh13 ? '(-) INSS 13º' : '(-) INSS'], ['IRRF', _folhaR2_(it.ir), eh13 ? '(-) IR 13º' : '(-) IR'], ['CONSIGNADO', _folhaR2_(it.cons), '(-) Consignado (crédito do trabalhador)']].forEach(function (c) {
           const v = c[1];
           if (!isFinite(v) || v < 0) return;
           if (o[c[0]].length) {
@@ -1508,7 +1510,7 @@ function folhaContabGravar_(ft, mes, itens, vinculos, arquivos, adm) {
             novas.push([mes, id, o.filial, o.nome, 'D', c[0], c[2], v, o.ordem]);
           }
         });
-        tInss += _folhaR2_(it.inss); tIr += _folhaR2_(it.ir); n++;
+        tInss += _folhaR2_(it.inss); tIr += _folhaR2_(it.ir); tCons += _folhaR2_(it.cons); n++;
       });
       if (mudou && rows.length) sh.getRange(2, FL.VALOR + 1, rows.length, 1).setValues(vals);
       if (novas.length) {
@@ -1534,10 +1536,10 @@ function folhaContabGravar_(ft, mes, itens, vinculos, arquivos, adm) {
         shF.getRange(f.linha, FU.INICIO + 1).setValue(new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1]))).setNumberFormat('dd/mm/yyyy');
         f.inicioTxt = it.adm; nAdm++;
       });
-      _folhaAba_(FOLHA_TAB.IMPORT).appendRow([new Date(), email, mes, String(arquivos || '').slice(0, 500), 'INSS/IR contabilidade', n, _folhaR2_(tInss + tIr),
-        'INSS ' + _folhaR2_(tInss) + ' · IR ' + _folhaR2_(tIr) + ((vinculos || []).length ? ' · ' + vinculos.length + ' vínculo(s)' : '') + (nAdm ? ' · ' + nAdm + ' admissão(ões)' : '')]);
+      _folhaAba_(FOLHA_TAB.IMPORT).appendRow([new Date(), email, mes, String(arquivos || '').slice(0, 500), 'INSS/IR contabilidade', n, _folhaR2_(tInss + tIr + tCons),
+        'INSS ' + _folhaR2_(tInss) + ' · IR ' + _folhaR2_(tIr) + (tCons ? ' · consignado ' + _folhaR2_(tCons) : '') + ((vinculos || []).length ? ' · ' + vinculos.length + ' vínculo(s)' : '') + (nAdm ? ' · ' + nAdm + ' admissão(ões)' : '')]);
       _folhaLog_(email, 'contabilidade (gravar)', mes + ': ' + n + ' recibos, INSS ' + _folhaR2_(tInss) + ', IR ' + _folhaR2_(tIr));
-      return JSON.stringify({ success: true, gravados: n, inss: _folhaR2_(tInss), ir: _folhaR2_(tIr), novas: novas.length, semRecibo: semRecibo, admissoes: nAdm });
+      return JSON.stringify({ success: true, gravados: n, inss: _folhaR2_(tInss), ir: _folhaR2_(tIr), cons: _folhaR2_(tCons), novas: novas.length, semRecibo: semRecibo, admissoes: nAdm });
     } finally { lock.releaseLock(); }
   } catch (e) { return _err_(e.message); }
 }

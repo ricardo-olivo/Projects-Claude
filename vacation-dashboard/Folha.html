@@ -220,7 +220,7 @@
       <div><label for="busca">Buscar funcionário</label><input type="text" id="busca" oninput="renderFolha()" placeholder="nome…"></div>
       <button class="btn btn-sec no-print" onclick="window.print()" title="Imprime os recibos que estão na tela">🖨 Imprimir recibos</button>
       <button class="btn btn-sec no-print" onclick="abrirImportacao()" title="Lê o relatório de comissão e o PDF dos manipulados e preenche a Premiação do mês">⬆ Importar comissões</button>
-      <button class="btn btn-sec no-print" onclick="abrirContab()" title="Lê os recibos (PDF) da contabilidade e preenche o INSS e o IR do mês">⬇ INSS/IR da contabilidade</button>
+      <button class="btn btn-sec no-print" onclick="abrirContab()" title="Lê os recibos (PDF) da contabilidade e preenche o INSS, o IR e o consignado do mês">⬇ INSS/IR da contabilidade</button>
       <button class="btn btn-sec no-print" onclick="abrirNovoMes()" title="Cria o mês seguinte copiando o último: valores fixos repetem, variáveis vêm em branco">📅 Abrir novo mês</button>
       <button class="btn btn-sec no-print" onclick="abrir13()" title="Gera os recibos do 13º salário (parcela única de dezembro) a partir dos salários de dezembro">🎄 Gerar 13º</button>
       <button class="btn btn-sec no-print" onclick="abrirRegras()" title="Gratificações, auxílios, pisos de premiação e bônus de cada funcionário — e aplicar no mês aberto">📋 Regras por funcionário</button>
@@ -292,7 +292,7 @@
     <div class="imp-box">
       <h2>⬇ INSS/IR da contabilidade — <span id="ct-mes"></span></h2>
       <p>Lê os PDFs <b>"Recibo de Pagamento"</b> que a contabilidade manda (sistema Domínio, um por empresa — pode marcar
-        todos de uma vez; arquivo repetido conta uma vez só) e troca o <b>INSS</b> e o <b>IR</b> dos recibos do mês pelos valores deles.
+        todos de uma vez; arquivo repetido conta uma vez só) e troca o <b>INSS</b>, o <b>IR</b> e o <b>consignado</b> (DESC. EMP. CRED. TRAB — linha "(-) Consignado") dos recibos do mês pelos valores deles.
         Mês normal: entram o I.N.S.S., a diferença de férias e o INSS de pró-labore; <b>INSS e IRRF de férias ficam de fora</b>
         (já saem no adiantamento de férias). No 13º entram todos. Quem trabalha em duas empresas recebe a soma.</p>
       <div class="imp-arqs">
@@ -1481,16 +1481,17 @@
   // regra do painel: mês normal = INSS/IRRF sem os de férias e de 13º (saem no recibo de férias / no 13º);
   // no 13º = todos os INSS/IRRF do recibo
   function ctImpostos(r, eh13) {
-    var inss = 0, ir = 0, outros = [];
+    var inss = 0, ir = 0, cons = 0, outros = [];
     r.eventos.forEach(function (e) {
       if (!e.desconto) return;
       var d = semAcento(e.descricao).toUpperCase();
       var fora = !eh13 && (/FERIAS/.test(d) && !/DIFERENCA/.test(d) || /13/.test(d));
-      if (/INSS|I\.N\.S\.S/.test(d)) { if (!fora) inss += e.valor; }
+      if (/CRED\.?\s*TRAB|CONSIGN/.test(d)) cons += e.valor;   // consignado CLT (DESC. EMP. CRED. TRAB)
+      else if (/INSS|I\.N\.S\.S/.test(d)) { if (!fora) inss += e.valor; }
       else if (/IRRF|I\.R\.R\.F/.test(d)) { if (!(eh13 ? false : /FERIAS|13/.test(d))) ir += e.valor; }
       else if (!/ADIANTAMENTO DE FERIAS|HORAS AFAST/.test(d)) outros.push(e.descricao + ' ' + valorBR(e.valor));
     });
-    return { inss: Math.round(inss * 100) / 100, ir: Math.round(ir * 100) / 100, outros: outros };
+    return { inss: Math.round(inss * 100) / 100, ir: Math.round(ir * 100) / 100, cons: Math.round(cons * 100) / 100, outros: outros };
   }
   function lerContabPdf(file) {
     return lerArquivoBytes(file).then(pdfObjetos).then(function (objs) {
@@ -1523,12 +1524,12 @@
       var mesTxt = eh13 ? '' : semAcento(MESES_PT[Number(folhaMesAtual.slice(5, 7)) - 1] + ' de ' + folhaMesAtual.slice(0, 4));
       var outrasComp = Object.keys(comps).filter(function (c) { return mesTxt && semAcento(c) !== mesTxt; });
       if (outrasComp.length) avisos.push('Competência nos PDFs: ' + Object.keys(comps).join(', ') + ' — o mês aberto é ' + nomeMes(folhaMesAtual) + '.');
-      recibos.forEach(function (r) { var c = ctImpostos(r, eh13); r.inss = c.inss; r.ir = c.ir; r.outros = c.outros; });
+      recibos.forEach(function (r) { var c = ctImpostos(r, eh13); r.inss = c.inss; r.ir = c.ir; r.cons = c.cons; r.outros = c.outros; });
       ctRecibos = recibos;
       ctArquivos = fs.map(function (f) { return f.name; }).join(', ');
       ctPrevia = { avisos: avisos, repetidos: repetidos };
       msg('ct-msg', 'Lidos ' + recibos.length + ' recibos em ' + fs.length + ' arquivo(s)' + (repetidos ? ' (' + repetidos + ' repetidos ignorados)' : '') + '. Conferindo…');
-      return chamarFolha('folhaContabPrevia', folhaMesAtual, recibos.map(function (r) { return { nome: r.nome, empresa: r.empresa, adm: r.adm, inss: r.inss, ir: r.ir }; }));
+      return chamarFolha('folhaContabPrevia', folhaMesAtual, recibos.map(function (r) { return { nome: r.nome, empresa: r.empresa, adm: r.adm, inss: r.inss, ir: r.ir, cons: r.cons }; }));
     }).then(function (j) {
       ocupado('ct-ler', false, 'Conferir');
       if (!j) return;
@@ -1553,12 +1554,12 @@
       if (!id) return;
       var l = porId[id];
       if (!l) {
-        var r = folhaRecibos.filter(function (x) { return x.id === id; })[0], at = { inss: null, ir: null };
-        if (r) r.linhas.forEach(function (x) { if (x.tipo === 'D' && x.rubrica === 'INSS') at.inss = (at.inss || 0) + (x.valor || 0); if (x.tipo === 'D' && x.rubrica === 'IRRF') at.ir = (at.ir || 0) + (x.valor || 0); });
-        l = porId[id] = { id: id, nome: fun[id].nome, filial: fun[id].filial, nomesCont: [], empresas: [], inss: 0, ir: 0, inssAtual: at.inss, irAtual: at.ir, temRecibo: !!r, adm: '', inicio: fun[id].inicio || '' };
+        var r = folhaRecibos.filter(function (x) { return x.id === id; })[0], at = { inss: null, ir: null, cons: null }, rk = { INSS: 'inss', IRRF: 'ir', CONSIGNADO: 'cons' };
+        if (r) r.linhas.forEach(function (x) { var k = x.tipo === 'D' && rk[x.rubrica]; if (k) at[k] = (at[k] || 0) + (x.valor || 0); });
+        l = porId[id] = { id: id, nome: fun[id].nome, filial: fun[id].filial, nomesCont: [], empresas: [], inss: 0, ir: 0, cons: 0, inssAtual: at.inss, irAtual: at.ir, consAtual: at.cons, temRecibo: !!r, adm: '', inicio: fun[id].inicio || '' };
       }
       l.nomesCont.push(v.nome); l.empresas = l.empresas.concat(v.empresas);
-      l.inss = Math.round((l.inss + v.inss) * 100) / 100; l.ir = Math.round((l.ir + v.ir) * 100) / 100;
+      l.inss = Math.round((l.inss + v.inss) * 100) / 100; l.ir = Math.round((l.ir + v.ir) * 100) / 100; l.cons = Math.round(((l.cons || 0) + (v.cons || 0)) * 100) / 100;
       if (!l.adm) l.adm = v.adm;
       l.manual = true;
     });
@@ -1566,7 +1567,7 @@
   }
   function ctMuda(l) {
     var dif = function (a, b) { return Math.abs((a || 0) - (b || 0)) >= 0.005; };
-    return dif(l.inss, l.inssAtual) || dif(l.ir, l.irAtual);
+    return dif(l.inss, l.inssAtual) || dif(l.ir, l.irAtual) || dif(l.cons, l.consAtual);
   }
   function renderContab() {
     var p = ctPrevia, linhas = ctLinhas().sort(function (a, b) { return a.filial.localeCompare(b.filial) || a.nome.localeCompare(b.nome); });
@@ -1576,7 +1577,8 @@
       '<div class="card"><div class="card-label">Recibos lidos</div><div class="card-value">' + ctRecibos.length + '</div></div>'
       + '<div class="card"><div class="card-label">Funcionários a gravar</div><div class="card-value">' + grava.length + '</div></div>'
       + '<div class="card"><div class="card-label">Mudam</div><div class="card-value">' + grava.filter(ctMuda).length + '</div></div>'
-      + '<div class="card"><div class="card-label">INSS / IR</div><div class="card-value" style="font-size:1.05rem">' + brl(soma(grava, 'inss')) + '<br>' + brl(soma(grava, 'ir')) + '</div></div>';
+      + '<div class="card"><div class="card-label">INSS / IR</div><div class="card-value" style="font-size:1.05rem">' + brl(soma(grava, 'inss')) + '<br>' + brl(soma(grava, 'ir')) + '</div></div>'
+      + '<div class="card"><div class="card-label">Consignado</div><div class="card-value" style="font-size:1.05rem">' + brl(soma(grava, 'cons')) + '</div></div>';
     var opc = function (ids, sel) {
       var lista = ids ? p.funcionarios.filter(function (f) { return ids.indexOf(f.id) >= 0; }) : p.funcionarios;
       return '<option value="">— ignorar —</option>' + lista.slice().sort(function (a, b) { return a.nome.localeCompare(b.nome); })
@@ -1585,7 +1587,7 @@
     var pend = function (titulo, lista, comOpc) {
       if (!lista.length) return '';
       return '<div class="pend"><h3>' + titulo + '</h3><table>' + lista.map(function (v) {
-        return '<tr><td><b>' + esc(v.nome) + '</b><br><small>' + esc(v.empresas.join(' · ')) + '</small></td><td class="num">INSS ' + brl(v.inss) + (v.ir ? '<br>IR ' + brl(v.ir) : '')
+        return '<tr><td><b>' + esc(v.nome) + '</b><br><small>' + esc(v.empresas.join(' · ')) + '</small></td><td class="num">INSS ' + brl(v.inss) + (v.ir ? '<br>IR ' + brl(v.ir) : '') + (v.cons ? '<br>Consignado ' + brl(v.cons) : '')
           + '</td><td><select data-k="' + esc(v.nome) + '">' + opc(comOpc ? v.opcoes : null, p.escolhas[v.nome]) + '</select></td></tr>';
       }).join('') + '</table></div>';
     };
@@ -1601,7 +1603,7 @@
       return '<td class="num' + (m ? ' muda' : '') + '">' + brl(novo) + '</td><td class="num">' + brl(atual) + '</td>';
     };
     document.getElementById('ct-tab').innerHTML = '<tr><th>Gravar</th><th>Filial</th><th>Funcionário</th><th>Na contabilidade</th>'
-      + '<th class="num">INSS</th><th class="num">INSS no mês</th><th class="num">IR</th><th class="num">IR no mês</th><th>Observação</th></tr>'
+      + '<th class="num">INSS</th><th class="num">INSS no mês</th><th class="num">IR</th><th class="num">IR no mês</th><th class="num">Consignado</th><th class="num">Consig. no mês</th><th>Observação</th></tr>'
       + vis.map(function (l) {
         var obs = [];
         if (!l.temRecibo) obs.push('sem recibo neste mês — não grava');
@@ -1611,7 +1613,7 @@
         return '<tr' + (p.fora[l.id] || !l.temRecibo ? ' style="opacity:.5"' : '') + '>'
           + '<td><input type="checkbox"' + (p.fora[l.id] || !l.temRecibo ? '' : ' checked') + (l.temRecibo ? '' : ' disabled') + ' onchange="ctMarcar(\'' + esc(l.id) + '\',this.checked)"></td>'
           + '<td>' + esc(l.filial) + '</td><td>' + esc(l.nome) + '</td><td><small>' + esc(l.nomesCont.join(' · ')) + '<br>' + esc(l.empresas.join(' · ')) + '</small></td>'
-          + cel(l.inss, l.inssAtual) + cel(l.ir, l.irAtual) + '<td><small>' + obs.map(esc).join('<br>') + '</small></td></tr>';
+          + cel(l.inss, l.inssAtual) + cel(l.ir, l.irAtual) + cel(l.cons, l.consAtual) + '<td><small>' + obs.map(esc).join('<br>') + '</small></td></tr>';
       }).join('');
     var semAdm = linhas.filter(function (l) { return l.adm && !l.inicio; }).length;
     document.getElementById('ct-adm-box').classList.toggle('hidden', !semAdm);
@@ -1624,16 +1626,16 @@
     if (!linhas.length) return alert('Nada para gravar.');
     var soma = function (k) { return Math.round(linhas.reduce(function (s, l) { return s + (l[k] || 0); }, 0) * 100) / 100; };
     var adm = document.getElementById('ct-adm').checked && !document.getElementById('ct-adm-box').classList.contains('hidden');
-    if (!confirm('Gravar INSS e IR da contabilidade em ' + linhas.length + ' recibos de ' + nomeMes(folhaMesAtual) + '?\nINSS: ' + brl(soma('inss')) + '   IR: ' + brl(soma('ir'))
-      + '\n\nO valor atual de INSS/IR desses recibos é trocado pelo da contabilidade.')) return;
+    if (!confirm('Gravar INSS, IR e consignado da contabilidade em ' + linhas.length + ' recibos de ' + nomeMes(folhaMesAtual) + '?\nINSS: ' + brl(soma('inss')) + '   IR: ' + brl(soma('ir')) + '   Consignado: ' + brl(soma('cons'))
+      + '\n\nO valor atual de INSS/IR/consignado desses recibos é trocado pelo da contabilidade.')) return;
     var vinculos = [];
     p.empates.concat(p.semFuncionario).forEach(function (v) { var id = p.escolhas[v.nome]; if (id) vinculos.push({ id: id, nome: v.nome }); });
     ocupado('ct-gravar', true, 'Gravando…');
-    chamarFolha('folhaContabGravar', folhaMesAtual, linhas.map(function (l) { return { id: l.id, inss: l.inss, ir: l.ir, adm: l.adm }; }), vinculos, ctArquivos, adm)
+    chamarFolha('folhaContabGravar', folhaMesAtual, linhas.map(function (l) { return { id: l.id, inss: l.inss, ir: l.ir, cons: l.cons || 0, adm: l.adm }; }), vinculos, ctArquivos, adm)
       .then(function (j) {
         ocupado('ct-gravar', false, 'Gravar INSS/IR');
         if (!j.success) return alert(j.error);
-        alert('Gravado: ' + j.gravados + ' recibos — INSS ' + brl(j.inss) + ', IR ' + brl(j.ir) + '.'
+        alert('Gravado: ' + j.gravados + ' recibos — INSS ' + brl(j.inss) + ', IR ' + brl(j.ir) + (j.cons ? ', consignado ' + brl(j.cons) : '') + '.'
           + (j.admissoes ? '\n' + j.admissoes + ' data(s) de admissão preenchida(s).' : '')
           + (j.semRecibo.length ? '\nSem recibo no mês (não gravou): ' + j.semRecibo.join(', ') : ''));
         fecharContab();
@@ -1799,10 +1801,10 @@
       case 'folhaRegrasAplicar': return r({ recibos: 2, mudancas: 3 });
       case 'folhaContabPrevia': return r({ mes: args[1], linhas: [
         { id: 'F901', nome: 'Ana Exemplo da Silva', filial: 'Filial 05', nomesCont: ['ANA EXEMPLO DA SILVA'], vinculado: false, empresas: ['EMPRESA MODELO LTDA'], inss: 171.25, ir: 0, inssAtual: 171.25, irAtual: null, temRecibo: true, adm: '01/02/2021', inicio: '01/02/2021' },
-        { id: 'F902', nome: 'Bruno Teste Pereira', filial: 'Filial 05', nomesCont: ['BRUNO TESTE PEREIRA'], vinculado: false, empresas: ['EMPRESA MODELO LTDA', 'OUTRA MODELO LTDA'], inss: 530.09, ir: 42.1, inssAtual: 500, irAtual: null, temRecibo: true, adm: '20/04/2024', inicio: '' }],
+        { id: 'F902', nome: 'Bruno Teste Pereira', filial: 'Filial 05', nomesCont: ['BRUNO TESTE PEREIRA'], vinculado: false, empresas: ['EMPRESA MODELO LTDA', 'OUTRA MODELO LTDA'], inss: 530.09, ir: 42.1, cons: 250, inssAtual: 500, irAtual: null, consAtual: null, temRecibo: true, adm: '20/04/2024', inicio: '' }],
         semFuncionario: [{ nome: 'CARLA MODELO SOUZA', inss: 236.43, ir: 0, empresas: ['OUTRA MODELO LTDA'], adm: '05/05/2022' }], empates: [],
         funcionarios: [{ id: 'F901', nome: 'Ana Exemplo da Silva', filial: 'Filial 05', inicio: '01/02/2021' }, { id: 'F902', nome: 'Bruno Teste Pereira', filial: 'Filial 05', inicio: '' }, { id: 'F903', nome: 'Carla Modelo Souza', filial: 'Filial 06', inicio: '' }] });
-      case 'folhaContabGravar': return r({ gravados: args[2].length, inss: args[2].reduce(function (s, x) { return s + x.inss; }, 0), ir: args[2].reduce(function (s, x) { return s + x.ir; }, 0), novas: 1, semRecibo: [], admissoes: args[5] ? 1 : 0 });
+      case 'folhaContabGravar': return r({ gravados: args[2].length, inss: args[2].reduce(function (s, x) { return s + x.inss; }, 0), ir: args[2].reduce(function (s, x) { return s + x.ir; }, 0), cons: args[2].reduce(function (s, x) { return s + (x.cons || 0); }, 0), novas: 1, semRecibo: [], admissoes: args[5] ? 1 : 0 });
       case 'folha13Previa': return r({ ano: args[1], mes: args[1] + '-13', base: args[1] + '-12', existe: false, total: 0, lista: [
         { id: 'F901', nome: 'Ana Exemplo da Silva', filial: 'Filial 05', admissao: '01/02/2021', fonte: 'painel de férias', avos: 12, avosCalc: 12, total: 2000,
           linhas: [{ tipo: 'P', rubrica: 'DECIMO_TERCEIRO', descricao: 'Salário', valor: 2000, base: 2000 }, { tipo: 'D', rubrica: 'INSS', descricao: '(-) INSS 13º', valor: null }], avisos: [] },
