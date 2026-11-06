@@ -92,6 +92,11 @@
     .cad-previa .ln { display: flex; justify-content: space-between; gap: 10px; padding: 3px 8px; font-size: 13px; border-bottom: 1px solid var(--gray-100); }
     .cad-previa .ln.d { background: #fff7ed; }
     .cad-previa .ln.tot { font-weight: 700; }
+    .cad-exp { font-size: 13px; padding: 9px 0; color: var(--gray-700); line-height: 1.4; }
+    .exp-aviso { background: #fffbeb; border: 1px solid #fcd34d; border-radius: 8px; padding: 10px 14px; margin: 0 0 14px; font-size: 13px; }
+    .exp-aviso h3 { font-size: 14px; margin: 0 0 6px; color: #92400e; }
+    .exp-aviso li { margin: 2px 0 2px 18px; }
+    .exp-tag { display: inline-block; font-size: 10px; border-radius: 4px; padding: 0 5px; background: #fef3c7; color: #92400e; font-weight: 600; }
     @media (max-width: 600px) { .ov-2 { grid-template-columns: 1fr; } .cad-chk { margin-top: 12px; } }
     .ov-hint { font-size: 12px; color: var(--gray-500); margin: 10px 0 0; }
     /* edição de recibo */
@@ -244,6 +249,7 @@
       <div class="card"><div class="card-label">Descontos</div><div class="card-value" id="c-desc">—</div></div>
       <div class="card"><div class="card-label">Líquido</div><div class="card-value" id="c-liq">—</div></div>
     </div>
+    <div class="exp-aviso hidden" id="exp-aviso"></div>
     <table class="resumo" id="tab-resumo"></table>
     <div class="recibos" id="recibos"></div>
   </div>
@@ -265,6 +271,17 @@
         <div><label for="nf-salario">Salário (R$)</label><input type="text" id="nf-salario" inputmode="decimal" placeholder="0,00" oninput="nfPrevia()"></div>
         <div><label for="nf-reg">Registrado (carteira)</label><select id="nf-reg" onchange="nfPrevia()"><option value="sim">Sim</option><option value="nao">Não</option></select></div>
         <div><label class="cad-chk"><input type="checkbox" id="nf-sal-prop" checked onchange="nfPrevia()"> Salário proporcional se entrou no meio do mês</label></div>
+      </div>
+      <div class="ov-3">
+        <div><label for="nf-exp">Contrato de experiência</label><select id="nf-exp" onchange="nfExp()">
+          <option value="45+45">45 + 45 dias</option><option value="30+60">30 + 60 dias</option><option value="60+30">60 + 30 dias</option>
+          <option value="30+30">30 + 30 dias</option><option value="90+0">90 dias (sem prorrogação)</option><option value="outro">Outro prazo…</option>
+          <option value="0+0">Sem experiência</option></select></div>
+        <div id="nf-exp-outro" class="hidden ov-2" style="gap:0 8px">
+          <div><label for="nf-exp-d1">1º período (dias)</label><input type="text" id="nf-exp-d1" inputmode="numeric" oninput="nfExp(1)"></div>
+          <div><label for="nf-exp-d2">Prorrogação (dias)</label><input type="text" id="nf-exp-d2" inputmode="numeric" oninput="nfExp(1)"></div>
+        </div>
+        <div><label>Vencimentos</label><div class="cad-exp" id="nf-exp-datas">—</div></div>
       </div>
 
       <h3 class="cad-sec">2. Painel de férias</h3>
@@ -579,6 +596,7 @@
     chamarFolha('folhaDados', mes).then(function (j) {
       if (!j.success) { document.getElementById('recibos').textContent = j.error; return; }
       folhaMesAtual = j.mes; folhaRecibos = j.recibos; editId = null; editLinhas = [];
+      folhaExp = j.experiencias || []; folhaHoje = j.hoje || ''; renderExpAviso();
       var filiais = Array.from(new Set(folhaRecibos.map(function (r) { return r.filial; }))).sort();
       var sel = document.getElementById('sel-filial'), atual = sel.value;
       sel.innerHTML = '<option value="">Todas as filiais</option>';
@@ -644,7 +662,9 @@
     return '<div class="recibo" data-id="' + esc(r.id) + '">'
       + '<div class="rh"><div class="rn">' + esc(r.nome) + (r.ativo ? '' : '<span class="selo-inativo">inativo</span>')
         + '<button class="btn-ed no-print" title="Editar este recibo" onclick="editarRecibo(this)">✏ Editar</button></div>'
-      + '<div class="rs">' + esc(r.filial) + ' · ' + esc(nomeMes(folhaMesAtual)) + (r.inicio ? ' · Início: ' + esc(r.inicio) : '') + ' · USO RESTRITO DA EMPRESA</div></div>'
+      + '<div class="rs">' + esc(r.filial) + ' · ' + esc(nomeMes(folhaMesAtual)) + (r.inicio ? ' · Início: ' + esc(r.inicio) : '')
+        + (r.experiencia && r.experiencia.fim >= folhaMesAtual + '-01' ? ' · <span class="exp-tag no-print">Experiência até ' + isoBR(r.experiencia.d2 && r.experiencia.fim1 >= (folhaHoje || '') ? r.experiencia.fim1 : r.experiencia.fim) + (r.experiencia.d2 && r.experiencia.fim1 >= (folhaHoje || '') ? ' (+' + r.experiencia.d2 + ' dias)' : '') + '</span>' : '')
+        + ' · USO RESTRITO DA EMPRESA</div></div>'
       + '<div class="bp">' + p.map(function (l) { return ln('p', l.descricao, l.valor); }).join('')
       + ln('tot', 'Total', r.proventos) + '</div>'
       + '<div class="bd">' + d.map(function (l) { return ln('d', l.descricao, l.valor); }).join('') + '</div>'
@@ -804,6 +824,9 @@
     document.getElementById('nf-fe-saldo').value = '0';
     document.getElementById('nf-reg').value = 'sim';
     document.getElementById('nf-sal-prop').checked = true;
+    document.getElementById('nf-exp').value = '45+45';
+    document.getElementById('nf-exp-d1').value = ''; document.getElementById('nf-exp-d2').value = '';
+    nfExp();
     document.querySelector('input[name=nf-fe][value=novo]').checked = true;
     document.getElementById('nf-msg').textContent = '';
     nfRegras = [];
@@ -828,6 +851,51 @@
     }).catch(function (e) { if (e && e.message !== 'bloqueada') document.getElementById('nf-msg').textContent = 'Erro: ' + e.message; });
   }
   function fecharNovoFunc() { document.getElementById('ov-func').classList.add('hidden'); }
+  // ---- contrato de experiência (até 90 dias, 1 prorrogação) ----
+  function isoData(s) { var p = String(s || '').split('-').map(Number); return p.length === 3 && p[0] ? new Date(p[0], p[1] - 1, p[2]) : null; }
+  function isoBR(s) { var p = String(s || '').split('-'); return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : ''; }
+  function isoMais(s, n) { var d = isoData(s); d.setDate(d.getDate() + n); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+  // { d1, d2 } escolhidos; null = sem experiência; { erro } = prazo inválido
+  function nfExpDias() {
+    var v = nfVal('nf-exp');
+    if (v === 'outro') {
+      var d1 = parseInt(nfVal('nf-exp-d1'), 10), d2 = parseInt(nfVal('nf-exp-d2') || '0', 10);
+      if (!(d1 >= 1) || !(d2 >= 0)) return { erro: 'Informe os dias do 1º período (e da prorrogação, se houver).' };
+      if (d1 + d2 > 90) return { erro: 'O total (1º período + prorrogação) vai até 90 dias.' };
+      return { d1: d1, d2: d2 };
+    }
+    var p = v.split('+').map(Number);
+    return p[0] ? { d1: p[0], d2: p[1] } : null;
+  }
+  function nfExp(semToggle) {
+    if (!semToggle) document.getElementById('nf-exp-outro').classList.toggle('hidden', nfVal('nf-exp') !== 'outro');
+    var el = document.getElementById('nf-exp-datas'), e = nfExpDias(), ini = nfVal('nf-inicio');
+    if (!e) { el.textContent = 'Sem contrato de experiência'; return; }
+    if (e.erro) { el.textContent = e.erro; return; }
+    if (!ini) { el.textContent = 'Informe a data de início'; return; }
+    el.innerHTML = '1º período até <b>' + isoBR(isoMais(ini, e.d1 - 1)) + '</b>'
+      + (e.d2 ? '<br>Prorrogação até <b>' + isoBR(isoMais(ini, e.d1 + e.d2 - 1)) + '</b>' : '');
+  }
+  // aviso na folha: prazos de experiência entre 7 dias atrás e os próximos 15
+  var folhaExp = [], folhaHoje = '';
+  function renderExpAviso() {
+    var el = document.getElementById('exp-aviso');
+    if (!el) return;
+    var hoje = isoData(folhaHoje) || new Date(), dia = 864e5, itens = [];
+    hoje.setHours(0, 0, 0, 0);
+    folhaExp.forEach(function (x) {
+      [['fim1', x.d2 ? 'fim do 1º período (prorrogar ou encerrar)' : 'fim da experiência'], ['fim', 'fim da experiência']].forEach(function (c, k) {
+        if (k === 1 && !x.d2) return;
+        var n = Math.round((isoData(x[c[0]]) - hoje) / dia);
+        if (n < -7 || n > 15) return;
+        itens.push({ n: n, t: '<b>' + esc(x.nome) + '</b> (' + esc(x.filial) + ') — ' + c[1] + ' em ' + isoBR(x[c[0]])
+          + (n === 0 ? ' · <b>hoje</b>' : n > 0 ? ' · em ' + n + ' dia' + (n > 1 ? 's' : '') : ' · <b>venceu há ' + (-n) + ' dia' + (n < -1 ? 's' : '') + '</b>') });
+      });
+    });
+    itens.sort(function (a, b) { return a.n - b.n; });
+    el.classList.toggle('hidden', !itens.length);
+    el.innerHTML = itens.length ? '<h3>⏳ Contratos de experiência vencendo</h3><ul>' + itens.map(function (i) { return '<li>' + i.t + '</li>'; }).join('') + '</ul>' : '';
+  }
   // filial das férias: a de mesmo nome (sem acento/maiúsculas), se houver
   function nfFilialFerias() {
     if (!nfDados) return;
@@ -908,6 +976,7 @@
   function nfPrevia() {
     var el = document.getElementById('nf-previa'), mesEl = document.getElementById('nf-mes');
     if (!el) return;
+    nfExp(1);
     mesEl.textContent = folhaMesAtual ? '— ' + nomeMes(folhaMesAtual) : '';
     var trab = nfDiasMes();
     if (!folhaMesAtual || /-13$/.test(folhaMesAtual)) { el.innerHTML = '<p class="ov-hint">Sem mês aberto (ou 13º): o funcionário é cadastrado sem recibo.</p>'; return; }
@@ -942,7 +1011,9 @@
       ferias: { modo: modo, filial: nfVal('nf-fe-filial'), matricula: modo === 'existente' ? nfVal('nf-fe-lig') : nfVal('nf-fe-mat').trim(),
         saldoInicial: lerValor(nfVal('nf-fe-saldo')) || 0, ctps: nfVal('nf-fe-ctps').trim() },
       regras: nfRegras,
+      experiencia: nfExpDias(),
     };
+    if (d.experiencia && d.experiencia.erro) return (msgEl.textContent = 'Experiência: ' + d.experiencia.erro);
     // filial digitada igual a uma existente (sem acento/maiúsculas) → usa a grafia da folha
     var filK = semAcento(d.filial).toLowerCase();
     Array.from(document.querySelectorAll('#nf-filiais option')).forEach(function (o) { if (semAcento(o.value).toLowerCase() === filK) d.filial = o.value; });
@@ -960,6 +1031,7 @@
     chamarFolha('folhaCadastrar', folhaMesAtual, d).then(function (j) {
       if (!j.success) { b.disabled = false; b.textContent = 'Cadastrar'; msgEl.textContent = j.error; return; }
       fecharNovoFunc();
+      if (j.experiencia) { folhaExp.push(Object.assign({ id: j.id, nome: d.nome, filial: d.filial }, j.experiencia)); renderExpAviso(); }
       if (j.recibo) {
         folhaRecibos.push(j.recibo);
         document.getElementById('busca').value = j.recibo.nome;   // mostra o recibo recém-criado
@@ -968,6 +1040,7 @@
       alert(d.nome + ' cadastrado na folha (' + j.id + ')'
         + (j.matFerias ? (modo === 'novo' ? ' e no painel de férias (matrícula ' + j.matFerias + ')' : ', ligado às férias (matrícula ' + j.matFerias + ')') : '') + '.'
         + (j.regras ? '\n' + j.regras + ' regra(s) gravada(s).' : '')
+        + (j.experiencia ? '\nExperiência: 1º período até ' + isoBR(j.experiencia.fim1) + (j.experiencia.d2 ? ', prorrogação até ' + isoBR(j.experiencia.fim) : '') + '.' : '')
         + (j.periodoAviso ? '\nAtenção (período aquisitivo): ' + j.periodoAviso : '')
         + (j.recibo ? '\nRecibo criado em ' + nomeMes(folhaMesAtual) + ' — premiação e INSS entram pela importação (ou ✏ Editar).' : j.semRecibo ? '\nSem recibo neste mês (' + j.semRecibo + ').' : ''));
     }).catch(function (e) { if (e && e.message !== 'bloqueada') { b.disabled = false; b.textContent = 'Cadastrar'; msgEl.textContent = 'Erro: ' + e.message; } });
@@ -1936,7 +2009,8 @@
         return r({ folhaToken: 'f'.repeat(64), minutos: 15 });
       case 'folhaBloquear': return r({});
       case 'folhaMeses': return r({ meses: ['2026-08'] });
-      case 'folhaDados': return r({ mes: '2026-08', recibos: FOLHA_MOCK });
+      case 'folhaDados': return r({ mes: '2026-08', recibos: FOLHA_MOCK, hoje: '2026-08-20',
+        experiencias: [{ id: 'F902', nome: 'Bruno Teste Pereira', filial: 'Filial 05', inicio: '2026-07-10', d1: 45, fim1: '2026-08-23', d2: 45, fim: '2026-10-07' }] });
       case 'folhaImportarPrevia': {
         // no preview casa por 1º nome igual (no servidor é _folhaCasar_ do FolhaPagamento.gs)
         var func = FOLHA_MOCK.map(function (f) { return { id: f.id, nome: f.nome, filial: f.filial, piso: f.id === 'F903' ? 900 : null }; });
@@ -1968,7 +2042,7 @@
         ln.push({ tipo: 'P', rubrica: 'PREMIACAO', descricao: 'Premiação', valor: null, ordem: ln.length + 1 });
         if (dc.registrado) ln.push({ tipo: 'D', rubrica: 'INSS', descricao: '(-) INSS', valor: null, ordem: ln.length + 1 });
         var pv = ln.reduce(function (s, l) { return s + (l.tipo === 'P' && l.valor ? l.valor : 0); }, 0);
-        return r({ id: 'F904', matFerias: dc.ferias.modo === 'nao' ? '' : (dc.ferias.matricula || '128'), periodoAviso: null, regras: dc.regras.length, semRecibo: '',
+        return r({ id: 'F904', experiencia: dc.experiencia ? { d1: dc.experiencia.d1, d2: dc.experiencia.d2, fim1: '2026-09-24', fim: '2026-11-08' } : null, matFerias: dc.ferias.modo === 'nao' ? '' : (dc.ferias.matricula || '128'), periodoAviso: null, regras: dc.regras.length, semRecibo: '',
           recibo: args[1] ? { id: 'F904', nome: dc.nome, filial: dc.filial, inicio: '', ativo: true, ferias: [], linhas: ln, proventos: pv, descontos: 0, liquido: pv } : null }); }
       case 'folhaNovoFuncionario': { var dd = args[2]; return r({ id: 'F904', recibo: args[1] ? { id: 'F904', nome: dd.nome, filial: dd.filial, inicio: '', ativo: true, ferias: [], linhas: [{ tipo: 'P', rubrica: 'SALARIO', descricao: 'Salário', valor: dd.salario, ordem: 1 }, { tipo: 'P', rubrica: 'PREMIACAO', descricao: 'Premiação', valor: null, ordem: 2 }, { tipo: 'D', rubrica: 'INSS', descricao: '(-) INSS', valor: null, ordem: 3 }], proventos: dd.salario || 0, descontos: 0, liquido: dd.salario || 0 } : null }); }
       case 'folhaRegras': return r({ regras: folhaMockRegras, antes: 'x', limite: 200000, funcionarios: FOLHA_MOCK.map(function (f) { return { id: f.id, nome: f.nome, filial: f.filial }; }),

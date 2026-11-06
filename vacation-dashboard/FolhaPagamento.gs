@@ -336,8 +336,13 @@ function folhaDados_(ft, mes) {
       r.ferias = ferias[k] || [];
       return r;
     });
+    // contrato de experiência: selo no recibo + aviso dos prazos que vencem (só funcionários ativos)
+    const exp = _folhaExperiencias_();
+    lista.forEach(function (r) { if (exp[r.id]) r.experiencia = exp[r.id]; });
+    const experiencias = Object.keys(exp).filter(function (id) { return func[id] && func[id].ativo; })
+      .map(function (id) { return Object.assign({ id: id, nome: func[id].nome, filial: func[id].filial }, exp[id]); });
     _folhaLog_(email, 'ver mês', mes + ' (' + lista.length + ' recibos)');
-    return JSON.stringify({ success: true, mes: mes, recibos: lista });
+    return JSON.stringify({ success: true, mes: mes, recibos: lista, experiencias: experiencias, hoje: formatDate_(new Date()) });
   } catch (e) { return _err_(e.message); }
 }
 
@@ -862,6 +867,30 @@ function folhaNovoFuncionario_(ft, mes, d) {
 FOLHA_API.folhaCadastroDados = folhaCadastroDados_;
 FOLHA_API.folhaCadastrar = folhaCadastrar_;
 
+// Contrato de experiência (CLT art. 445: até 90 dias, 1 prorrogação). Aba "Experiencia" da planilha da folha,
+// uma linha por contrato: 1º período (dias) e prorrogação (dias, 0 = sem). Fim = início + dias − 1.
+FOLHA_TAB.EXPER = 'Experiencia';
+FOLHA_HEADERS.Experiencia = ['ID', 'Nome', 'Filial', 'Início', '1º período (dias)', 'Fim do 1º período',
+  'Prorrogação (dias)', 'Fim da experiência', 'Observação', 'Registrado em'];
+function _folhaExpDatas_(inicio, d1, d2) {
+  const fim1 = _plusDays_(inicio, d1 - 1), fim = _plusDays_(inicio, d1 + d2 - 1);
+  return { fim1: fim1, fim: fim };
+}
+// { id: { inicio, d1, fim1, d2, fim, obs } } — vale a última linha de cada ID
+function _folhaExperiencias_() {
+  const out = {};
+  const ss = _folhaSS_();
+  if (!ss.getSheetByName(FOLHA_TAB.EXPER)) return out;
+  _folhaRows_(FOLHA_TAB.EXPER).forEach(function (r) {
+    const id = String(r[0] || '').trim(), ini = toDate_(r[3]);
+    const d1 = Number(r[4]) || 0, d2 = Number(r[6]) || 0;
+    if (!id || !ini || !d1) return;
+    const dt = _folhaExpDatas_(ini, d1, d2);
+    out[id] = { inicio: formatDate_(ini), d1: d1, fim1: formatDate_(dt.fim1), d2: d2, fim: formatDate_(dt.fim), obs: String(r[8] || '').trim() };
+  });
+  return out;
+}
+
 function folhaCadastroDados_(ft) {
   try {
     _folhaSessao_(ft);
@@ -932,6 +961,15 @@ function folhaCadastrar_(ft, mes, d) {
         proporcional: !!g.proporcional, semFalta: tipo === 'bonus' && !!g.semFalta, obs: String(g.obs || '').trim().slice(0, 200) });
     });
 
+    // contrato de experiência (opcional): d.experiencia = { d1, d2, obs } — total até 90 dias
+    let exper = null;
+    if (d.experiencia && Number(d.experiencia.d1) > 0) {
+      const d1 = Math.round(Number(d.experiencia.d1)), d2 = Math.round(Number(d.experiencia.d2) || 0);
+      if (!(d1 >= 1) || d2 < 0 || d1 + d2 > 90) return _err_('Experiência: o total (1º período + prorrogação) vai até 90 dias.');
+      exper = { d1: d1, d2: d2, obs: String(d.experiencia.obs || '').trim().slice(0, 200) };
+      Object.assign(exper, _folhaExpDatas_(inicio, d1, d2));
+    }
+
     mes = mes ? _folhaMes_(mes) : '';
     if (_folhaEh13_(mes)) mes = '';   // no 13º o recibo vem do 🎄 Gerar 13º
     // dias no mês aberto (base 30): admitido no mês = do dia da admissão até 30; depois do mês = sem recibo
@@ -994,6 +1032,15 @@ function folhaCadastrar_(ft, mes, d) {
         }));
       }
 
+      // 3b) contrato de experiência
+      if (exper) {
+        const shE = _folhaAba_(FOLHA_TAB.EXPER);
+        const ne = shE.getLastRow() + 1;
+        shE.getRange(ne, 1, 1, FOLHA_HEADERS.Experiencia.length).setValues([[id, nome, filial, inicio, exper.d1, exper.fim1,
+          exper.d2, exper.fim, exper.obs, new Date()]]);
+        [4, 6, 8].forEach(function (c) { shE.getRange(ne, c).setNumberFormat('dd/mm/yyyy'); });
+      }
+
       // 4) recibo do mês aberto, no modelo da folha
       let linhas = [];
       if (mes) {
@@ -1019,10 +1066,12 @@ function folhaCadastrar_(ft, mes, d) {
       _folhaLog_(email, 'cadastrar funcionário', id + ' · ' + nome + ' · ' + filial + (matFerias ? ' · férias ' + matFerias : '') +
         ' · ' + regras.length + ' regra(s)' + (mes ? ' · recibo em ' + mes : ''));
       const prov = linhas.reduce(function (s, l) { return s + (l[0] === 'P' && typeof l[3] === 'number' ? l[3] : 0); }, 0);
+      const expOut = exper ? { inicio: formatDate_(inicio), d1: exper.d1, fim1: formatDate_(exper.fim1), d2: exper.d2, fim: formatDate_(exper.fim), obs: exper.obs } : null;
       return JSON.stringify({
         success: true, id: id, matFerias: matFerias, periodoAviso: periodoAviso, regras: regras.length, semRecibo: semRecibo, trab: trab,
+        experiencia: expOut,
         recibo: mes ? {
-          id: id, nome: nome, filial: filial, inicio: formatDateBR_(formatDate_(inicio)), ativo: true, ferias: [],
+          id: id, nome: nome, filial: filial, inicio: formatDateBR_(formatDate_(inicio)), ativo: true, ferias: [], experiencia: expOut || undefined,
           linhas: linhas.map(function (l, i) { return { tipo: l[0], rubrica: l[1], descricao: l[2], valor: l[3] === '' ? null : l[3], ordem: i + 1 }; }),
           proventos: _folhaR2_(prov), descontos: 0, liquido: _folhaR2_(prov) } : null,
       });
