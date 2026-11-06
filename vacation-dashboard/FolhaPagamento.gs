@@ -849,6 +849,188 @@ function folhaNovoFuncionario_(ft, mes, d) {
 }
 
 // ============================================================
+// CADASTRAR NOVO FUNCIONÁRIO (botão 👤 Cadastrar novo funcionário)
+//   Um formulário só para as duas planilhas:
+//   · painel de férias (aba Func): matrícula, nome, filial, cargo, admissão, registrado, saldo inicial, CTPS
+//     — e o 1º período aquisitivo, se registrado (addEmployee_). Ou liga a um cadastro de férias que já existe;
+//   · folha (aba Funcionarios): próximo ID F###, "Matrícula (férias)" já ligada, Início = admissão;
+//   · regras do funcionário (aba Regras): Fixo / Piso premiação / Bônus manipulação / Entra no 13º;
+//   · recibo no mês aberto, no modelo da folha: Salário, linhas das regras Fixo, Premiação e (registrado) INSS.
+//     Admitido dentro do mês aberto: salário e regras proporcionais = base × dias desde a admissão ÷ 30,
+//     centavos cortados (mesma conta das regras). Admitido depois do mês aberto: não cria recibo.
+// ============================================================
+FOLHA_API.folhaCadastroDados = folhaCadastroDados_;
+FOLHA_API.folhaCadastrar = folhaCadastrar_;
+
+function folhaCadastroDados_(ft) {
+  try {
+    _folhaSessao_(ft);
+    const func = _folhaFuncionarios_();
+    const liga = _folhaLigarFerias_(func.lista.filter(function (f) { return f.ativo; }));
+    const ligadas = {};
+    Object.keys(liga).forEach(function (id) { ligadas[liga[id]] = id; });
+    const filFolha = {}, filFerias = {};
+    func.lista.forEach(function (f) { if (f.ativo && f.filial) filFolha[f.filial] = 1; });
+    let maxMat = 0;
+    const ferias = [];
+    _rows_(TAB.FUNC).forEach(function (r) {
+      const n = parseInt(String(r[F.MAT]).replace(/\D/g, ''), 10);
+      if (!isNaN(n) && n > maxMat) maxMat = n;
+      const mat = _mk_(r[F.MAT]);
+      if (!mat) return;
+      const fil = String(r[F.FILIAL] || '').trim();
+      if (fil) filFerias[fil] = 1;
+      if (String(r[F.SITUACAO] || '').trim().toLowerCase() === 'inativo') return;
+      const adm = toDate_(r[F.ADMISSAO]);
+      ferias.push({ mat: mat, nome: String(r[F.NOME] || '').trim(), filial: fil, cargo: String(r[F.CARGO] || '').trim(),
+        admissao: adm ? formatDate_(adm) : '', registrado: String(r[F.REGISTRADO] || '').trim().toLowerCase() !== 'não',
+        naFolha: ligadas[mat] || '' });
+    });
+    const rub = _folhaRows_(FOLHA_TAB.RUBRICAS).map(function (r) {
+      return { cod: String(r[0] || '').trim(), nome: String(r[1] || '').trim(), tipo: String(r[2] || '').trim().toUpperCase() };
+    }).filter(function (r) { return r.cod; });
+    return JSON.stringify({
+      success: true, proxMatricula: maxMat + 1, rubricas: rub, ferias: ferias,
+      filiaisFolha: Object.keys(filFolha).sort(), filiaisFerias: Object.keys(filFerias).sort(),
+    });
+  } catch (e) { return _err_(e.message); }
+}
+
+// d = { nome, filial (folha), inicio (aaaa-mm-dd), salario, salarioProp, registrado, cargo,
+//       ferias: { modo: 'novo'|'existente'|'nao', matricula, filial, saldoInicial, ctps },
+//       regras: [{ tipo, rubrica, descricao, valor, proporcional, semFalta, obs }] }
+function folhaCadastrar_(ft, mes, d) {
+  try {
+    const email = _folhaSessao_(ft);
+    d = d || {};
+    const nome = String(d.nome || '').replace(/\s+/g, ' ').trim();
+    const filial = String(d.filial || '').trim();
+    if (!nome) return _err_('Informe o nome.');
+    if (!filial) return _err_('Informe a filial.');
+    const inicio = toDate_(d.inicio);
+    if (!inicio) return _err_('Informe a data de início (admissão).');
+    const salario = Math.round(Number(d.salario) * 100) / 100;
+    if (d.salario === '' || d.salario === null || d.salario === undefined || !isFinite(salario) || salario < 0) return _err_('Informe o salário.');
+    const registrado = d.registrado !== false;
+    const fe = d.ferias || { modo: 'nao' };
+    if (['novo', 'existente', 'nao'].indexOf(fe.modo) < 0) return _err_('Escolha o que fazer no painel de férias.');
+    if (fe.modo === 'novo' && !String(fe.filial || '').trim()) return _err_('Escolha a filial no painel de férias.');
+
+    const rubs = {};
+    _folhaRows_(FOLHA_TAB.RUBRICAS).forEach(function (r) { const c = String(r[0] || '').trim().toUpperCase(); if (c) rubs[c] = String(r[1] || '').trim() || c; });
+    const regras = [];
+    (Array.isArray(d.regras) ? d.regras : []).forEach(function (g, i) {
+      const tipo = _folhaTipoRegra_(FOLHA_TIPOS_REGRA[g && g.tipo] || (g && g.tipo));
+      const rub = String(g.rubrica || '').trim().toUpperCase() ||
+        (tipo === 'bonus' ? 'BONUS_MANIPULACAO' : tipo === 'piso' ? 'PREMIACAO' : '');
+      const valor = Math.round(Number(g.valor) * 100) / 100;
+      if (!rub) throw new Error('Regra ' + (i + 1) + ': escolha a rubrica.');
+      if (g.valor === '' || g.valor === null || g.valor === undefined || !isFinite(valor) || valor < 0) throw new Error('Regra ' + (i + 1) + ': valor inválido.');
+      // Fixo sem descrição: usa o nome da rubrica (a mesma descrição da linha do recibo — é por ela que a regra acha a linha)
+      const desc = String(g.descricao || '').trim().slice(0, 120) || (tipo === 'fixo' ? (rubs[rub] || rub) : '');
+      regras.push({ tipo: tipo, rubrica: rub, descricao: desc, valor: valor,
+        proporcional: !!g.proporcional, semFalta: tipo === 'bonus' && !!g.semFalta, obs: String(g.obs || '').trim().slice(0, 200) });
+    });
+
+    mes = mes ? _folhaMes_(mes) : '';
+    if (_folhaEh13_(mes)) mes = '';   // no 13º o recibo vem do 🎄 Gerar 13º
+    // dias no mês aberto (base 30): admitido no mês = do dia da admissão até 30; depois do mês = sem recibo
+    let trab = 30, semRecibo = '';
+    if (mes) {
+      const ym = formatDate_(inicio).slice(0, 7);
+      if (ym > mes) { semRecibo = 'admissão depois de ' + mes; mes = ''; }
+      else if (ym === mes) trab = Math.max(0, 30 - Math.min(inicio.getDate(), 31) + 1);
+    }
+    const prop = function (v, sim) { return sim && trab < 30 ? _folhaProp_(v, trab) : v; };
+    const fmt = function (v) { return Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); };
+
+    const lock = LockService.getScriptLock();
+    lock.waitLock(20000);
+    try {
+      const func = _folhaFuncionarios_();
+      const igual = func.lista.find(function (f) { return f.ativo && _folhaNorm_(f.nome) === _folhaNorm_(nome); });
+      if (igual) return _err_('Já existe um funcionário ativo na folha com esse nome (' + igual.id + ', ' + igual.filial + ').');
+
+      // 1) painel de férias
+      let matFerias = '', periodoAviso = null;
+      if (fe.modo === 'existente') {
+        const mk = _mk_(fe.matricula);
+        if (!mk || !_rows_(TAB.FUNC).some(function (r) { return _mk_(r[F.MAT]) === mk; }))
+          return _err_('Matrícula ' + (fe.matricula || '') + ' não encontrada no painel de férias.');
+        matFerias = mk;
+      } else if (fe.modo === 'novo') {
+        const jaFer = _rows_(TAB.FUNC).find(function (r) {
+          return String(r[F.SITUACAO] || '').trim().toLowerCase() !== 'inativo' && _folhaNorm_(r[F.NOME]) === _folhaNorm_(nome);
+        });
+        if (jaFer) return _err_('Já existe "' + String(jaFer[F.NOME]).trim() + '" no painel de férias (matrícula ' + _mk_(jaFer[F.MAT]) +
+          '). Escolha "Já está no painel de férias — só ligar".');
+        const rf = JSON.parse(addEmployee_({
+          matricula: fe.matricula, nome: nome, filial: String(fe.filial).trim(), cargo: d.cargo, admissao: formatDate_(inicio),
+          registrado: registrado, saldoInicial: Number(fe.saldoInicial) || 0, ctps: fe.ctps,
+        }));
+        if (!rf.success) return _err_('Painel de férias: ' + rf.error);
+        matFerias = rf.matricula; periodoAviso = rf.periodoAviso || null;
+      }
+
+      // 2) folha — cadastro
+      let max = 0;
+      func.lista.forEach(function (f) { const m = /^F(\d+)$/i.exec(f.id); if (m) max = Math.max(max, Number(m[1])); });
+      const id = 'F' + String(max + 1).padStart(3, '0');
+      const shF = _folhaAba_(FOLHA_TAB.FUNC);
+      const nr = shF.getLastRow() + 1;
+      const piso = '';   // piso vai como regra "Piso premiação" (a coluna J fica para os cadastros antigos)
+      shF.getRange(nr, FU.MAT_FERIAS + 1).setNumberFormat('@');
+      shF.getRange(nr, 1, 1, FOLHA_HEADERS.Funcionarios.length).setValues([[
+        id, nome, filial, inicio, 'Sim', String(matFerias || ''), '', '',
+        'Cadastrado no painel ' + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd/MM/yyyy'), piso, '']]);
+      shF.getRange(nr, FU.INICIO + 1).setNumberFormat('dd/mm/yyyy');
+
+      // 3) regras
+      if (regras.length) {
+        const shR = _folhaAba_(FOLHA_TAB.REGRAS);
+        shR.getRange(shR.getLastRow() + 1, 1, regras.length, FOLHA_HEADERS.Regras.length).setValues(regras.map(function (g) {
+          return [id, nome, FOLHA_TIPOS_REGRA[g.tipo], g.rubrica, g.descricao, g.valor,
+            g.proporcional ? 'Sim' : 'Não', g.semFalta ? 'Sim' : 'Não', g.obs];
+        }));
+      }
+
+      // 4) recibo do mês aberto, no modelo da folha
+      let linhas = [];
+      if (mes) {
+        const salV = prop(salario, d.salarioProp !== false);
+        linhas.push(['P', 'SALARIO', 'Salário (' + fmt(salario) + ')' + (salV !== salario ? ' ' + trab + ' dias' : ''), salV]);
+        regras.filter(function (g) { return g.tipo === 'fixo'; }).forEach(function (g) {
+          linhas.push(['P', g.rubrica, g.descricao || rubs[g.rubrica] || g.rubrica, prop(g.valor, g.proporcional)]);
+        });
+        const temPrem = linhas.some(function (l) { return l[1] === 'PREMIACAO'; }) ||
+          regras.some(function (g) { return g.tipo === 'piso' && g.rubrica !== 'PREMIACAO' && linhas.some(function (l) { return l[1] === g.rubrica; }); });
+        if (!temPrem) {
+          const pisoR = regras.filter(function (g) { return g.tipo === 'piso' && g.rubrica === 'PREMIACAO'; })[0];
+          linhas.push(['P', 'PREMIACAO', pisoR && pisoR.descricao ? pisoR.descricao : 'Premiação', '']);
+        }
+        if (registrado) linhas.push(['D', 'INSS', '(-) INSS', '']);
+        const sh = _folhaAba_(FOLHA_TAB.LANC);
+        const ini = sh.getLastRow() + 1;
+        sh.getRange(ini, FL.MES + 1, linhas.length, 1).setNumberFormat('@');
+        sh.getRange(ini, 1, linhas.length, 9).setValues(linhas.map(function (l, i) {
+          return [mes, id, filial, nome, l[0], l[1], l[2], l[3], i + 1];
+        }));
+      }
+      _folhaLog_(email, 'cadastrar funcionário', id + ' · ' + nome + ' · ' + filial + (matFerias ? ' · férias ' + matFerias : '') +
+        ' · ' + regras.length + ' regra(s)' + (mes ? ' · recibo em ' + mes : ''));
+      const prov = linhas.reduce(function (s, l) { return s + (l[0] === 'P' && typeof l[3] === 'number' ? l[3] : 0); }, 0);
+      return JSON.stringify({
+        success: true, id: id, matFerias: matFerias, periodoAviso: periodoAviso, regras: regras.length, semRecibo: semRecibo, trab: trab,
+        recibo: mes ? {
+          id: id, nome: nome, filial: filial, inicio: formatDateBR_(formatDate_(inicio)), ativo: true, ferias: [],
+          linhas: linhas.map(function (l, i) { return { tipo: l[0], rubrica: l[1], descricao: l[2], valor: l[3] === '' ? null : l[3], ordem: i + 1 }; }),
+          proventos: _folhaR2_(prov), descontos: 0, liquido: _folhaR2_(prov) } : null,
+      });
+    } finally { lock.releaseLock(); }
+  } catch (e) { return _err_(e.message); }
+}
+
+// ============================================================
 // REGRAS POR FUNCIONÁRIO (botão 📋 Regras por funcionário)
 //   Aba "Regras": uma linha por regra. Tipos:
 //   · Fixo              → a linha do recibo (rubrica + descrição) recebe o valor base; se "Proporcional",
