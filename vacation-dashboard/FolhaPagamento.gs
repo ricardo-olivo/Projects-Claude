@@ -1774,3 +1774,206 @@ function folhaContabGravar_(ft, mes, itens, vinculos, arquivos, adm) {
     } finally { lock.releaseLock(); }
   } catch (e) { return _err_(e.message); }
 }
+
+// ============================================================
+// DESLIGAMENTO DE FUNCIONÁRIO (botão 🚪 Desligar funcionário)
+// Dois motivos: pedido de demissão (o funcionário pediu para sair) ou dispensa sem justa causa
+// (a empresa desligou). O CÁLCULO da rescisão é feito na tela (rescCalc no Folha.html, ao vivo,
+// com os campos editáveis); aqui o servidor só junta os dados e grava:
+//   · folhaDesligDados_(ft, '')  → lista dos ativos;
+//   · folhaDesligDados_(ft, id)  → remuneração (salário + linhas de regra que entram no 13º, do último
+//     recibo), média da premiação (12 meses), admissão, saldo de férias do painel, experiência, registro;
+//   · folhaDesligar_(ft, d)      → aba Rescisoes + Ativo = "Não" + (opcional) troca o recibo dele no mês
+//     da saída pelas verbas da rescisão + (opcional) inativa no painel de férias.
+// A contabilidade confere/homologa: INSS e IR são estimativas, o FGTS (8% e multa) é pago por guia.
+// ============================================================
+FOLHA_TAB.RESC = 'Rescisoes';
+FOLHA_HEADERS.Rescisoes = ['Registrado em', 'Por', 'ID', 'Nome', 'Filial', 'Motivo', 'Admissão', 'Data de saída',
+  'Aviso prévio', 'Dias de aviso', 'Data projetada', 'Proventos', 'Descontos', 'Líquido', 'FGTS do mês (guia)',
+  'Multa 40% FGTS (guia)', 'Mês na folha', 'Verbas', 'Observação'];
+FOLHA_API.folhaDesligDados = folhaDesligDados_;
+FOLHA_API.folhaDesligar = folhaDesligar_;
+
+// linhas do funcionário por mês (sem 13º): { 'aaaa-mm': [{ tipo, rubrica, descricao, valor }] em ordem }
+function _folhaLinhasDe_(rows, id) {
+  const por = {};
+  rows.forEach(function (r) {
+    if (String(r[FL.ID] || '').trim() !== id) return;
+    const m = _folhaMes_(r[FL.MES]);
+    if (!m || _folhaEh13_(m)) return;
+    (por[m] = por[m] || []).push({ tipo: String(r[FL.TIPO] || '').trim().toUpperCase(), rubrica: String(r[FL.RUB] || '').trim(),
+      descricao: String(r[FL.DESC] || ''), valor: _folhaNum_(r[FL.VALOR]), ordem: Number(r[FL.ORDEM]) || 0 });
+  });
+  Object.keys(por).forEach(function (m) { por[m].sort(function (a, b) { return a.ordem - b.ordem; }); });
+  return por;
+}
+
+// remuneração para a rescisão: salário cheio (se o recibo foi proporcional, o valor do "(1.400,00)" da descrição)
+// + linhas fixas das regras "Entra no 13º" — o mesmo critério do 🎄 Gerar 13º
+function _folhaRemunDe_(id, ls, regras) {
+  const cheio = ls.map(function (l) {
+    if (String(l.rubrica).toUpperCase() !== 'SALARIO') return l;
+    const v = _folhaValorDaDesc_(l.descricao);
+    return v && v > (Number(l.valor) || 0) ? Object.assign({}, l, { valor: v }) : l;
+  });
+  const rec = {}, inf = {};
+  rec[id] = cheio; inf[id] = { adm: new Date(1990, 0, 1), admTxt: '' };
+  const p = _folha13Plano_(2000, rec, inf, regras, {})[id];
+  return (p ? p.linhas : []).filter(function (l) { return l.tipo === 'P'; })
+    .map(function (l) {
+      const nome = String(l.descricao || '').replace(/\s*\(\d[\d.]*,\d{2}\)/, '').replace(/\s+\d+\s+dias$/, '').trim();
+      return { descricao: nome || 'Salário', valor: _folhaR2_(l.base) };
+    });
+}
+
+function folhaDesligDados_(ft, id) {
+  try {
+    const email = _folhaSessao_(ft);
+    const func = _folhaFuncionarios_();
+    id = String(id || '').trim();
+    if (!id) {
+      const lista = func.lista.filter(function (f) { return f.ativo; })
+        .map(function (f) { return { id: f.id, nome: f.nome, filial: f.filial }; })
+        .sort(function (a, b) { return a.nome.localeCompare(b.nome); });
+      return JSON.stringify({ success: true, lista: lista });
+    }
+    const f = func.porId[id];
+    if (!f) return _err_('Funcionário não encontrado: ' + id);
+    if (!f.ativo) return _err_(f.nome + ' já está desligado (Ativo = Não na aba Funcionarios).');
+
+    const rows = _folhaRows_(FOLHA_TAB.LANC);
+    const todos = {};
+    rows.forEach(function (r) { const m = _folhaMes_(r[FL.MES]); if (m && !_folhaEh13_(m)) todos[m] = 1; });
+    const por = _folhaLinhasDe_(rows, id);
+    const seus = Object.keys(por).sort();
+    const base = seus.length ? seus[seus.length - 1] : '';
+    const ls = base ? por[base] : [];
+    const componentes = base ? _folhaRemunDe_(id, ls, _folhaRegras_()) : [];
+
+    // média da premiação nos últimos 12 meses com recibo (entra no 13º, nas férias e no aviso)
+    const ult = seus.slice(-12);
+    let somaPrem = 0;
+    ult.forEach(function (m) {
+      por[m].forEach(function (l) { if (l.tipo === 'P' && String(l.rubrica).toUpperCase() === 'PREMIACAO') somaPrem += Number(l.valor) || 0; });
+    });
+    const medias = { media: ult.length ? Math.floor(somaPrem * 100 / ult.length) / 100 : 0, meses: ult.length, total: _folhaR2_(somaPrem) };
+
+    // admissão e férias: painel de férias (pela ligação de sempre); sem ele, "Início" da folha
+    let mat = '', adm = null, admFonte = '', ferias = null;
+    // registrado: o do painel de férias; sem ele, INSS em algum dos últimos 3 recibos
+    let registrado = seus.slice(-3).some(function (m) { return por[m].some(function (l) { return String(l.rubrica).toUpperCase() === 'INSS'; }); });
+    try { mat = _folhaLigarFerias_(func.lista)[id] || ''; } catch (e) { mat = ''; }
+    if (mat) {
+      try {
+        const fx = JSON.parse(getEmployeeFicha_(mat));
+        if (fx.success) {
+          adm = toDate_(fx.func.admissao);
+          if (adm) admFonte = 'painel de férias';
+          registrado = !!fx.func.registrado;
+          ferias = { mat: mat, saldo: Number(fx.saldo.atual) || 0, risco: Number(fx.saldo.risco) || 0, pendente: Number(fx.saldo.pendente) || 0,
+            periodos: (fx.periodos || []).map(function (p) {
+              return { periodo: p.periodo, iniAq: p.iniAq, fimAq: p.fimAq, concessao: p.concessao, direito: p.direito, situacao: p.situacao };
+            }) };
+        }
+      } catch (e) { ferias = null; }
+    }
+    if (!adm) { const v = f.row[FU.INICIO]; adm = v instanceof Date ? v : (v ? toDate_(v) : null); if (adm) admFonte = 'início na folha'; }
+
+    const exp = _folhaExperiencias_()[id] || null;
+    _folhaLog_(email, 'desligamento (consulta)', id + ' · ' + f.nome);
+    return JSON.stringify({ success: true, hoje: formatDate_(new Date()),
+      func: { id: id, nome: f.nome, filial: f.filial }, admissao: adm ? formatDate_(adm) : '', admFonte: admFonte,
+      base: base, componentes: componentes, medias: medias, registrado: registrado, ferias: ferias, experiencia: exp,
+      meses: Object.keys(todos).sort().reverse(), mesesDele: seus });
+  } catch (e) { return _err_(e.message); }
+}
+
+// d = { id, motivo: 'pedido'|'dispensa', admissao, saida, aviso, diasAviso, projetada,
+//       linhas: [{ tipo, rubrica, descricao, valor }], fgtsMes, multa, mes ('' = não lançar), inativarFerias, obs }
+function folhaDesligar_(ft, d) {
+  try {
+    const email = _folhaSessao_(ft);
+    d = d || {};
+    const id = String(d.id || '').trim();
+    const motivo = d.motivo === 'dispensa' ? 'Dispensa sem justa causa' : d.motivo === 'pedido' ? 'Pedido de demissão' : '';
+    if (!id || !motivo) return _err_('Escolha o funcionário e o motivo.');
+    const saida = toDate_(d.saida);
+    if (!saida) return _err_('Informe a data de saída.');
+    if (!Array.isArray(d.linhas) || !d.linhas.length) return _err_('A rescisão não tem verbas.');
+    const linhas = [];
+    let prov = 0, desc = 0;
+    for (let i = 0; i < d.linhas.length; i++) {
+      const l = d.linhas[i] || {};
+      const tipo = String(l.tipo || '').trim().toUpperCase();
+      if (['P', 'D', 'I'].indexOf(tipo) < 0) return _err_('Tipo de linha inválido: ' + tipo);
+      const ds = String(l.descricao || '').trim().slice(0, 120);
+      if (!ds) return _err_('Toda verba precisa de descrição.');
+      const v = tipo === 'I' ? null : _folhaR2_(l.valor);
+      if (v !== null && (!isFinite(v) || v < 0)) return _err_('Valor inválido em "' + ds + '".');
+      linhas.push({ tipo: tipo, rubrica: String(l.rubrica || '').trim().toUpperCase().slice(0, 30) || 'RESCISAO', descricao: ds, valor: v });
+      if (tipo === 'P') prov += v;
+      if (tipo === 'D') desc += v;
+    }
+    prov = _folhaR2_(prov); desc = _folhaR2_(desc);
+    const mes = _folhaMes_(d.mes);
+
+    const lock = LockService.getScriptLock();
+    lock.waitLock(20000);
+    try {
+      const func = _folhaFuncionarios_();
+      const f = func.porId[id];
+      if (!f) return _err_('Funcionário não encontrado: ' + id);
+      if (!f.ativo) return _err_(f.nome + ' já está desligado.');
+      const rows = _folhaRows_(FOLHA_TAB.LANC);
+      let lancado = '', depois = [];
+      if (mes) {
+        const existe = rows.some(function (r) { return _folhaMes_(r[FL.MES]) === mes; });
+        if (!existe) return _err_(_folhaNomeMes_(mes) + ' ainda não está aberto na folha — escolha um mês aberto ou "não lançar".');
+        const sh = _folhaAba_(FOLHA_TAB.LANC);
+        const pos = [];
+        let filial = f.filial;
+        rows.forEach(function (r, i) {
+          if (_folhaMes_(r[FL.MES]) === mes && String(r[FL.ID] || '').trim() === id) { pos.push(i + 2); filial = String(r[FL.FILIAL] || '') || filial; }
+        });
+        const valores = linhas.map(function (l, i) {
+          return [mes, id, filial, f.nome, l.tipo, l.rubrica, l.descricao, l.valor === null ? '' : l.valor, i + 1];
+        });
+        valores.push([mes, id, filial, f.nome, 'I', 'RESCISAO_OBS', motivo + ' — saída em ' + formatDateBR_(formatDate_(saida)), '', valores.length + 1]);
+        const usar = Math.min(pos.length, valores.length);
+        for (let i = 0; i < usar; i++) sh.getRange(pos[i], 1, 1, valores[i].length).setValues([valores[i]]);
+        if (valores.length > usar) {
+          const resto = valores.slice(usar), ini = sh.getLastRow() + 1;
+          sh.getRange(ini, FL.MES + 1, resto.length, 1).setNumberFormat('@');
+          sh.getRange(ini, 1, resto.length, resto[0].length).setValues(resto);
+        }
+        pos.slice(usar).sort(function (a, b) { return b - a; }).forEach(function (n) { sh.deleteRow(n); });
+        lancado = mes;
+        const dep = {};
+        rows.forEach(function (r) {
+          const m = _folhaMes_(r[FL.MES]);
+          if (m > mes && !_folhaEh13_(m) && String(r[FL.ID] || '').trim() === id) dep[m] = 1;
+        });
+        depois = Object.keys(dep).sort();
+      }
+      _folhaAba_(FOLHA_TAB.FUNC).getRange(f.linha, FU.ATIVO + 1).setValue('Não');
+
+      let ferias = '';
+      if (d.inativarFerias) {
+        let mat = '';
+        try { mat = _folhaLigarFerias_(func.lista)[id] || ''; } catch (e) { mat = ''; }
+        if (mat) {
+          const r = JSON.parse(setEmployeeStatus_({ matricula: mat, ativo: false }));
+          ferias = r.success ? 'inativado (matrícula ' + mat + ')' : 'não inativado: ' + r.error;
+        } else ferias = 'sem ligação com o painel de férias';
+      }
+
+      const resumo = linhas.filter(function (l) { return l.tipo !== 'I'; })
+        .map(function (l) { return (l.tipo === 'D' ? '-' : '+') + ' ' + l.descricao + ': ' + l.valor; }).join(' | ');
+      _folhaAba_(FOLHA_TAB.RESC).appendRow([new Date(), email, id, f.nome, f.filial, motivo,
+        toDate_(d.admissao) || '', saida, String(d.aviso || '').slice(0, 40), Number(d.diasAviso) || 0, toDate_(d.projetada) || '',
+        prov, desc, _folhaR2_(prov - desc), _folhaR2_(d.fgtsMes), _folhaR2_(d.multa), lancado, resumo.slice(0, 2000), String(d.obs || '').slice(0, 300)]);
+      _folhaLog_(email, 'desligamento', id + ' · ' + f.nome + ' · ' + motivo + ' · saída ' + formatDate_(saida) + ' · líquido ' + _folhaR2_(prov - desc));
+      return JSON.stringify({ success: true, id: id, nome: f.nome, mes: lancado, liquido: _folhaR2_(prov - desc), ferias: ferias, mesesDepois: depois });
+    } finally { lock.releaseLock(); }
+  } catch (e) { return _err_(e.message); }
+}

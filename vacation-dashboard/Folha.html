@@ -97,6 +97,12 @@
     .exp-aviso h3 { font-size: 14px; margin: 0 0 6px; color: #92400e; }
     .exp-aviso li { margin: 2px 0 2px 18px; }
     .exp-tag { display: inline-block; font-size: 10px; border-radius: 4px; padding: 0 5px; background: #fef3c7; color: #92400e; font-weight: 600; }
+    .dl-res { margin-bottom: 6px; }
+    .cad-previa h4 { font-size: 13px; margin: 12px 0 4px; color: var(--gray-700); }
+    .cad-previa .ln.liq { font-size: 15px; border-top: 2px solid var(--gray-700); }
+    .dl-fgts { margin-top: 12px; padding: 9px 12px; background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px; font-size: 13px; line-height: 1.5; }
+    .dl-avisos { margin: 10px 0 0; padding: 9px 12px 9px 28px; background: #fffbeb; border: 1px solid #fcd34d; border-radius: 8px; font-size: 13px; }
+    .dl-avisos li { margin: 2px 0; }
     @media (max-width: 600px) { .ov-2 { grid-template-columns: 1fr; } .cad-chk { margin-top: 12px; } }
     .ov-hint { font-size: 12px; color: var(--gray-500); margin: 10px 0 0; }
     /* edição de recibo */
@@ -241,6 +247,7 @@
       <button class="btn btn-sec no-print" onclick="abrir13()" title="Gera os recibos do 13º salário (parcela única de dezembro) a partir dos salários de dezembro">🎄 Gerar 13º</button>
       <button class="btn btn-sec no-print" onclick="abrirRegras()" title="Gratificações, auxílios, pisos de premiação e bônus de cada funcionário — e aplicar no mês aberto">📋 Regras por funcionário</button>
       <button class="btn btn-sec no-print" onclick="abrirNovoFunc()" title="Cadastra no painel de férias e na folha: início, salário, regras e o recibo do mês aberto">👤 Cadastrar novo funcionário</button>
+      <button class="btn btn-sec no-print" onclick="abrirDeslig()" title="Pedido de demissão ou dispensa: calcula a rescisão e registra a saída na folha e no painel de férias">🚪 Desligar funcionário</button>
       <span class="aviso-sessao" id="aviso-sessao"></span>
     </div>
     <div class="cards">
@@ -311,6 +318,61 @@
 
       <div class="msg erro" id="nf-msg"></div>
       <div class="ed-botoes"><button class="btn btn-sec" onclick="fecharNovoFunc()">Cancelar</button><button class="btn ed-salvar" id="nf-salvar" onclick="salvarNovoFunc()">Cadastrar</button></div>
+    </div>
+  </div>
+
+  <!-- desligamento de funcionário (pedido de demissão / dispensa) + prévia da rescisão -->
+  <div class="ov hidden" id="ov-desl" onclick="if(event.target===this)fecharDeslig()">
+    <div class="ov-box cad-box">
+      <h2>🚪 Desligar funcionário</h2>
+      <p class="ov-hint" style="margin-top:0">Calcula a rescisão (prévia para conferir com a contabilidade) e registra a saída na folha — e, se quiser, no painel de férias.</p>
+      <h3 class="cad-sec">1. Funcionário e motivo</h3>
+      <div class="ov-3">
+        <div><label for="dl-func">Funcionário</label><select id="dl-func" onchange="dlCarregar()"></select></div>
+        <div><label for="dl-saida">Data de saída (último dia trabalhado)</label><input type="date" id="dl-saida" onchange="dlCalc()"></div>
+      </div>
+      <div class="cad-radios">
+        <label><input type="radio" name="dl-motivo" value="pedido" onchange="dlMotivo()"> 1. Funcionário pediu para sair (pedido de demissão)</label>
+        <label><input type="radio" name="dl-motivo" value="dispensa" onchange="dlMotivo()"> 2. Funcionário foi desligado pela empresa (dispensa sem justa causa)</label>
+      </div>
+      <div class="cad-exp" id="dl-info"></div>
+      <div id="dl-campos" class="hidden">
+        <h3 class="cad-sec">2. Aviso prévio</h3>
+        <div class="ov-3">
+          <div id="dl-aviso-box"><label for="dl-aviso">Aviso prévio</label><select id="dl-aviso" onchange="dlCalc()"></select></div>
+          <div id="dl-480-box" class="hidden"><label class="cad-chk"><input type="checkbox" id="dl-480" onchange="dlCalc()"> Descontar a indenização do art. 480</label></div>
+        </div>
+        <p class="ov-hint" id="dl-aviso-hint"></p>
+        <h3 class="cad-sec">3. Valores do cálculo <span class="ov-hint">— vêm da folha e do painel de férias; dá para trocar</span></h3>
+        <div class="ov-3">
+          <div><label for="dl-remun">Remuneração mensal (R$)</label><input type="text" id="dl-remun" inputmode="decimal" oninput="dlCalc()"></div>
+          <div><label for="dl-medias">Média de variáveis (R$)</label><input type="text" id="dl-medias" inputmode="decimal" placeholder="premiação, horas extras…" oninput="dlCalc()"></div>
+          <div><label for="dl-outros-prov">Outros proventos do mês (R$)</label><input type="text" id="dl-outros-prov" inputmode="decimal" placeholder="comissão do mês, extras…" oninput="dlCalc()"></div>
+          <div><label for="dl-venc">Férias vencidas (dias)</label><input type="text" id="dl-venc" inputmode="decimal" oninput="dlCalc()"></div>
+          <div><label for="dl-dobro">…dessas, em dobro (dias)</label><input type="text" id="dl-dobro" inputmode="decimal" placeholder="0" oninput="dlCalc()"></div>
+          <div><label for="dl-avos-fer">Férias proporcionais (meses/12)</label><input type="text" id="dl-avos-fer" inputmode="numeric" oninput="dlCalc()"></div>
+          <div><label for="dl-avos13">13º proporcional (meses/12)</label><input type="text" id="dl-avos13" inputmode="numeric" oninput="dlCalc()"></div>
+          <div><label for="dl-adiant13">13º já adiantado (R$)</label><input type="text" id="dl-adiant13" inputmode="decimal" placeholder="0,00" oninput="dlCalc()"></div>
+          <div><label for="dl-reg">Registrado (carteira)</label><select id="dl-reg" onchange="dlCalc()"><option value="sim">Sim</option><option value="nao">Não</option></select></div>
+          <div><label for="dl-inss">INSS (R$)</label><input type="text" id="dl-inss" inputmode="decimal" oninput="dlCalc()"></div>
+          <div><label for="dl-inss13">INSS do 13º (R$)</label><input type="text" id="dl-inss13" inputmode="decimal" oninput="dlCalc()"></div>
+          <div><label for="dl-ir">IR (R$)</label><input type="text" id="dl-ir" inputmode="decimal" placeholder="da contabilidade" oninput="dlCalc()"></div>
+          <div><label for="dl-outros-desc">Outros descontos (R$)</label><input type="text" id="dl-outros-desc" inputmode="decimal" placeholder="0,00" oninput="dlCalc()"></div>
+          <div><label for="dl-outros-desc-txt">Descrição dos descontos</label><input type="text" id="dl-outros-desc-txt" maxlength="60" placeholder="conta farmácia, vale…" oninput="dlCalc()"></div>
+          <div><label for="dl-fgts">Saldo do FGTS — para a multa (R$)</label><input type="text" id="dl-fgts" inputmode="decimal" placeholder="extrato do FGTS" oninput="dlCalc()"></div>
+        </div>
+        <p class="ov-hint">Campos em branco = automático (o valor calculado aparece em cinza). INSS pela tabela 2026; o IR vem da contabilidade (até R$ 5.000 no mês é isento).</p>
+      </div>
+      <h3 class="cad-sec">4. Rescisão (prévia)</h3>
+      <div id="dl-previa" class="cad-previa"></div>
+      <h3 class="cad-sec">5. Registrar</h3>
+      <div class="ov-3">
+        <div><label for="dl-mes">Lançar as verbas na folha de</label><select id="dl-mes" onchange="this.dataset.mexeu = '1'"></select></div>
+        <div><label class="cad-chk"><input type="checkbox" id="dl-inat" checked> Inativar também no painel de férias</label></div>
+        <div><label for="dl-obs">Observação</label><input type="text" id="dl-obs" maxlength="300"></div>
+      </div>
+      <div class="msg erro" id="dl-msg"></div>
+      <div class="ed-botoes"><button class="btn btn-sec" onclick="dlImprimir()">🖨 Imprimir prévia</button><button class="btn btn-sec" onclick="fecharDeslig()">Cancelar</button><button class="btn ed-salvar" id="dl-salvar" onclick="salvarDeslig()">Registrar desligamento</button></div>
     </div>
   </div>
 
@@ -1044,6 +1106,352 @@
         + (j.periodoAviso ? '\nAtenção (período aquisitivo): ' + j.periodoAviso : '')
         + (j.recibo ? '\nRecibo criado em ' + nomeMes(folhaMesAtual) + ' — premiação e INSS entram pela importação (ou ✏ Editar).' : j.semRecibo ? '\nSem recibo neste mês (' + j.semRecibo + ').' : ''));
     }).catch(function (e) { if (e && e.message !== 'bloqueada') { b.disabled = false; b.textContent = 'Cadastrar'; msgEl.textContent = 'Erro: ' + e.message; } });
+  }
+
+  // ════ DESLIGAMENTO / RESCISÃO (botão 🚪 Desligar funcionário) ════
+  // O cálculo é uma PRÉVIA para o RH conferir com a contabilidade (que faz o TRCT oficial).
+  // Tabela do INSS do empregado — ATUALIZAR TODO JANEIRO (portaria do MPS/MF). Valores de 2026:
+  var INSS_FAIXAS = [[1621.00, 0.075], [2902.84, 0.09], [4354.27, 0.12], [8475.55, 0.14]];
+  function rcInss(base) {
+    if (!(base > 0)) return 0;
+    var t = 0, ant = 0;
+    INSS_FAIXAS.forEach(function (f) { if (base > ant) t += (Math.min(base, f[0]) - ant) * f[1]; ant = f[0]; });
+    return Math.round(t * 100) / 100;
+  }
+  function rcF2(x) { return Math.floor(x * 100 + 1e-6) / 100; }
+  function rcIso(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+  function rcDiasMes(y, m) { return new Date(y, m + 1, 0).getDate(); }   // m: 0 = janeiro
+  function rcMaisMeses(iso, n) {
+    var d = isoData(iso), m = d.getMonth() + n, yy = d.getFullYear() + Math.floor(m / 12), mm = ((m % 12) + 12) % 12;
+    return rcIso(new Date(yy, mm, Math.min(d.getDate(), rcDiasMes(yy, mm))));
+  }
+  function rcEntre(a, b) { return Math.round((isoData(b) - isoData(a)) / 864e5); }
+  // anos completos de a até b (aniversário conta)
+  function rcAnos(a, b) {
+    var x = isoData(a), y = isoData(b), n = y.getFullYear() - x.getFullYear();
+    if (y.getMonth() * 100 + y.getDate() < x.getMonth() * 100 + x.getDate()) n--;
+    return Math.max(0, n);
+  }
+  // períodos aquisitivos completos até `ate` (o período fecha na véspera do aniversário da admissão)
+  function rcPeriodos(adm, ate) { return ate < adm ? 0 : rcAnos(adm, isoMais(ate, 1)); }
+  // avos do 13º no ano: mês com 15 dias ou mais trabalhados conta
+  function rcAvos13(adm, ate, ano) {
+    var ini = adm > ano + '-01-01' ? adm : ano + '-01-01', fim = ate < ano + '-12-31' ? ate : ano + '-12-31';
+    if (fim < ini) return 0;
+    var a = isoData(ini), b = isoData(fim), n = 0;
+    for (var m = a.getMonth(); m <= b.getMonth(); m++) {
+      var d1 = m === a.getMonth() ? a.getDate() : 1, d2 = m === b.getMonth() ? b.getDate() : rcDiasMes(Number(ano), m);
+      if (d2 - d1 + 1 >= 15) n++;
+    }
+    return n;
+  }
+  // avos de férias proporcionais no período aquisitivo que começou em `ini`: mês completo + fração de 15 dias ou mais
+  function rcAvosFerias(ini, ate) {
+    if (ate < ini) return 0;
+    var m = 0;
+    while (m < 12 && rcMaisMeses(ini, m + 1) <= isoMais(ate, 1)) m++;
+    if (m < 12 && rcEntre(rcMaisMeses(ini, m), ate) + 1 >= 15) m++;
+    return Math.min(12, m);
+  }
+
+  // p = { motivo: 'pedido'|'dispensa', adm, saida, hoje, aviso: 'indenizado'|'trabalhado'|'descontado'|'dispensado',
+  //       remun, medias, outrosProv, ferVenc, ferDobro, somarProj, avos13, avosFer (null = calcula), adiant13,
+  //       registrado, fgtsSaldo, inss, inss13 (null = tabela), ir, outrosDesc, outrosDescTxt, exp: { fim } | null, desc480 }
+  // → { linhas: [{ tipo, rubrica, descricao, valor }], proventos, descontos, liquido, r: {...resumo}, avisos: [] }
+  function rescCalc(p) {
+    var L = [], av = [], r = {};
+    var remun = p.remun || 0, base = remun + (p.medias || 0), reg = !!p.registrado;
+    var dS = isoData(p.saida), ultimo = dS.getDate() === rcDiasMes(dS.getFullYear(), dS.getMonth());
+    // saldo de salário (mês comercial de 30 dias)
+    var dias = ultimo ? 30 : Math.min(dS.getDate(), 30);
+    if (p.adm && p.adm.slice(0, 7) === p.saida.slice(0, 7)) dias = Math.max(0, (ultimo ? 30 : Math.min(dS.getDate(), 30)) - Math.min(isoData(p.adm).getDate(), 30) + 1);
+    var saldo = rcF2(remun * dias / 30);
+    r.diasSaldo = dias;
+    // aviso prévio / contrato de experiência
+    var emExp = !!(p.exp && p.exp.fim && p.saida <= p.exp.fim);
+    r.caso = p.motivo === 'pedido' ? 'pedido' : emExp && p.saida === p.exp.fim ? 'termino' : 'dispensa';
+    r.anos = rcAnos(p.adm, p.saida);
+    var diasAviso = 0, projecao = 0, avisoInd = 0, avisoDesc = 0, ind479 = 0, desc480 = 0, restam = 0;
+    if (emExp) {
+      restam = rcEntre(p.saida, p.exp.fim);
+      var meia = rcF2(remun * restam / 30 / 2);
+      if (restam > 0 && p.motivo === 'dispensa') ind479 = meia;
+      if (restam > 0 && p.motivo === 'pedido' && p.desc480) desc480 = meia;
+      r.avisoTxt = r.caso === 'termino' ? 'não se aplica (fim do contrato de experiência)' : 'não se aplica (contrato de experiência até ' + isoBR(p.exp.fim) + ')';
+    } else if (p.motivo === 'dispensa') {
+      diasAviso = Math.min(90, 30 + 3 * r.anos);
+      if (p.aviso === 'trabalhado') {
+        projecao = diasAviso - 30;
+        avisoInd = projecao > 0 ? rcF2(base * projecao / 30) : 0;
+        r.avisoTxt = 'trabalhado (30 dias)' + (projecao ? ' + ' + projecao + ' dias indenizados (Lei 12.506)' : '');
+      } else {
+        projecao = diasAviso;
+        avisoInd = rcF2(base * diasAviso / 30);
+        r.avisoTxt = 'indenizado (' + diasAviso + ' dias' + (diasAviso > 30 ? ': 30 + ' + (diasAviso - 30) + ' pelos ' + r.anos + ' anos' : '') + ')';
+      }
+    } else if (p.aviso === 'descontado') {
+      avisoDesc = rcF2(remun); r.avisoTxt = 'não cumprido — desconta 30 dias';
+    } else r.avisoTxt = p.aviso === 'dispensado' ? 'dispensado pela empresa (sem desconto)' : 'trabalhado (30 dias)';
+    r.diasAviso = diasAviso; r.projecao = projecao; r.restam = restam; r.emExp = emExp;
+    var proj = projecao ? isoMais(p.saida, projecao) : p.saida;
+    r.projetada = proj;
+    // 13º proporcional (a projeção do aviso indenizado conta)
+    var avos13 = 0;
+    for (var y = Number(p.saida.slice(0, 4)); y <= Number(proj.slice(0, 4)); y++) avos13 += rcAvos13(p.adm, proj, String(y));
+    r.avos13Calc = avos13;
+    if (p.avos13 !== null && p.avos13 !== undefined) avos13 = p.avos13;
+    r.avos13 = avos13;
+    var d13 = rcF2(base * avos13 / 12);
+    // férias: vencidas (do painel) + período que fecha até a data projetada + proporcionais
+    var venc = Math.max(0, p.ferVenc || 0), dobro = Math.min(venc, Math.max(0, p.ferDobro || 0));
+    var extra = p.somarProj && p.hoje ? Math.max(0, rcPeriodos(p.adm, proj) - rcPeriodos(p.adm, p.hoje)) : 0;
+    if (extra) { venc += 30 * extra; av.push('Somei ' + (30 * extra) + ' dias às férias vencidas: o período aquisitivo fecha até ' + isoBR(proj) + (projecao ? ' (com a projeção do aviso)' : '') + ' e o painel ainda não creditou.'); }
+    r.venc = venc; r.dobro = dobro;
+    var iniPA = rcMaisMeses(p.adm, 12 * rcPeriodos(p.adm, proj));
+    r.iniPA = iniPA;
+    var avosFer = rcAvosFerias(iniPA, proj);
+    r.avosFerCalc = avosFer;
+    if (p.avosFer !== null && p.avosFer !== undefined) avosFer = p.avosFer;
+    r.avosFer = avosFer;
+    var fVenc = rcF2(base * (venc - dobro) / 30), fDobro = rcF2(base * dobro / 30 * 2), fProp = rcF2(base * avosFer / 12);
+    var terco = rcF2((fVenc + fDobro + fProp) / 3);
+    var outrosP = p.outrosProv || 0;
+
+    var P = function (rub, d, v) { if (v > 0) L.push({ tipo: 'P', rubrica: rub, descricao: d, valor: rcF2(v) }); };
+    var D = function (rub, d, v) { if (v > 0) L.push({ tipo: 'D', rubrica: rub, descricao: d, valor: rcF2(v) }); };
+    P('SALDO_SALARIO', 'Saldo de salário (' + dias + ' dias)', saldo);
+    P('OUTROS_PROV', 'Outros proventos do mês', outrosP);
+    P('AVISO_INDENIZADO', 'Aviso prévio indenizado (' + projecao + ' dias)', avisoInd);
+    P('INDENIZ_479', 'Indenização art. 479 CLT (metade de ' + restam + ' dias que faltavam da experiência)', ind479);
+    P('DECIMO_TERCEIRO', '13º salário proporcional (' + avos13 + '/12)', d13);
+    P('FERIAS_VENCIDAS', 'Férias vencidas (' + (venc - dobro) + ' dias)', fVenc);
+    P('FERIAS_DOBRO', 'Férias vencidas em dobro (' + dobro + ' dias)', fDobro);
+    P('FERIAS_PROP', 'Férias proporcionais (' + avosFer + '/12)', fProp);
+    P('TERCO_FERIAS', '1/3 constitucional sobre férias', terco);
+    // descontos
+    var inss = p.inss !== null && p.inss !== undefined ? p.inss : reg ? rcInss(saldo + outrosP) : 0;
+    var inss13 = p.inss13 !== null && p.inss13 !== undefined ? p.inss13 : reg ? rcInss(d13) : 0;
+    r.inssAuto = p.inss === null || p.inss === undefined; r.inss13Auto = p.inss13 === null || p.inss13 === undefined;
+    D('INSS', '(-) INSS', inss);
+    D('INSS', '(-) INSS 13º', inss13);
+    D('IRRF', '(-) IR', p.ir || 0);
+    D('AVISO_DESC', '(-) Aviso prévio não cumprido (30 dias)', avisoDesc);
+    D('INDENIZ_480', '(-) Indenização art. 480 CLT (saída antes do fim da experiência)', desc480);
+    D('ADIANT_13', '(-) Adiantamento do 13º já pago', p.adiant13 || 0);
+    D('OUTROS_DESC', '(-) ' + (String(p.outrosDescTxt || '').trim() || 'Outros descontos'), p.outrosDesc || 0);
+
+    var prov = 0, desc = 0;
+    L.forEach(function (l) { if (l.tipo === 'P') prov += l.valor; else desc += l.valor; });
+    prov = Math.round(prov * 100) / 100; desc = Math.round(desc * 100) / 100;
+    // FGTS: pago por guia (FGTS Digital), não entra no líquido
+    var fgtsMes = reg ? rcF2((saldo + outrosP + avisoInd + d13) * 0.08) : 0;
+    var multa = reg && r.caso === 'dispensa' ? rcF2(((p.fgtsSaldo || 0) + fgtsMes) * 0.4) : 0;
+    r.fgtsMes = fgtsMes; r.multa = multa;
+    r.saque = reg && r.caso !== 'pedido';
+    r.seguro = reg && r.caso === 'dispensa';
+    r.prazo = isoMais(p.saida, 10);
+    if (r.caso === 'pedido') av.push('Pedido de demissão: não saca o FGTS, não tem multa de 40% nem seguro-desemprego.');
+    if (r.caso === 'termino') av.push('Fim do contrato de experiência no prazo: sem aviso e sem multa de 40%; saca o FGTS. Seguro-desemprego normalmente não cabe.');
+    if (!reg) av.push('Sem registro: sem INSS e sem FGTS na conta — confirme com a contabilidade.');
+    if (emExp && r.caso !== 'termino' && p.motivo === 'pedido' && restam > 0 && !p.desc480) av.push('Saiu antes do fim da experiência: a empresa PODE descontar até ' + brl(rcF2(remun * restam / 30 / 2)) + ' (art. 480) — marque acima se for descontar.');
+    if (p.motivo === 'dispensa' && !emExp && p.aviso === 'trabalhado') av.push('Aviso trabalhado: nos 30 dias ele pode sair 2 h mais cedo por dia ou faltar 7 dias corridos, sem desconto.');
+    if (r.anos >= 1 && !(p.ferVenc > 0) && !extra) av.push('Sem férias vencidas no painel — se ele tem dias de férias não gozados, preencha o campo.');
+    return { linhas: L, proventos: prov, descontos: desc, liquido: Math.round((prov - desc) * 100) / 100, r: r, avisos: av };
+  }
+
+  // ---- tela ----
+  var dlDados = null, dlUlt = null;
+  function abrirDeslig() {
+    if (editId && !confirm('Há um recibo em edição. Descartar as alterações dele?')) return;
+    dlDados = null; dlUlt = null;
+    ['dl-saida', 'dl-remun', 'dl-medias', 'dl-outros-prov', 'dl-venc', 'dl-dobro', 'dl-avos-fer', 'dl-avos13', 'dl-adiant13', 'dl-fgts', 'dl-inss', 'dl-inss13', 'dl-ir', 'dl-outros-desc', 'dl-outros-desc-txt', 'dl-obs']
+      .forEach(function (id) { document.getElementById(id).value = ''; });
+    document.querySelectorAll('input[name=dl-motivo]').forEach(function (x) { x.checked = false; });
+    document.getElementById('dl-480').checked = false;
+    document.getElementById('dl-info').innerHTML = '';
+    document.getElementById('dl-previa').innerHTML = '<p class="ov-hint">Escolha o funcionário, o motivo e a data de saída.</p>';
+    document.getElementById('dl-msg').textContent = '';
+    document.getElementById('dl-campos').classList.add('hidden');
+    var dm = document.getElementById('dl-mes'); dm.innerHTML = ''; delete dm.dataset.mexeu;
+    var sel = document.getElementById('dl-func');
+    sel.innerHTML = '<option value="">Carregando…</option>';
+    var b = document.getElementById('dl-salvar'); b.disabled = true; b.textContent = 'Registrar desligamento';
+    document.getElementById('ov-desl').classList.remove('hidden');
+    chamarFolha('folhaDesligDados', '').then(function (j) {
+      if (!j.success) return (document.getElementById('dl-msg').textContent = j.error);
+      var sf = document.getElementById('sel-filial').value;
+      sel.innerHTML = '<option value="">— escolha —</option>' + j.lista.filter(function (f) { return !sf || f.filial === sf; })
+        .map(function (f) { return '<option value="' + esc(f.id) + '">' + esc(f.nome) + ' · ' + esc(f.filial) + '</option>'; }).join('');
+    }).catch(function (e) { if (e && e.message !== 'bloqueada') document.getElementById('dl-msg').textContent = 'Erro: ' + e.message; });
+  }
+  function fecharDeslig() { document.getElementById('ov-desl').classList.add('hidden'); }
+  function dlNum(v) { return v === null || v === undefined || v === '' ? '' : Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+  function dlCarregar() {
+    var id = nfVal('dl-func'), info = document.getElementById('dl-info');
+    dlDados = null; document.getElementById('dl-salvar').disabled = true;
+    document.getElementById('dl-campos').classList.add('hidden');
+    if (!id) { info.innerHTML = ''; return dlCalc(); }
+    info.innerHTML = 'Carregando…';
+    chamarFolha('folhaDesligDados', id).then(function (j) {
+      if (nfVal('dl-func') !== id) return;
+      if (!j.success) { info.innerHTML = '<span class="erro">' + esc(j.error) + '</span>'; return; }
+      dlDados = j;
+      var remun = j.componentes.reduce(function (s, c) { return s + c.valor; }, 0);
+      document.getElementById('dl-remun').value = dlNum(Math.round(remun * 100) / 100);
+      document.getElementById('dl-medias').value = '';
+      document.getElementById('dl-reg').value = j.registrado ? 'sim' : 'nao';
+      var fe = j.ferias;
+      document.getElementById('dl-venc').value = fe ? String(Math.max(0, fe.saldo)) : '';
+      document.getElementById('dl-dobro').value = fe && fe.risco > 0 ? String(Math.min(fe.risco, Math.max(0, fe.saldo))) : '';
+      if (!nfVal('dl-saida')) document.getElementById('dl-saida').value = j.hoje;
+      // meses abertos para lançar: o da saída fica escolhido em dlCalc
+      document.getElementById('dl-mes').innerHTML = '<option value="">Não lançar na folha (só registrar)</option>'
+        + j.meses.map(function (m) { return '<option value="' + m + '">' + esc(nomeMes(m)) + '</option>'; }).join('');
+      document.getElementById('dl-inat').checked = !!fe;
+      document.getElementById('dl-inat').disabled = !fe;
+      var ex = j.experiencia;
+      info.innerHTML = '<b>Admissão:</b> ' + (j.admissao ? isoBR(j.admissao) + ' <span class="ov-hint" style="margin:0">(' + esc(j.admFonte) + ')</span>' : '<span class="erro">sem data — preencha o Início na aba Funcionarios</span>')
+        + ' · <b>Remuneração</b> (recibo de ' + (j.base ? esc(nomeMes(j.base)) : '—') + '): '
+        + (j.componentes.length ? j.componentes.map(function (c) { return esc(c.descricao) + ' ' + brl(c.valor); }).join(' + ') : '<span class="erro">sem salário no último recibo</span>')
+        + '<br><b>Férias (painel):</b> ' + (fe ? fe.saldo + ' dias de saldo' + (fe.risco > 0 ? ', ' + fe.risco + ' vencidos além do prazo (em dobro)' : '') + (fe.pendente ? ' · ' + fe.pendente + ' dias pendentes de aprovação' : '') + ' — matrícula ' + esc(fe.mat) : 'não ligado ao painel de férias — informe os dias de férias vencidas')
+        + (j.medias.meses ? ' · <b>Premiação:</b> média ' + brl(j.medias.media) + ' em ' + j.medias.meses + ' meses <button class="ed-add" style="display:inline-block;margin:0 0 0 4px" onclick="dlUsarMedia()">usar como média</button>' : '')
+        + (ex ? '<br><b>Experiência:</b> ' + isoBR(ex.inicio) + ' até ' + isoBR(ex.fim1) + (ex.d2 ? ' (prorrogação até ' + isoBR(ex.fim) + ')' : '') : '');
+      document.getElementById('dl-campos').classList.remove('hidden');
+      document.getElementById('dl-salvar').disabled = false;
+      dlMotivo();
+    }).catch(function (e) { if (e && e.message !== 'bloqueada') info.innerHTML = '<span class="erro">Erro: ' + esc(e.message) + '</span>'; });
+  }
+  function dlUsarMedia() { if (dlDados) { document.getElementById('dl-medias').value = dlNum(dlDados.medias.media); dlCalc(); } }
+  function dlMotivoAtual() { var x = document.querySelector('input[name=dl-motivo]:checked'); return x ? x.value : ''; }
+  // fim da experiência que vale na data de saída: 1º período; se já passou dele, a prorrogação
+  function dlExpFim(saida) {
+    var ex = dlDados && dlDados.experiencia;
+    if (!ex || !saida) return null;
+    if (saida <= ex.fim1) return ex.fim1;
+    return ex.d2 && saida <= ex.fim ? ex.fim : null;
+  }
+  function dlMotivo() {
+    var mot = dlMotivoAtual(), sel = document.getElementById('dl-aviso'), ant = sel.value;
+    var ops = mot === 'dispensa' ? [['indenizado', 'Indenizado (sai já, a empresa paga o aviso)'], ['trabalhado', 'Trabalhado (cumpre 30 dias)']]
+      : mot === 'pedido' ? [['trabalhado', 'Trabalhado (cumpriu os 30 dias)'], ['descontado', 'Não cumpriu — descontar 30 dias'], ['dispensado', 'Empresa dispensou o cumprimento (sem desconto)']] : [];
+    sel.innerHTML = ops.map(function (o) { return '<option value="' + o[0] + '">' + o[1] + '</option>'; }).join('');
+    if (ops.some(function (o) { return o[0] === ant; })) sel.value = ant;
+    dlCalc();
+  }
+  function dlLer(id) { var v = lerValor(nfVal(id)); return v === null ? null : v; }
+  function dlParams() {
+    var saida = nfVal('dl-saida'), mot = dlMotivoAtual();
+    var expFim = dlExpFim(saida);
+    var p = {
+      motivo: mot, adm: dlDados.admissao, saida: saida, hoje: dlDados.hoje, aviso: nfVal('dl-aviso'),
+      remun: dlLer('dl-remun') || 0, medias: dlLer('dl-medias') || 0, outrosProv: dlLer('dl-outros-prov') || 0,
+      ferVenc: dlLer('dl-venc') || 0, ferDobro: dlLer('dl-dobro') || 0, somarProj: !!dlDados.ferias,
+      avos13: dlLer('dl-avos13'), avosFer: dlLer('dl-avos-fer'), adiant13: dlLer('dl-adiant13') || 0,
+      registrado: nfVal('dl-reg') === 'sim', fgtsSaldo: dlLer('dl-fgts') || 0,
+      inss: dlLer('dl-inss'), inss13: dlLer('dl-inss13'), ir: dlLer('dl-ir') || 0,
+      outrosDesc: dlLer('dl-outros-desc') || 0, outrosDescTxt: nfVal('dl-outros-desc-txt'),
+      exp: expFim ? { fim: expFim } : null, desc480: document.getElementById('dl-480').checked,
+    };
+    return p;
+  }
+  function dlCalc() {
+    var el = document.getElementById('dl-previa'); dlUlt = null;
+    if (!dlDados) return;
+    var mot = dlMotivoAtual(), saida = nfVal('dl-saida');
+    var expFim = dlExpFim(saida);
+    document.getElementById('dl-aviso-box').classList.toggle('hidden', !!expFim);
+    document.getElementById('dl-480-box').classList.toggle('hidden', !(expFim && mot === 'pedido' && saida < expFim));
+    document.getElementById('dl-aviso-hint').textContent = !mot ? 'Escolha o motivo do desligamento.'
+      : expFim ? 'Está no contrato de experiência (até ' + isoBR(expFim) + '): não tem aviso prévio.' + (saida < expFim ? (mot === 'dispensa' ? ' Como a empresa encerra antes do fim, paga metade dos dias que faltavam (art. 479).' : ' Como ele sai antes do fim, a empresa pode descontar metade dos dias que faltavam (art. 480).') : ' Saída no último dia do contrato: término normal.')
+      : mot === 'dispensa' ? 'Aviso de 30 dias + 3 por ano completo (máx. 90). No indenizado, os dias do aviso contam para o 13º e as férias.'
+      : 'No pedido de demissão quem dá o aviso é o funcionário. Se não cumprir, a empresa pode descontar 30 dias.';
+    if (!mot) return (el.innerHTML = '<p class="ov-hint">Escolha o motivo do desligamento.</p>');
+    if (!saida) return (el.innerHTML = '<p class="ov-hint">Informe a data de saída.</p>');
+    if (!dlDados.admissao) return (el.innerHTML = '<p class="ov-hint erro">Sem data de admissão: preencha o Início na aba Funcionarios.</p>');
+    if (saida < dlDados.admissao) return (el.innerHTML = '<p class="ov-hint erro">A saída é antes da admissão (' + isoBR(dlDados.admissao) + ').</p>');
+    var p = dlParams();
+    var bad = ['dl-remun', 'dl-medias', 'dl-outros-prov', 'dl-venc', 'dl-dobro', 'dl-avos13', 'dl-avos-fer', 'dl-adiant13', 'dl-fgts', 'dl-inss', 'dl-inss13', 'dl-ir', 'dl-outros-desc']
+      .filter(function (id) { var v = lerValor(nfVal(id)); return v !== null && (isNaN(v) || v < 0); });
+    if (bad.length) return (el.innerHTML = '<p class="ov-hint erro">Valor inválido em: ' + bad.map(function (id) { return document.querySelector('label[for=' + id + ']').textContent; }).join(', ') + ' (formato 1.234,56).</p>');
+    var c = rescCalc(p), r = c.r;
+    dlUlt = { p: p, c: c };
+    document.getElementById('dl-avos13').placeholder = r.avos13Calc + ' (automático)';
+    document.getElementById('dl-avos-fer').placeholder = r.avosFerCalc + ' (automático)';
+    document.getElementById('dl-inss').placeholder = r.inssAuto ? dlNum(c.linhas.filter(function (l) { return l.descricao === '(-) INSS'; }).reduce(function (s, l) { return s + l.valor; }, 0) || 0) + ' (tabela)' : '';
+    document.getElementById('dl-inss13').placeholder = dlNum(rcInss(c.linhas.filter(function (l) { return l.rubrica === 'DECIMO_TERCEIRO'; }).reduce(function (s, l) { return s + l.valor; }, 0))) + ' (tabela)';
+    // mês da saída escolhido para lançar (se estiver aberto); senão "não lançar"
+    var mesSel = document.getElementById('dl-mes');
+    if (!mesSel.dataset.mexeu) mesSel.value = dlDados.meses.indexOf(saida.slice(0, 7)) >= 0 ? saida.slice(0, 7) : '';
+    el.innerHTML = dlTermoHtml(c, p, false);
+  }
+  function dlTermoHtml(c, p, impressao) {
+    var r = c.r, f = dlDados.func;
+    var motTxt = p.motivo === 'dispensa' ? (r.caso === 'termino' ? 'Término do contrato de experiência' : 'Dispensa sem justa causa (empresa desligou)') : 'Pedido de demissão (funcionário pediu para sair)';
+    var ln = function (cls, a, b) { return '<div class="ln' + (cls ? ' ' + cls : '') + '"><span>' + a + '</span><span>' + b + '</span></div>'; };
+    var h = (impressao ? '<h2>Prévia de rescisão — ' + esc(f.nome) + '</h2><p>' + esc(f.filial) + ' · ' + esc(f.id) + '</p>' : '')
+      + '<div class="dl-res">'
+      + ln('', 'Motivo', esc(motTxt))
+      + ln('', 'Admissão → saída', isoBR(p.adm) + ' → ' + isoBR(p.saida) + ' (' + (r.anos ? r.anos + (r.anos === 1 ? ' ano completo' : ' anos completos') : 'menos de 1 ano') + ')')
+      + ln('', 'Aviso prévio', esc(r.avisoTxt))
+      + (r.projecao ? ln('', 'Data projetada (fim do aviso)', isoBR(r.projetada)) : '')
+      + ln('', 'Pagar até', isoBR(r.prazo) + ' (10 dias após a saída — art. 477)')
+      + '</div><h4>Proventos</h4>';
+    c.linhas.filter(function (l) { return l.tipo === 'P'; }).forEach(function (l) { h += ln('', esc(l.descricao), brl(l.valor)); });
+    h += ln('tot', 'Total de proventos', brl(c.proventos)) + '<h4>Descontos</h4>';
+    var ds = c.linhas.filter(function (l) { return l.tipo === 'D'; });
+    if (!ds.length) h += ln('', '<i>nenhum</i>', '');
+    ds.forEach(function (l) { h += ln('d', esc(l.descricao) + (l.descricao === '(-) INSS' && r.inssAuto || l.descricao === '(-) INSS 13º' && r.inss13Auto ? ' <span class="tag">tabela ' + 2026 + '</span>' : ''), brl(l.valor)); });
+    h += ln('tot', 'Total de descontos', brl(c.descontos)) + ln('tot liq', 'Líquido a pagar', brl(c.liquido));
+    h += '<div class="dl-fgts"><b>FGTS</b> (pago por guia no FGTS Digital — não entra no líquido): '
+      + (p.registrado ? 'depósito do mês e da rescisão ≈ ' + brl(r.fgtsMes)
+        + (r.caso === 'dispensa' ? ' · multa de 40% ≈ ' + brl(r.multa) + (p.fgtsSaldo ? '' : ' <span class="erro">(informe o saldo do FGTS para calcular a multa)</span>') : ' · sem multa de 40%')
+        + ' · saque do FGTS: ' + (r.saque ? 'sim' : 'não') + ' · seguro-desemprego: ' + (r.seguro ? 'pode ter direito (no 1º pedido, 12 meses trabalhados nos últimos 18)' : 'não')
+        : 'sem registro — sem FGTS.') + '</div>';
+    if (c.avisos.length) h += '<ul class="dl-avisos">' + c.avisos.map(function (a) { return '<li>' + esc(a) + '</li>'; }).join('') + '</ul>';
+    h += '<p class="ov-hint">Prévia para conferência: o termo oficial (TRCT), o INSS e o IR são da contabilidade. Médias de horas extras e adicionais entram no campo "Média de variáveis".</p>';
+    return h;
+  }
+  function dlImprimir() {
+    if (!dlUlt) return alert('Preencha o desligamento para ver a prévia.');
+    var fr = document.createElement('iframe');
+    fr.style.cssText = 'position:fixed;width:0;height:0;border:0;right:0;bottom:0';
+    document.body.appendChild(fr);
+    var dc = fr.contentWindow.document;
+    dc.open();
+    dc.write('<!doctype html><html><head><meta charset="utf-8"><title>Rescisão</title><style>body{font-family:Arial,sans-serif;font-size:13px;margin:24px;color:#111}h2{margin:0 0 4px;font-size:18px}h4{margin:14px 0 4px}.ln{display:flex;justify-content:space-between;gap:12px;padding:3px 6px;border-bottom:1px solid #ddd}.ln.d{background:#fff7ed}.ln.tot{font-weight:700}.ln.liq{font-size:15px;border-top:2px solid #111}.dl-fgts{margin-top:12px;padding:8px;border:1px solid #ccc;border-radius:6px}.ov-hint{font-size:11px;color:#555}.tag{font-size:10px;background:#eee;border-radius:3px;padding:0 4px}.erro{color:#b91c1c}.assin{display:flex;gap:40px;margin-top:60px}.assin div{flex:1;border-top:1px solid #111;text-align:center;padding-top:4px}</style></head><body>'
+      + dlTermoHtml(dlUlt.c, dlUlt.p, true) + '<div class="assin"><div>Empresa</div><div>' + esc(dlDados.func.nome) + '</div></div></body></html>');
+    dc.close();
+    setTimeout(function () { fr.contentWindow.focus(); fr.contentWindow.print(); setTimeout(function () { fr.remove(); }, 1000); }, 200);
+  }
+  function salvarDeslig() {
+    var msgEl = document.getElementById('dl-msg'), b = document.getElementById('dl-salvar');
+    dlCalc();
+    if (!dlDados) return (msgEl.textContent = 'Escolha o funcionário.');
+    if (!dlUlt) return (msgEl.textContent = 'Preencha motivo e data de saída (e corrija os campos em vermelho).');
+    var c = dlUlt.c, p = dlUlt.p, mes = nfVal('dl-mes'), f = dlDados.func;
+    if (!c.linhas.length) return (msgEl.textContent = 'A rescisão ficou sem verbas.');
+    var depois = (dlDados.mesesDele || []).filter(function (m) { return mes && m > mes; });
+    if (!confirm('Registrar o desligamento de ' + f.nome + '?\n\n'
+      + (p.motivo === 'dispensa' ? 'Dispensa sem justa causa' : 'Pedido de demissão') + ' · saída em ' + isoBR(p.saida)
+      + '\nLíquido da rescisão: ' + brl(c.liquido)
+      + (mes ? '\n\nO recibo dele em ' + nomeMes(mes) + ' será TROCADO pelas verbas da rescisão.' : '\n\nNão lança na folha (só registra).')
+      + (depois.length ? '\nAtenção: ele ainda tem recibo em ' + depois.map(nomeMes).join(', ') + ' — apague à mão se não for pagar.' : '')
+      + '\nEle sai da lista de ativos (não entra nos próximos meses nem no 13º)'
+      + (document.getElementById('dl-inat').checked ? ' e fica inativo no painel de férias.' : '.'))) return;
+    b.disabled = true; b.textContent = 'Salvando…'; msgEl.textContent = '';
+    var d = { id: f.id, motivo: p.motivo, admissao: p.adm, saida: p.saida, aviso: c.r.avisoTxt, diasAviso: c.r.diasAviso, projetada: c.r.projetada,
+      linhas: c.linhas, fgtsMes: c.r.fgtsMes, multa: c.r.multa, mes: mes, inativarFerias: document.getElementById('dl-inat').checked, obs: nfVal('dl-obs').trim() };
+    chamarFolha('folhaDesligar', d).then(function (j) {
+      b.disabled = false; b.textContent = 'Registrar desligamento';
+      if (!j.success) { msgEl.textContent = j.error; return; }
+      fecharDeslig();
+      alert(j.nome + ' desligado. Líquido da rescisão: ' + brl(j.liquido) + '.'
+        + (j.mes ? '\nVerbas lançadas no recibo de ' + nomeMes(j.mes) + '.' : '')
+        + (j.ferias ? '\nPainel de férias: ' + j.ferias + '.' : '')
+        + (j.mesesDepois && j.mesesDepois.length ? '\nAinda tem recibo em ' + j.mesesDepois.map(nomeMes).join(', ') + '.' : '')
+        + '\nO registro fica na aba Rescisoes da planilha da folha.');
+      if (j.mes === folhaMesAtual || !j.mes) carregarMes();
+    }).catch(function (e) { if (e && e.message !== 'bloqueada') { b.disabled = false; b.textContent = 'Registrar desligamento'; msgEl.textContent = 'Erro: ' + e.message; } });
   }
 
   function voltarPainel() {
@@ -2032,6 +2440,19 @@
       }
       case 'folhaSalvarRecibo': return r({});
       case 'folhaAbrirMes': return r({ mes: args[1], origem: '2026-08', funcionarios: FOLHA_MOCK.length, novos: 0, linhas: 20 });
+      case 'folhaDesligDados': {
+        if (!args[1]) return r({ lista: FOLHA_MOCK.map(function (f) { return { id: f.id, nome: f.nome, filial: f.filial }; }) });
+        var fm = FOLHA_MOCK.filter(function (f) { return f.id === args[1]; })[0];
+        var dm = { F901: { adm: '2021-02-01', comp: [{ descricao: 'Salário', valor: 2000 }, { descricao: 'Gratificação', valor: 300 }], fer: { mat: '101', saldo: 30, risco: 0, pendente: 0 }, exp: null },
+          F902: { adm: '2026-07-10', comp: [{ descricao: 'Salário', valor: 4000 }, { descricao: 'Gratificação Gerência', valor: 500 }], fer: { mat: '102', saldo: 0, risco: 0, pendente: 0 }, exp: { inicio: '2026-07-10', d1: 45, fim1: '2026-08-23', d2: 45, fim: '2026-10-07' } },
+          F903: { adm: '2024-03-18', comp: [{ descricao: 'Salário', valor: 2000 }], fer: null, exp: null } }[fm.id];
+        return r({ hoje: '2026-08-20', func: { id: fm.id, nome: fm.nome, filial: fm.filial }, admissao: dm.adm, admFonte: dm.fer ? 'painel de férias' : 'início na folha',
+          base: '2026-08', componentes: dm.comp, medias: { media: 812.5, meses: 8, total: 6500 }, registrado: true, ferias: dm.fer, experiencia: dm.exp,
+          meses: ['2026-08', '2026-07'], mesesDele: ['2026-07', '2026-08'] });
+      }
+      case 'folhaDesligar': { var dd2 = args[1], liq = dd2.linhas.reduce(function (s, l) { return s + (l.tipo === 'P' ? l.valor : l.tipo === 'D' ? -l.valor : 0); }, 0);
+        FOLHA_MOCK.forEach(function (f) { if (f.id === dd2.id) f.ativo = false; });
+        return r({ id: dd2.id, nome: 'Funcionário ' + dd2.id, mes: dd2.mes, liquido: Math.round(liq * 100) / 100, ferias: dd2.inativarFerias ? 'inativado (matrícula 101)' : '', mesesDepois: [] }); }
       case 'folhaCadastroDados': return r({ proxMatricula: 128, filiaisFolha: ['Filial 05', 'Filial 06'], filiaisFerias: ['Filial 05', 'Filial 06', 'Filial 07'],
         rubricas: [{ cod: 'SALARIO', nome: 'Salário', tipo: 'P' }, { cod: 'GRATIFICACAO', nome: 'Gratificação', tipo: 'P' }, { cod: 'PREMIACAO', nome: 'Premiação', tipo: 'P' },
           { cod: 'AUXILIOS', nome: 'Auxílios', tipo: 'P' }, { cod: 'BONUS_MANIPULACAO', nome: 'Bônus manipulação', tipo: 'P' }, { cod: 'INSS', nome: 'INSS', tipo: 'D' }],
