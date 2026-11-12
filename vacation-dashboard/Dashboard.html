@@ -755,6 +755,7 @@
   </div>
   <div class="last-update">
     <div id="last-update-text">Carregando...</div>
+    <button class="refresh-btn rh-only" onclick="abrirFolha('dre')" title="DRE — mesmo acesso da folha (senha da folha + código do Authenticator)">📊 Gerar DRE</button>
     <button class="refresh-btn rh-only" onclick="abrirFolha()" title="Folha de pagamento — pede a senha da folha e o código do Authenticator">💼 Folha</button>
     <button class="refresh-btn" onclick="loadData()">↻ Atualizar</button>
     <button class="refresh-btn" onclick="sair()" title="Encerrar a sessão">⎋ Sair</button>
@@ -1493,12 +1494,13 @@
     return p;
   }
   // Folha de pagamento (Folha.html / FolhaPagamento.gs): abre "no lugar", como o painel
-  function abrirFolha() {
-    if (typeof google === 'undefined' || !google.script) { location.href = 'Folha.html'; return; }
+  // modo 'dre' = mesma página e mesmo acesso da folha, abrindo direto na DRE
+  function abrirFolha(modo) {
+    if (typeof google === 'undefined' || !google.script) { location.href = 'Folha.html' + (modo === 'dre' ? '?dre=1' : ''); return; }
     gsRun()
       .withSuccessHandler(function (html) { document.open(); document.write(html); document.close(); })
       .withFailureHandler(function (e) { alert((e && e.message) || e); })
-      .paginaFolha();
+      .paginaFolha(modo === 'dre' ? 'dre' : '');
   }
   function sair() {
     if (!confirm('Sair do Controle de Férias?')) return;

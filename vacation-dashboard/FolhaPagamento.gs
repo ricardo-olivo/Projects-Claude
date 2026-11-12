@@ -52,9 +52,12 @@ const FOLHA_API = {
   folhaNovoFuncionario: folhaNovoFuncionario_,
 };
 
-function paginaFolha_() {
+// modo 'dre' (botão 📊 Gerar DRE do painel): mesma página e mesma proteção, abre na DRE
+function paginaFolha_(modo) {
   _folhaSoRH_();
-  return HtmlService.createHtmlOutputFromFile('Folha').getContent();
+  const html = HtmlService.createHtmlOutputFromFile('Folha').getContent();
+  return modo === 'dre' ? html.replace('</head>', '<script>var FOLHA_INICIO = "dre";</script>
+</head>') : html;
 }
 
 // ---------- credenciais (segunda senha + segredo do Authenticator) ----------

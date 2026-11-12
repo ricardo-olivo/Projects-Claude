@@ -234,6 +234,17 @@
     <div class="msg" id="db-msg"></div>
   </div>
 
+  <!-- DRE (botão 📊 Gerar DRE do painel) — mesma proteção da folha -->
+  <div class="box hidden" id="tela-dre">
+    <div class="cadeado">📊</div>
+    <h2>DRE — Demonstração do Resultado</h2>
+    <p>A tela da DRE ainda está sendo montada. Falta definir <b>o que ela deve mostrar</b>
+      (receitas, custos, despesas…) e <b>de onde vêm os números</b>.</p>
+    <p style="font-size:12px;color:#64748b">O acesso já é o mesmo da folha de pagamento: só RH,
+      com a senha da folha e o código do Authenticator.</p>
+    <button class="btn btn-sec" onclick="irParaFolha()">💼 Ir para a folha de pagamento</button>
+  </div>
+
   <!-- folha aberta -->
   <div class="hidden" id="tela-folha">
     <div class="toolbar">
@@ -517,6 +528,8 @@
   var folhaMesAtual = '';
   var folhaTimer = null, folhaFimSessao = 0;
   var FOLHA_MIN = 15;
+  // 'dre' quando aberta pelo botão 📊 Gerar DRE (servidor injeta FOLHA_INICIO; na prévia, ?dre=1)
+  var MODO_DRE = (typeof FOLHA_INICIO !== 'undefined' && FOLHA_INICIO === 'dre') || /[?&]dre=1/.test(location.search);
   var MESES_PT = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 
   function noAppsScript() { return typeof google !== 'undefined' && google.script; }
@@ -553,10 +566,10 @@
   }
 
   function mostrar(id) {
-    ['tela-carregando', 'tela-config1', 'tela-config2', 'tela-desbloq', 'tela-folha', 'tela-import', 'tela-regras', 'tela-13', 'tela-contab'].forEach(function (t) {
+    ['tela-carregando', 'tela-config1', 'tela-config2', 'tela-desbloq', 'tela-folha', 'tela-import', 'tela-regras', 'tela-13', 'tela-contab', 'tela-dre'].forEach(function (t) {
       document.getElementById(t).classList.toggle('hidden', t !== id);
     });
-    document.getElementById('btn-bloquear').classList.toggle('hidden', ['tela-folha', 'tela-import', 'tela-regras', 'tela-13', 'tela-contab'].indexOf(id) < 0);
+    document.getElementById('btn-bloquear').classList.toggle('hidden', ['tela-folha', 'tela-import', 'tela-regras', 'tela-13', 'tela-contab', 'tela-dre'].indexOf(id) < 0);
   }
   function msg(id, texto, erro) { var el = document.getElementById(id); el.textContent = texto || ''; el.className = 'msg' + (erro ? ' erro' : ''); }
   function ocupado(id, sim, texto) { var b = document.getElementById(id); b.disabled = sim; if (texto) b.textContent = texto; }
@@ -612,14 +625,22 @@
     if (!s || !/^\d{6}$/.test(c)) return msg('db-msg', 'Informe a senha da folha e os 6 números do aplicativo.', true);
     ocupado('db-btn', true, 'Conferindo…');
     chamar('folhaDesbloquear', { senha: s, codigo: c }).then(function (j) {
-      ocupado('db-btn', false, 'Abrir a folha');
+      ocupado('db-btn', false, MODO_DRE ? 'Abrir a DRE' : 'Abrir a folha');
       document.getElementById('db-senha').value = ''; document.getElementById('db-codigo').value = '';
       if (!j.success) return msg('db-msg', j.error, true);
       folhaToken = j.folhaToken; FOLHA_MIN = j.minutos || 15;
-      mostrar('tela-folha');
       renovarTimer();
+      if (MODO_DRE) { mostrar('tela-dre'); return; }
+      mostrar('tela-folha');
       carregarMeses();
-    }).catch(function (e) { ocupado('db-btn', false, 'Abrir a folha'); msg('db-msg', e.message, true); });
+    }).catch(function (e) { ocupado('db-btn', false, MODO_DRE ? 'Abrir a DRE' : 'Abrir a folha'); msg('db-msg', e.message, true); });
+  }
+  function irParaFolha() {
+    MODO_DRE = false;
+    document.querySelector('.header h1').textContent = '💼 Folha de Pagamento';
+    document.title = 'Folha de Pagamento';
+    mostrar('tela-folha');
+    carregarMeses();
   }
   function bloquearFolha() {
     var ft = folhaToken;
@@ -2528,6 +2549,11 @@
       { tipo: 'D', descricao: '(-) Conta Farmácia', valor: 250 }, { tipo: 'D', descricao: '(-) INSS', valor: 150 }] },
   ];
 
+  if (MODO_DRE) {
+    document.querySelector('.header h1').textContent = '📊 DRE';
+    document.title = 'DRE';
+    document.getElementById('db-btn').textContent = 'Abrir a DRE';
+  }
   iniciarFolha();
 </script>
 </body>
