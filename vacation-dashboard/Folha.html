@@ -37,6 +37,16 @@
     .chave { font-family: Consolas, monospace; font-size: 18px; background: var(--gray-100); padding: 12px; border-radius: 7px; text-align: center; word-break: break-all; user-select: all; }
     .cadeado { font-size: 34px; text-align: center; margin-bottom: 8px; }
     .hidden { display: none !important; }
+    table.dre { border-collapse: collapse; background: white; font-size: 14px; min-width: 560px; max-width: 860px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+    table.dre td { border: 1px solid var(--gray-300); padding: 3px 8px; }
+    table.dre td.v { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; min-width: 120px; }
+    table.dre tr.tit td { text-align: center; font-weight: 700; }
+    table.dre tr.g td { font-weight: 700; }
+    table.dre tr.it td { font-style: italic; font-weight: 700; }
+    table.dre tr.sep td { border-top: 2px solid var(--gray-900); }
+    table.dre tr.tot td { font-weight: 700; border-top: 2px solid var(--gray-900); }
+    .dre-nota { font-size: 12px; color: var(--gray-500); margin-top: 10px; max-width: 860px; line-height: 1.5; }
+    @media (max-width: 640px) { table.dre { min-width: 0; width: 100%; font-size: 12px; } table.dre td.v { min-width: 0; } }
     .toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; margin-bottom: 18px; }
     .toolbar > div { min-width: 180px; }
     .toolbar label { margin-top: 0; }
@@ -234,15 +244,22 @@
     <div class="msg" id="db-msg"></div>
   </div>
 
-  <!-- DRE (botão 📊 Gerar DRE do painel) — mesma proteção da folha -->
-  <div class="box hidden" id="tela-dre">
-    <div class="cadeado">📊</div>
-    <h2>DRE — Demonstração do Resultado</h2>
-    <p>A tela da DRE ainda está sendo montada. Falta definir <b>o que ela deve mostrar</b>
-      (receitas, custos, despesas…) e <b>de onde vêm os números</b>.</p>
-    <p style="font-size:12px;color:#64748b">O acesso já é o mesmo da folha de pagamento: só RH,
-      com a senha da folha e o código do Authenticator.</p>
-    <button class="btn btn-sec" onclick="irParaFolha()">💼 Ir para a folha de pagamento</button>
+  <!-- DRE (botão 📊 Gerar DRE do painel) — mesma proteção da folha; dados do Relatório PAI do Trier -->
+  <div class="hidden" id="tela-dre">
+    <div class="toolbar no-print">
+      <div><label for="dre-filial">Filial</label><select id="dre-filial"><option value="">Carregando…</option></select></div>
+      <div style="min-width:130px"><label for="dre-mes">Mês</label><select id="dre-mes"></select></div>
+      <div style="min-width:90px"><label for="dre-ano">Ano</label><input type="text" id="dre-ano" inputmode="numeric" maxlength="4"></div>
+      <div><label for="dre-regime">Regime</label><select id="dre-regime">
+        <option value="COMPETENCIA">Regime de competência</option><option value="CAIXA">Regime de caixa</option></select></div>
+      <button class="btn btn-primary" id="dre-btn" style="width:auto;margin-top:0" onclick="dreGerar()">Gerar relatório</button>
+      <button class="btn btn-sec hidden" id="dre-imp" onclick="window.print()">🖨 Imprimir</button>
+      <button class="btn btn-sec hidden" id="dre-copiar" onclick="dreCopiar()" title="Copia as linhas para colar no Excel">📋 Copiar para o Excel</button>
+      <button class="btn btn-sec" onclick="irParaFolha()">💼 Ir para a folha</button>
+    </div>
+    <div class="msg" id="dre-msg"></div>
+    <table class="dre hidden" id="dre-tab"></table>
+    <p class="dre-nota no-print" id="dre-nota"></p>
   </div>
 
   <!-- folha aberta -->
@@ -630,10 +647,99 @@
       if (!j.success) return msg('db-msg', j.error, true);
       folhaToken = j.folhaToken; FOLHA_MIN = j.minutos || 15;
       renovarTimer();
-      if (MODO_DRE) { mostrar('tela-dre'); return; }
+      if (MODO_DRE) { abrirDre(); return; }
       mostrar('tela-folha');
       carregarMeses();
     }).catch(function (e) { ocupado('db-btn', false, MODO_DRE ? 'Abrir a DRE' : 'Abrir a folha'); msg('db-msg', e.message, true); });
+  }
+  // ── DRE (Relatório PAI do Trier, no modelo da planilha) ─────────────────
+  var dreLinhasAtual = [];
+  function abrirDre() {
+    mostrar('tela-dre');
+    var selM = document.getElementById('dre-mes');
+    if (!selM.options.length) {
+      MESES_PT.forEach(function (n, i) { var o = document.createElement('option'); o.value = i + 1; o.textContent = n; selM.appendChild(o); });
+      var d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - 1);          // padrão: mês passado
+      selM.value = d.getMonth() + 1;
+      document.getElementById('dre-ano').value = d.getFullYear();
+    }
+    var selF = document.getElementById('dre-filial');
+    if (selF.getAttribute('data-ok')) return;
+    chamarFolha('dreFiliais').then(function (j) {
+      if (!j.success) { selF.innerHTML = '<option value="">Todas as filiais</option>'; return msg('dre-msg', 'Lista de filiais: ' + j.error, true); }
+      selF.innerHTML = '<option value="">Todas as filiais</option>';
+      j.filiais.forEach(function (f) { var o = document.createElement('option'); o.value = f.cod; o.textContent = f.cod + ' - ' + f.nome; selF.appendChild(o); });
+      selF.setAttribute('data-ok', '1');
+    }).catch(function () {});
+  }
+  function dreBRL(v) { return (Math.round(Math.abs(Number(v) || 0) * 100) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+  // Modelo da planilha "SETEMBRO - FÓRMULAS" (função pura):
+  //  - entra RECEBIMENTOS REALIZADOS (com os itens) e os grupos de DESPESA (valor negativo);
+  //    venda extraída, desconto concedido e grupos informativos/zerados ficam de fora;
+  //  - IMPOSTO SOBRE VENDA e DESPESAS COM MERCADORIAS só com o total (sem itens);
+  //    mercadorias em itálico e FORA do TOTAL DESPESAS;
+  //  - itens zerados não aparecem; valores sem sinal.
+  function dreMontar(grupos) {
+    var linhas = [], total = 0, jaSep = false;
+    var r2 = function (v) { return Math.round(Math.abs(Number(v) || 0) * 100) / 100; };
+    (grupos || []).forEach(function (g) {
+      var chave = String(g.febrafar || ''), nome = String(g.nome || g.descricao || '');
+      var receb = chave === 'RECEBIMENTOS_REALIZADOS' || /^RECEBIMENTOS REALIZADOS/i.test(nome);
+      var merc = chave === 'DESPESAS_COM_MERCADORIAS' || /^DESPESAS COM MERCADORIAS/i.test(nome);
+      var imp = chave === 'IMPOSTO_SOBRE_VENDA' || /^IMPOSTO SOBRE VENDA/i.test(nome);
+      if (g.quantitativo) return;
+      if (!receb && !(Number(g.valor) < 0 && r2(g.valor) > 0)) return;
+      linhas.push({ nome: nome, valor: r2(g.valor), tipo: merc ? 'it' : 'g', sep: !receb && linhas.length > 0 && !jaSep });
+      if (!receb) jaSep = true;          // linha grossa só antes do 1º grupo de despesa
+      if (!receb) { if (!merc) total += r2(g.valor); }
+      if (imp || merc) return;
+      (g.itens || []).forEach(function (i) {
+        if (r2(i.valor) === 0) return;
+        linhas.push({ nome: String(i.nome || i.descricao || ''), valor: r2(i.valor), tipo: 'i' });
+      });
+    });
+    return { linhas: linhas, total: Math.round(total * 100) / 100 };
+  }
+  function dreGerar() {
+    var mes = Number(document.getElementById('dre-mes').value), ano = Number(document.getElementById('dre-ano').value);
+    if (!(ano >= 2000 && ano <= 2100)) return msg('dre-msg', 'Digite o ano com 4 números.', true);
+    var selF = document.getElementById('dre-filial');
+    var filial = selF.value, nomeFil = filial ? selF.options[selF.selectedIndex].textContent : 'TODAS AS FILIAIS';
+    var regime = document.getElementById('dre-regime').value;
+    ocupado('dre-btn', true, 'Gerando… (uns 10 s)');
+    msg('dre-msg', 'Buscando o relatório no Trier…', false);
+    ['dre-tab', 'dre-imp', 'dre-copiar'].forEach(function (id) { document.getElementById(id).classList.add('hidden'); });
+    document.getElementById('dre-nota').textContent = '';
+    chamarFolha('dreGerar', { filial: filial, mes: mes, ano: ano, regime: regime }).then(function (j) {
+      ocupado('dre-btn', false, 'Gerar relatório');
+      if (!j.success) return msg('dre-msg', j.error, true);
+      msg('dre-msg', '', false);
+      var m = dreMontar(j.grupos);
+      var titulo = MESES_PT[mes - 1].toUpperCase() + (ano !== new Date().getFullYear() ? '/' + ano : '') + ' - ' + nomeFil.replace(/^(\d+\s*-\s*)+/, '').replace(/\s*-\s*LIDER FARMA$/i, '');
+      dreLinhasAtual = [[titulo, '']].concat(m.linhas.map(function (l) { return [l.nome, dreBRL(l.valor)]; }), [['TOTAL DESPESAS:', dreBRL(m.total)]]);
+      var esc = function (t) { var d = document.createElement('div'); d.textContent = t; return d.innerHTML; };
+      var h = '<tr class="tit"><td colspan="2">' + esc(titulo) + '</td></tr>';
+      m.linhas.forEach(function (l) {
+        h += '<tr class="' + l.tipo + (l.sep ? ' sep' : '') + '"><td>' + esc(l.nome) + '</td><td class="v">' + dreBRL(l.valor) + '</td></tr>';
+      });
+      h += '<tr class="tot"><td>TOTAL DESPESAS:</td><td class="v">' + dreBRL(m.total) + '</td></tr>';
+      var tab = document.getElementById('dre-tab');
+      tab.innerHTML = h;
+      ['dre-tab', 'dre-imp', 'dre-copiar'].forEach(function (id) { document.getElementById(id).classList.remove('hidden'); });
+      document.getElementById('dre-nota').textContent = 'Fonte: Relatório PAI do Trier, ' + (regime === 'CAIXA' ? 'regime de caixa' : 'regime de competência')
+        + '. Despesas com mercadorias (em itálico) não entram no TOTAL DESPESAS.';
+    }).catch(function (e) { ocupado('dre-btn', false, 'Gerar relatório'); if (e && e.message !== 'bloqueada') msg('dre-msg', e.message, true); });
+  }
+  function dreCopiar() {
+    var txt = dreLinhasAtual.map(function (l) { return l.join('\t'); }).join('\r\n');
+    var ok = function () { msg('dre-msg', 'Copiado! Cole no Excel com Ctrl+V.', false); };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(ok, function () { dreCopiarVelho(txt); ok(); });
+    else { dreCopiarVelho(txt); ok(); }
+  }
+  function dreCopiarVelho(txt) {
+    var t = document.createElement('textarea'); t.value = txt; document.body.appendChild(t); t.select();
+    try { document.execCommand('copy'); } catch (e) {}
+    document.body.removeChild(t);
   }
   function irParaFolha() {
     MODO_DRE = false;
@@ -2425,6 +2531,24 @@
   // ── preview local (sem Apps Script): servidor de mentira ─────────
   // Senha da folha no preview: qualquer uma com 10+ caracteres; código: 123456.
   var folhaMockEstado = { configurado: false };
+  // DRE de exemplo (valores fictícios) no formato do Trier
+  function dreMockGrupos() {
+    var it = function (nome, valor, chave) { return { nome: nome, valor: valor, itens: [], febrafar: chave || '' }; };
+    var g = function (nome, chave, itens, valor) {
+      return { nome: nome, febrafar: chave, itens: itens, valor: valor != null ? valor : itens.reduce(function (s, i) { return s + i.valor; }, 0) };
+    };
+    return [
+      g('RECEBIMENTOS REALIZADOS (R$)', 'RECEBIMENTOS_REALIZADOS', [it('RECEBIMENTO DINHEIRO', 1000), it('RECEBIMENTO CHEQUES', 0), it('RECEBIMENTO CARTÕES', 2000.5)]),
+      g('VENDA EXTRAÍDA DO SISTEMA OPERACIONAL (Deduzido o Desconto) (R$)', 'VENDA_EXTRAIDA_DO_SISTEMA_OPERACIONAL', [], 3500),
+      g('TOTAL DE DESCONTO CONCEDIDO - EM R$', 'TOTAL_DE_DESCONTO_CONCEDIDO', [], 300),
+      g('IMPOSTO SOBRE VENDA', 'IMPOSTO_SOBRE_VENDA', [it('IMPOSTO FEDERAL PAGO NO PERÍODO - EM R$', -100), it('ICMS PAGO NO PERÍODO - EM R$', 0)]),
+      g('DESPESAS COM MERCADORIAS', 'DESPESAS_COM_MERCADORIAS', [it('CUSTO DE MERCADORIA VENDIDA', -900)]),
+      g('DESPESAS OPERACIONAIS COM PESSOAL (FUNCIONÁRIO)', 'X', [it('SALÁRIOS FIXOS + HORAS EXTRAS', -500), it('ENCARGOS - INSS', 0), it('ENCARGOS - FGTS', -40.25)]),
+      g('DESPESAS OPERACIONAIS COM PESSOAL (PROPRIETÁRIO)', 'X', [it('SEDE CORPORATIVA', 0)]),
+      g('DESPESAS FINANCEIRAS', 'X', [it('TARIFAS BANCÁRIAS', -10.1)]),
+      g('VALOR TOTAL VENDA FARMÁCIA POPULAR', 'X', [], 50),
+    ];
+  }
   function folhaMock(fn, args) {
     var r = function (o) { o.success = true; return o; };
     switch (fn) {
@@ -2438,6 +2562,8 @@
         return r({ folhaToken: 'f'.repeat(64), minutos: 15 });
       case 'folhaBloquear': return r({});
       case 'folhaMeses': return r({ meses: ['2026-08'] });
+      case 'dreFiliais': return r({ filiais: [{ cod: '1', nome: '01 - LOJA EXEMPLO' }, { cod: '4', nome: '04 - FORMULAS - LIDER FARMA' }] });
+      case 'dreGerar': return r({ grupos: dreMockGrupos() });
       case 'folhaDados': return r({ mes: '2026-08', recibos: FOLHA_MOCK, hoje: '2026-08-20',
         experiencias: [{ id: 'F902', nome: 'Bruno Teste Pereira', filial: 'Filial 05', inicio: '2026-07-10', d1: 45, fim1: '2026-08-23', d2: 45, fim: '2026-10-07' }] });
       case 'folhaImportarPrevia': {

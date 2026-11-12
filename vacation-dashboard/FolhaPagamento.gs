@@ -56,8 +56,7 @@ const FOLHA_API = {
 function paginaFolha_(modo) {
   _folhaSoRH_();
   const html = HtmlService.createHtmlOutputFromFile('Folha').getContent();
-  return modo === 'dre' ? html.replace('</head>', '<script>var FOLHA_INICIO = "dre";</script>
-</head>') : html;
+  return modo === 'dre' ? html.replace('</head>', '<script>var FOLHA_INICIO = "dre";</script></head>') : html;
 }
 
 // ---------- credenciais (segunda senha + segredo do Authenticator) ----------
@@ -1979,4 +1978,208 @@ function folhaDesligar_(ft, d) {
       return JSON.stringify({ success: true, id: id, nome: f.nome, mes: lancado, liquido: _folhaR2_(prov - desc), ferias: ferias, mesesDepois: depois });
     } finally { lock.releaseLock(); }
   } catch (e) { return _err_(e.message); }
+}
+
+// ============================================================
+// DRE (botão 📊 Gerar DRE do painel) — mesma proteção da folha (_folhaSessao_)
+//
+// Busca o "Relatório PAI" do Trier novo (web-drogaria):
+//   GET <TRIER_URL>/web-drogaria/financeiro/relatorio-pai?regime=COMPETENCIA|CAIXA&mes=&ano=&desconsiderarIcmsSt=&filial=
+//   com "Authorization: Bearer <token>". A montagem no modelo da planilha (o que entra, total) é na tela (dreMontar).
+// Token: 1º tenta POST /web-drogaria/oauth/token (login direto); se falhar, faz o login do sistema
+// antigo (/sgfpod1/, como o controle-estoque/trier.js), cuja resposta traz o token_integracao.
+//
+// CONFIGURAÇÃO (Apps Script → Configurações do projeto → Propriedades do script). NUNCA no código/GitHub:
+//   TRIER_SENHA   (obrigatória) senha do usuário do Trier
+//   TRIER_USUARIO (padrão 33)   TRIER_FILIAL_LOGIN (padrão 99 = Central)
+//   TRIER_URL     (padrão http://177.75.172.133:10100)
+// Para conferir a ligação: no editor, rode a função dreTestarConexao e veja o Registro de execução.
+// ============================================================
+
+function _dreCfg_() {
+  const p = PropertiesService.getScriptProperties();
+  return {
+    url: String(p.getProperty('TRIER_URL') || 'http://177.75.172.133:10100').replace(/\/+$/, ''),
+    usuario: String(p.getProperty('TRIER_USUARIO') || '33'),
+    filial: String(p.getProperty('TRIER_FILIAL_LOGIN') || '99'),
+    senha: String(p.getProperty('TRIER_SENHA') || ''),
+  };
+}
+
+function _dreForm_(o) {
+  return Object.keys(o).map(function (k) { return encodeURIComponent(k) + '=' + encodeURIComponent(o[k] == null ? '' : o[k]); }).join('&');
+}
+
+// segundos até o JWT expirar (0 se não der para ler)
+function _dreTokenSeg_(tok) {
+  try {
+    let p = String(tok).split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    while (p.length % 4) p += '=';
+    const j = JSON.parse(Utilities.newBlob(Utilities.base64Decode(p)).getDataAsString());
+    return Math.max(0, Math.floor(Number(j.exp) - Date.now() / 1000));
+  } catch (e) { return 0; }
+}
+
+function _dreToken_(novo) {
+  const cache = CacheService.getScriptCache();
+  if (!novo) { const t = cache.get('dre_trier_token'); if (t) return t; }
+  const c = _dreCfg_();
+  if (!c.senha) throw new Error('A senha do Trier ainda não foi cadastrada. No Apps Script: Configurações do projeto → Propriedades do script → adicionar TRIER_SENHA.');
+  let tok = '', erroOauth = '';
+  try {
+    const r = UrlFetchApp.fetch(c.url + '/web-drogaria/oauth/token', {
+      method: 'post', contentType: 'application/x-www-form-urlencoded', muteHttpExceptions: true,
+      payload: _dreForm_({ grant_type: 'password', username: c.filial + '@' + c.usuario, password: c.senha, client_id: 'sgf', client_secret: 'secret' }),
+    });
+    if (r.getResponseCode() === 200) tok = String(JSON.parse(r.getContentText()).access_token || '');
+    else erroOauth = 'HTTP ' + r.getResponseCode();
+  } catch (e) { erroOauth = e.message; }
+  if (!tok) {
+    try { tok = _dreLoginSgf_(c); }
+    catch (e) { throw new Error(e.message + (erroOauth ? ' (login direto: ' + erroOauth + ')' : '')); }
+  }
+  const seg = _dreTokenSeg_(tok);
+  if (seg > 120) cache.put('dre_trier_token', tok, Math.min(21600, seg - 60));
+  return tok;
+}
+
+// Login do sistema antigo (Podium): GET Login.pod -> httpStart -> save. O Referer é obrigatório.
+function _dreLoginSgf_(c) {
+  const base = c.url + '/sgfpod1/';
+  const cookies = {};
+  const guardar = function (r) {
+    const h = r.getAllHeaders()['Set-Cookie'];
+    (Array.isArray(h) ? h : h ? [h] : []).forEach(function (x) {
+      const kv = String(x).split(';')[0], i = kv.indexOf('=');
+      if (i > 0) cookies[kv.slice(0, i).trim()] = kv.slice(i + 1).trim();
+    });
+  };
+  const cab = function () {
+    return { Referer: base + 'Login.pod', Cookie: Object.keys(cookies).map(function (k) { return k + '=' + cookies[k]; }).join('; ') };
+  };
+  const g = UrlFetchApp.fetch(base + 'Login.pod', { muteHttpExceptions: true, followRedirects: false });
+  guardar(g);
+  const html = g.getContentText();
+  const ctl = (/controllerSerial\s*=\s*'([^']+)'/.exec(html) || [])[1];
+  if (!ctl) throw new Error('Não consegui abrir o login do Trier (HTTP ' + g.getResponseCode() + ').');
+  let n = 0;
+  const acao = function (params) {
+    const id = Date.now() + '_' + (++n);
+    const p = Object.assign({ actionId: id, controller: ctl }, params);
+    const r = UrlFetchApp.fetch(base + 'PodiumAction?actionId=' + id, {
+      method: 'post', contentType: 'application/x-www-form-urlencoded; charset=UTF-8', payload: _dreForm_(p),
+      headers: cab(), muteHttpExceptions: true, followRedirects: false,
+    });
+    guardar(r);
+    return r.getContentText();
+  };
+  acao({ action: 'httpStart', attributes: _dreAtributos_(html) });
+  const r = acao({ action: 'save', id_cod_rede: '1', id_cod_filial: c.filial, nom_filial: '', id_cod_usuario: c.usuario, nom_senha: c.senha });
+  const tok = (/token_integracao['"]\s*,\s*['"]([^'"]+)['"]/.exec(r) || [])[1];
+  if (!tok) {
+    const m = (/(?:alertMessage|showMessage)\('((?:[^'\\]|\\.)+)'/.exec(r) || [])[1];
+    throw new Error('O Trier recusou o login' + (m ? ': ' + m.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() : '') + '. Confira TRIER_USUARIO / TRIER_SENHA.');
+  }
+  return tok;
+}
+
+// Descritor dos campos da página que o Podium pede no httpStart (igual ao montarAtributos do trier.js).
+function _dreAtributos_(html) {
+  const TIPOS = ['hidden', 'text', 'search', 'tel', 'url', 'email', 'password', 'date', 'month', 'week', 'time',
+    'datetime-local', 'number', 'range', 'color', 'checkbox', 'radio', 'file', 'submit', 'image', 'reset', 'button'];
+  const attr = function (tag, nome) {
+    const m = new RegExp('\\s' + nome + '\\s*=\\s*(?:"([^"]*)"|\'([^\']*)\'|([^\\s>]+))', 'i').exec(tag);
+    return !m ? null : m[1] !== undefined ? m[1] : m[2] !== undefined ? m[2] : m[3];
+  };
+  const tem = function (tag, nome) {
+    return new RegExp('\\s' + nome + '(?=[\\s=/>])', 'i').test(tag.replace(/"[^"]*"|'[^']*'/g, '""'));
+  };
+  const limpo = html.replace(/<!--[\s\S]*?-->/g, '').replace(/<script\b[\s\S]*?<\/script>/gi, '')
+    .replace(/<textarea\b([^>]*)>[\s\S]*?<\/textarea>/gi, '<textarea$1>');
+  const partes = [];
+  const reForm = /<form\b[^>]*>([\s\S]*?)<\/form>/gi;
+  let f, fi = 0;
+  while ((f = reForm.exec(limpo))) {
+    const reEl = /<(input|select|textarea|button|fieldset|output|object)\b[^>]*>/gi;
+    let e;
+    while ((e = reEl.exec(f[1]))) {
+      const tag = e[0], tt = e[1].toLowerCase(), nome = attr(tag, 'name');
+      if (!nome) continue;
+      let tipo;
+      if (tt === 'input') { const t = (attr(tag, 'type') || 'text').toLowerCase(); tipo = TIPOS.indexOf(t) >= 0 ? t : 'text'; }
+      else if (tt === 'select') tipo = tem(tag, 'multiple') ? 'select-multiple' : 'select-one';
+      else if (tt === 'button') { const t = (attr(tag, 'type') || '').toLowerCase(); tipo = ['submit', 'reset', 'button'].indexOf(t) >= 0 ? t : 'submit'; }
+      else tipo = tt;
+      const ro = (tt === 'input' || tt === 'textarea') && tem(tag, 'readonly') ? 1 : 0;
+      partes.push(nome + '=ty-' + tipo + '!id-' + (attr(tag, 'id') || '') + '!ds-' + (tem(tag, 'disabled') ? 1 : 0) + '!ro-' + ro + '!fi-' + fi + '!');
+    }
+    fi++;
+  }
+  return partes.join('&');
+}
+
+// GET na API nova do Trier; token vencido/recusado (401/403) -> pega outro e tenta de novo uma vez
+function _dreGet_(caminho, params) {
+  const c = _dreCfg_();
+  const q = params ? '?' + _dreForm_(params) : '';
+  for (let tent = 0; tent < 2; tent++) {
+    const r = UrlFetchApp.fetch(c.url + caminho + q, {
+      headers: { Authorization: 'Bearer ' + _dreToken_(tent > 0), Accept: 'application/json' }, muteHttpExceptions: true,
+    });
+    const st = r.getResponseCode();
+    if (st === 401 || st === 403) { CacheService.getScriptCache().remove('dre_trier_token'); continue; }
+    if (st !== 200) throw new Error('O Trier respondeu HTTP ' + st + ' em ' + caminho + '.');
+    return JSON.parse(r.getContentText());
+  }
+  throw new Error('O Trier não aceitou o login (sem permissão para o relatório PAI?).');
+}
+
+// filiais ativas (sem a Central) -> [{cod, nome}]
+function dreFiliais_(ft) {
+  try {
+    _folhaSessao_(ft);
+    const cache = CacheService.getScriptCache();
+    const salvo = cache.get('dre_filiais');
+    if (salvo) return JSON.stringify({ success: true, filiais: JSON.parse(salvo) });
+    const lista = _dreGet_('/web-drogaria/filial/busca-filiais-ativas-exceto-central');
+    const arr = Array.isArray(lista) ? lista : (lista && (lista.content || lista.filiais)) || [];
+    const filiais = arr.map(function (f) {
+      const cod = f.codFilial != null ? f.codFilial : f.codigo != null ? f.codigo : f.id;
+      const nome = f.nomFilial || f.nomeFilial || f.nome || f.nomFantasia || f.nomeFantasia || '';
+      return { cod: String(cod), nome: String(nome || ('Filial ' + cod)).trim() };
+    }).filter(function (f) { return /^\d+$/.test(f.cod); })
+      .sort(function (a, b) { return Number(a.cod) - Number(b.cod); });
+    cache.put('dre_filiais', JSON.stringify(filiais), 21600);
+    return JSON.stringify({ success: true, filiais: filiais });
+  } catch (e) { return _err_(e.message); }
+}
+
+// p = { filial: '4' ou '' (todas), mes: 1-12, ano, regime: 'COMPETENCIA'|'CAIXA' } -> { grupos: [árvore do Trier] }
+function dreGerar_(ft, p) {
+  try {
+    const email = _folhaSessao_(ft);
+    p = p || {};
+    const mes = Number(p.mes), ano = Number(p.ano);
+    if (!(mes >= 1 && mes <= 12) || !(ano >= 2000 && ano <= 2100)) return _err_('Mês/ano inválido.');
+    const regime = p.regime === 'CAIXA' ? 'CAIXA' : 'COMPETENCIA';
+    const filial = /^\d+$/.test(String(p.filial || '')) ? String(p.filial) : '';
+    const grupos = _dreGet_('/web-drogaria/financeiro/relatorio-pai',
+      { regime: regime, mes: String(mes), ano: String(ano), desconsiderarIcmsSt: '', filial: filial });
+    if (!Array.isArray(grupos)) return _err_('Resposta inesperada do Trier.');
+    _folhaLog_(email, 'dre', (filial ? 'filial ' + filial : 'todas') + ' · ' + mes + '/' + ano + ' · ' + regime);
+    return JSON.stringify({ success: true, grupos: grupos, filial: filial, mes: mes, ano: ano, regime: regime });
+  } catch (e) { return _err_(e.message); }
+}
+
+FOLHA_API.dreFiliais = dreFiliais_;
+FOLHA_API.dreGerar = dreGerar_;
+
+// Rodar no editor do Apps Script para conferir a ligação com o Trier (não mostra a senha).
+function dreTestarConexao() {
+  const tok = _dreToken_(true);
+  Logger.log('Login no Trier OK (token válido por ~' + Math.round(_dreTokenSeg_(tok) / 60) + ' min).');
+  CacheService.getScriptCache().remove('dre_filiais');
+  const lista = _dreGet_('/web-drogaria/filial/busca-filiais-ativas-exceto-central');
+  Logger.log('Filiais recebidas: ' + (Array.isArray(lista) ? lista.length : JSON.stringify(lista).slice(0, 200)));
+  if (Array.isArray(lista) && lista.length) Logger.log('Campos de uma filial: ' + Object.keys(lista[0]).join(', '));
 }
