@@ -45,6 +45,11 @@
     table.dre tr.it td { font-style: italic; font-weight: 700; }
     table.dre tr.sep td { border-top: 2px solid var(--gray-900); }
     table.dre tr.tot td { font-weight: 700; border-top: 2px solid var(--gray-900); }
+    table.dre tr.ed td.v { background: #fef9c3; }
+    table.dre input.dre-in { width: 130px; text-align: right; padding: 2px 6px; font-size: 14px; border: 1px solid var(--gray-300); border-radius: 4px; font-variant-numeric: tabular-nums; }
+    table.dre input.dre-in.erro { border-color: var(--danger); background: #fee2e2; }
+    table.dre.editando tr.g td, table.dre.editando tr.it td { background: var(--gray-50); }
+    @media print { table.dre tr.ed td.v { background: none; } }
     .dre-nota { font-size: 12px; color: var(--gray-500); margin-top: 10px; max-width: 860px; line-height: 1.5; }
     @media (max-width: 640px) { table.dre { min-width: 0; width: 100%; font-size: 12px; } table.dre td.v { min-width: 0; } }
     .toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; margin-bottom: 18px; }
@@ -253,11 +258,15 @@
       <div><label for="dre-regime">Regime</label><select id="dre-regime">
         <option value="COMPETENCIA">Regime de competência</option><option value="CAIXA">Regime de caixa</option></select></div>
       <button class="btn btn-primary" id="dre-btn" style="width:auto;margin-top:0" onclick="dreGerar()">Gerar relatório</button>
-      <button class="btn btn-sec hidden" id="dre-imp" onclick="window.print()">🖨 Imprimir</button>
-      <button class="btn btn-sec hidden" id="dre-copiar" onclick="dreCopiar()" title="Copia as linhas para colar no Excel">📋 Copiar para o Excel</button>
       <button class="btn btn-sec" onclick="irParaFolha()">💼 Ir para a folha</button>
     </div>
     <div class="msg" id="dre-msg"></div>
+    <div class="toolbar no-print hidden" id="dre-acoes" style="margin-bottom:10px">
+      <button class="btn btn-sec" id="dre-editar" onclick="dreAlternarEdicao()" title="Corrigir valores deste relatório; os totais se recalculam">✏ Editar valores</button>
+      <button class="btn btn-sec hidden" id="dre-desfazer" onclick="dreDesfazer()">↺ Voltar aos valores do Trier</button>
+      <button class="btn btn-sec" onclick="dreImprimir()">🖨 Imprimir</button>
+      <button class="btn btn-sec" onclick="dreCopiar()" title="Copia as linhas para colar no Excel">📋 Copiar para o Excel</button>
+    </div>
     <table class="dre hidden" id="dre-tab"></table>
     <p class="dre-nota no-print" id="dre-nota"></p>
   </div>
@@ -653,7 +662,6 @@
     }).catch(function (e) { ocupado('db-btn', false, MODO_DRE ? 'Abrir a DRE' : 'Abrir a folha'); msg('db-msg', e.message, true); });
   }
   // ── DRE (Relatório PAI do Trier, no modelo da planilha) ─────────────────
-  var dreLinhasAtual = [];
   function abrirDre() {
     mostrar('tela-dre');
     var selM = document.getElementById('dre-mes');
@@ -673,65 +681,144 @@
     }).catch(function () {});
   }
   function dreBRL(v) { return (Math.round(Math.abs(Number(v) || 0) * 100) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
-  // Modelo da planilha "SETEMBRO - FÓRMULAS" (função pura):
+  // Modelo da planilha "SETEMBRO - FÓRMULAS" (função pura) — vira um objeto EDITÁVEL:
   //  - entra RECEBIMENTOS REALIZADOS (com os itens) e os grupos de DESPESA (valor negativo);
-  //    venda extraída, desconto concedido e grupos informativos/zerados ficam de fora;
+  //    venda extraída, desconto concedido e grupos informativos ficam de fora;
   //  - IMPOSTO SOBRE VENDA e DESPESAS COM MERCADORIAS só com o total (sem itens);
   //    mercadorias em itálico e FORA do TOTAL DESPESAS;
-  //  - itens zerados não aparecem; valores sem sinal.
-  function dreMontar(grupos) {
-    var linhas = [], total = 0, jaSep = false;
-    var r2 = function (v) { return Math.round(Math.abs(Number(v) || 0) * 100) / 100; };
+  //  - grupo com itens = soma dos itens (recalcula ao editar); itens/grupos zerados só aparecem
+  //    no modo de edição (para poder preencher); valores sem sinal.
+  function dreR2(v) { return Math.round(Math.abs(Number(v) || 0) * 100) / 100; }
+  function dreModelo(grupos) {
+    var lista = [];
     (grupos || []).forEach(function (g) {
       var chave = String(g.febrafar || ''), nome = String(g.nome || g.descricao || '');
       var receb = chave === 'RECEBIMENTOS_REALIZADOS' || /^RECEBIMENTOS REALIZADOS/i.test(nome);
       var merc = chave === 'DESPESAS_COM_MERCADORIAS' || /^DESPESAS COM MERCADORIAS/i.test(nome);
       var imp = chave === 'IMPOSTO_SOBRE_VENDA' || /^IMPOSTO SOBRE VENDA/i.test(nome);
       if (g.quantitativo) return;
-      if (!receb && !(Number(g.valor) < 0 && r2(g.valor) > 0)) return;
-      linhas.push({ nome: nome, valor: r2(g.valor), tipo: merc ? 'it' : 'g', sep: !receb && linhas.length > 0 && !jaSep });
-      if (!receb) jaSep = true;          // linha grossa só antes do 1º grupo de despesa
-      if (!receb) { if (!merc) total += r2(g.valor); }
-      if (imp || merc) return;
-      (g.itens || []).forEach(function (i) {
-        if (r2(i.valor) === 0) return;
-        linhas.push({ nome: String(i.nome || i.descricao || ''), valor: r2(i.valor), tipo: 'i' });
+      var despesa = Number(g.valor) < 0 && dreR2(g.valor) > 0;
+      var zeradoDeDespesa = dreR2(g.valor) === 0 && /^(DESPESAS|IMPOSTO)/i.test(nome);
+      if (!receb && !despesa && !zeradoDeDespesa) return;
+      var itens = (imp || merc) ? [] : (g.itens || []).map(function (i) {
+        var v = dreR2(i.valor);
+        return { nome: String(i.nome || i.descricao || ''), valor: v, orig: v };
+      });
+      var v = dreR2(g.valor);
+      lista.push({ nome: nome, tipo: receb ? 'receb' : merc ? 'merc' : 'g', valor: v, orig: v, itens: itens });
+    });
+    return lista;
+  }
+  // valor do grupo: soma dos itens (se tiver) ou o próprio valor
+  function dreValorGrupo(g) {
+    if (!g.itens.length) return g.valor;
+    return Math.round(g.itens.reduce(function (t, i) { return t + i.valor; }, 0) * 100) / 100;
+  }
+  function dreTotal(lista) {
+    return Math.round(lista.reduce(function (t, g) { return t + (g.tipo === 'g' ? dreValorGrupo(g) : 0); }, 0) * 100) / 100;
+  }
+  // linhas que aparecem (fora da edição, some o que é zero)
+  function dreLinhas(lista, editando) {
+    var out = [], jaSep = false;
+    lista.forEach(function (g, gi) {
+      var vg = dreValorGrupo(g);
+      if (!editando && g.tipo !== 'receb' && vg === 0) return;
+      out.push({ nome: g.nome, valor: vg, tipo: g.tipo === 'merc' ? 'it' : 'g', gi: gi, ii: -1,
+        editavel: !g.itens.length, mudou: !g.itens.length && g.valor !== g.orig, sep: g.tipo !== 'receb' && out.length > 0 && !jaSep });
+      if (g.tipo !== 'receb') jaSep = true;            // linha grossa só antes do 1º grupo de despesa
+      g.itens.forEach(function (i, ii) {
+        if (!editando && i.valor === 0) return;
+        out.push({ nome: i.nome, valor: i.valor, tipo: 'i', gi: gi, ii: ii, editavel: true, mudou: i.valor !== i.orig });
       });
     });
-    return { linhas: linhas, total: Math.round(total * 100) / 100 };
+    return out;
   }
+  // "1.234,56" / "1234,56" / "1234.56" / "R$ 10" -> número (sem sinal) ou null
+  function dreNum(t) {
+    var x = String(t || '').replace(/\s|R\$/g, '');
+    if (x === '') return 0;
+    if (x.indexOf(',') >= 0) x = x.replace(/\./g, '').replace(',', '.');
+    var n = Number(x);
+    return isFinite(n) ? dreR2(n) : null;
+  }
+  var dreAtual = null;      // { titulo, regime, grupos: dreModelo(...) }
+  var dreEditando = false;
+  function dreEsc(t) { var d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
+  function dreRender() {
+    var tab = document.getElementById('dre-tab');
+    if (!dreAtual) { tab.innerHTML = ''; return; }
+    var h = '<tr class="tit"><td colspan="2">' + dreEsc(dreAtual.titulo) + '</td></tr>';
+    dreLinhas(dreAtual.grupos, dreEditando).forEach(function (l) {
+      var cls = l.tipo + (l.sep ? ' sep' : '') + (l.mudou ? ' ed' : '');
+      var cel;
+      if (dreEditando && l.editavel) {
+        cel = '<input class="dre-in" inputmode="decimal" data-g="' + l.gi + '" data-i="' + l.ii + '" value="' + dreBRL(l.valor) + '" oninput="dreDigitou(this)" onblur="dreSaiu(this)">';
+      } else cel = '<span' + (l.ii < 0 && !l.editavel ? ' id="dre-g-' + l.gi + '"' : '') + '>' + dreBRL(l.valor) + '</span>';
+      h += '<tr class="' + cls + '"><td>' + dreEsc(l.nome) + '</td><td class="v">' + cel + '</td></tr>';
+    });
+    h += '<tr class="tot"><td>TOTAL DESPESAS:</td><td class="v" id="dre-total">' + dreBRL(dreTotal(dreAtual.grupos)) + '</td></tr>';
+    tab.innerHTML = h;
+    tab.classList.toggle('editando', dreEditando);
+    var mudou = dreAtual.grupos.some(function (g) { return g.valor !== g.orig || g.itens.some(function (i) { return i.valor !== i.orig; }); });
+    document.getElementById('dre-editar').textContent = dreEditando ? '✔ Concluir edição' : '✏ Editar valores';
+    document.getElementById('dre-desfazer').classList.toggle('hidden', !mudou);
+    document.getElementById('dre-nota').textContent = 'Fonte: Relatório PAI do Trier, ' + (dreAtual.regime === 'CAIXA' ? 'regime de caixa' : 'regime de competência')
+      + '. Despesas com mercadorias (em itálico) não entram no TOTAL DESPESAS.'
+      + (mudou ? ' Valores em amarelo foram alterados à mão (a alteração vale só para este relatório na tela).' : '')
+      + (dreEditando ? ' Linhas zeradas aparecem só durante a edição.' : '');
+  }
+  // digitando: atualiza o modelo e os totais sem redesenhar (não perde o cursor)
+  function dreDigitou(el) {
+    var n = dreNum(el.value);
+    el.classList.toggle('erro', n === null);
+    if (n === null) return;
+    var g = dreAtual.grupos[Number(el.getAttribute('data-g'))], ii = Number(el.getAttribute('data-i'));
+    if (ii >= 0) g.itens[ii].valor = n; else g.valor = n;
+    var alvo = document.getElementById('dre-g-' + el.getAttribute('data-g'));
+    if (alvo) alvo.textContent = dreBRL(dreValorGrupo(g));
+    document.getElementById('dre-total').textContent = dreBRL(dreTotal(dreAtual.grupos));
+    var orig = ii >= 0 ? g.itens[ii].orig : g.orig;
+    el.closest('tr').classList.toggle('ed', n !== orig);
+  }
+  function dreSaiu(el) { var n = dreNum(el.value); if (n !== null) el.value = dreBRL(n); }
+  function dreAlternarEdicao() { dreEditando = !dreEditando; dreRender(); if (dreEditando) { var p = document.querySelector('#dre-tab input'); if (p) p.focus(); } }
+  function dreDesfazer() {
+    if (!dreAtual || !confirm('Voltar todos os valores para os do Trier?')) return;
+    dreAtual.grupos.forEach(function (g) { g.valor = g.orig; g.itens.forEach(function (i) { i.valor = i.orig; }); });
+    dreRender();
+  }
+  function dreImprimir() { if (dreEditando) { dreEditando = false; dreRender(); } window.print(); }
   function dreGerar() {
     var mes = Number(document.getElementById('dre-mes').value), ano = Number(document.getElementById('dre-ano').value);
     if (!(ano >= 2000 && ano <= 2100)) return msg('dre-msg', 'Digite o ano com 4 números.', true);
+    if (dreAtual && dreAtual.grupos.some(function (g) { return g.valor !== g.orig || g.itens.some(function (i) { return i.valor !== i.orig; }); })
+      && !confirm('Gerar de novo apaga os valores que você alterou à mão. Continuar?')) return;
     var selF = document.getElementById('dre-filial');
     var filial = selF.value, nomeFil = filial ? selF.options[selF.selectedIndex].textContent : 'TODAS AS FILIAIS';
     var regime = document.getElementById('dre-regime').value;
     ocupado('dre-btn', true, 'Gerando… (uns 10 s)');
     msg('dre-msg', 'Buscando o relatório no Trier…', false);
-    ['dre-tab', 'dre-imp', 'dre-copiar'].forEach(function (id) { document.getElementById(id).classList.add('hidden'); });
+    ['dre-tab', 'dre-acoes'].forEach(function (id) { document.getElementById(id).classList.add('hidden'); });
     document.getElementById('dre-nota').textContent = '';
     chamarFolha('dreGerar', { filial: filial, mes: mes, ano: ano, regime: regime }).then(function (j) {
       ocupado('dre-btn', false, 'Gerar relatório');
       if (!j.success) return msg('dre-msg', j.error, true);
       msg('dre-msg', '', false);
-      var m = dreMontar(j.grupos);
-      var titulo = MESES_PT[mes - 1].toUpperCase() + (ano !== new Date().getFullYear() ? '/' + ano : '') + ' - ' + nomeFil.replace(/^(\d+\s*-\s*)+/, '').replace(/\s*-\s*LIDER FARMA$/i, '');
-      dreLinhasAtual = [[titulo, '']].concat(m.linhas.map(function (l) { return [l.nome, dreBRL(l.valor)]; }), [['TOTAL DESPESAS:', dreBRL(m.total)]]);
-      var esc = function (t) { var d = document.createElement('div'); d.textContent = t; return d.innerHTML; };
-      var h = '<tr class="tit"><td colspan="2">' + esc(titulo) + '</td></tr>';
-      m.linhas.forEach(function (l) {
-        h += '<tr class="' + l.tipo + (l.sep ? ' sep' : '') + '"><td>' + esc(l.nome) + '</td><td class="v">' + dreBRL(l.valor) + '</td></tr>';
-      });
-      h += '<tr class="tot"><td>TOTAL DESPESAS:</td><td class="v">' + dreBRL(m.total) + '</td></tr>';
-      var tab = document.getElementById('dre-tab');
-      tab.innerHTML = h;
-      ['dre-tab', 'dre-imp', 'dre-copiar'].forEach(function (id) { document.getElementById(id).classList.remove('hidden'); });
-      document.getElementById('dre-nota').textContent = 'Fonte: Relatório PAI do Trier, ' + (regime === 'CAIXA' ? 'regime de caixa' : 'regime de competência')
-        + '. Despesas com mercadorias (em itálico) não entram no TOTAL DESPESAS.';
+      dreAtual = {
+        titulo: MESES_PT[mes - 1].toUpperCase() + (ano !== new Date().getFullYear() ? '/' + ano : '') + ' - '
+          + nomeFil.replace(/^(\d+\s*-\s*)+/, '').replace(/\s*-\s*LIDER FARMA$/i, ''),
+        regime: regime, grupos: dreModelo(j.grupos),
+      };
+      dreEditando = false;
+      dreRender();
+      ['dre-tab', 'dre-acoes'].forEach(function (id) { document.getElementById(id).classList.remove('hidden'); });
     }).catch(function (e) { ocupado('dre-btn', false, 'Gerar relatório'); if (e && e.message !== 'bloqueada') msg('dre-msg', e.message, true); });
   }
   function dreCopiar() {
-    var txt = dreLinhasAtual.map(function (l) { return l.join('\t'); }).join('\r\n');
+    if (!dreAtual) return;
+    var linhas = [[dreAtual.titulo, '']].concat(dreLinhas(dreAtual.grupos, false).map(function (l) { return [l.nome, dreBRL(l.valor)]; }),
+      [['TOTAL DESPESAS:', dreBRL(dreTotal(dreAtual.grupos))]]);
+    var txt = linhas.map(function (l) { return l.join('\t'); }).join('\r\n');
     var ok = function () { msg('dre-msg', 'Copiado! Cole no Excel com Ctrl+V.', false); };
     if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(ok, function () { dreCopiarVelho(txt); ok(); });
     else { dreCopiarVelho(txt); ok(); }
