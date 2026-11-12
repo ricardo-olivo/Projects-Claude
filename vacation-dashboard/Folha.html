@@ -194,7 +194,7 @@
   <div style="display:flex;gap:8px;flex-wrap:wrap">
     <button class="hbtn hidden" id="btn-bloquear" onclick="bloquearFolha()">🔒 Bloquear</button>
     <button class="hbtn hidden" id="btn-ir-folha" onclick="irParaFolha()">💼 Ir para a folha</button>
-    <button class="hbtn" onclick="voltarPainel()">← Voltar ao painel de férias</button>
+    <button class="hbtn" onclick="voltarPainel()" title="Volta à página inicial do RH (Férias, Folha, DRE)">← Início</button>
   </div>
 </div>
 
@@ -1717,9 +1717,9 @@
 
   function voltarPainel() {
     var ft = folhaToken; folhaToken = '';
-    if (!noAppsScript()) { location.href = 'Dashboard.html'; return; }
+    if (!noAppsScript()) { location.href = 'Home.html'; return; }
     if (ft) chamar('folhaBloquear', ft).catch(function () {});
-    chamar('paginaPainel').then(function (j) {
+    chamar('paginaHome').then(function (j) {
       var html = j.html || j;
       document.open(); document.write(html); document.close();
     });

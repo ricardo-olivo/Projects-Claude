@@ -76,6 +76,16 @@
     .senha-msg{ font-size:12.5px; min-height:16px; margin-bottom:8px; }
     .senha-msg.erro{ color:#c0392b; } .senha-msg.ok{ color:var(--verde-esc); }
     .btn-sec{ background:var(--laranja); padding:10px 16px; font-size:14px; }
+    .opcoes{ display:grid; gap:10px; text-align:left; }
+    .opcoes[hidden]{ display:none; }
+    .opc{ display:flex; align-items:center; gap:14px; padding:14px 16px; border-radius:14px;
+      border:1px solid var(--linha); background:var(--fundo); color:var(--tinta); text-decoration:none;
+      transition:border-color .15s, background .15s; }
+    .opc:hover{ border-color:var(--verde); background:#f1f8e8; }
+    .opc .ic{ font-size:26px; width:34px; text-align:center; flex:none; }
+    .opc b{ display:block; font-size:15.5px; font-weight:800; }
+    .opc small{ display:block; font-size:12px; color:var(--suave); margin-top:1px; }
+    .opc.abrindo{ opacity:.6; pointer-events:none; }
   </style>
 </head>
 <body>
@@ -104,6 +114,13 @@
     <div class="aviso" id="aviso"></div>
 
     <a class="btn" id="btn" href="#">Acessar o painel</a>
+
+    <!-- só RH: escolhe o que abrir (o servidor confere o perfil de novo em cada um) -->
+    <div class="opcoes" id="opcoes" hidden>
+      <a class="opc" href="#" data-abrir="ferias"><span class="ic">🌴</span><span><b>Controle de Férias</b><small>Saldos, agendamentos e aprovações</small></span></a>
+      <a class="opc" href="#" data-abrir="folha"><span class="ic">💼</span><span><b>Folha de Pagamento</b><small>Pede a senha da folha + código do celular</small></span></a>
+      <a class="opc" href="#" data-abrir="dre"><span class="ic">📊</span><span><b>Gerar DRE</b><small>Relatório PAI do Trier por filial e mês</small></span></a>
+    </div>
 
     <div class="links">
       <a href="#" id="lnk-senha">Trocar senha</a> · <a href="#" id="lnk-sair">Sair</a>
@@ -207,8 +224,32 @@
         });
       });
 
+      // ---- RH: três opções no lugar do botão único ----
+      function mostrarOpcoesRH() {
+        btn.style.display = 'none';
+        document.getElementById('opcoes').hidden = false;
+        document.querySelector('h1').textContent = 'Área do RH';
+        document.querySelector('.sub').textContent = 'Escolha o que deseja abrir';
+      }
+      Array.prototype.forEach.call(document.querySelectorAll('#opcoes .opc'), function (a) {
+        a.addEventListener('click', function (ev) {
+          ev.preventDefault();
+          var qual = a.getAttribute('data-abrir');
+          if (noGAS) { location.href = qual === 'ferias' ? 'Dashboard.html' : qual === 'dre' ? 'Folha.html?dre=1' : 'Folha.html'; return; }
+          a.classList.add('abrindo');
+          var fn = qual === 'ferias' ? 'paginaPainel' : 'paginaFolha';
+          chamar(fn, qual === 'dre' ? ['dre'] : [], function (html) {
+            document.open(); document.write(html); document.close();
+          }, function (e) {
+            a.classList.remove('abrindo');
+            alert('Não foi possível abrir: ' + ((e && e.message) || e));
+          });
+        });
+      });
+
       if (noGAS) {
         document.getElementById('quem').textContent = '';
+        if (!/perfil=gerente/.test(location.search)) mostrarOpcoesRH();   // preview: ?perfil=gerente = botão único
         return;
       }
       chamar('getResumoHome', [], function (txt) {
@@ -233,6 +274,7 @@
           } else {
             var perfil = r.perfil === 'rh' ? 'RH' : (r.aprova ? 'Gerente Matriz' : 'Gerente');
             quem.innerHTML = (r.email ? '<b>' + r.email + '</b> · ' : '') + perfil + ' · ' + r.escopo;
+            if (r.perfil === 'rh') mostrarOpcoesRH();
           }
         }, function () {
           document.getElementById('quem').textContent = '';
