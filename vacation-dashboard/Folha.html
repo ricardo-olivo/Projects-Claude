@@ -697,6 +697,7 @@
       var merc = chave === 'DESPESAS_COM_MERCADORIAS' || /^DESPESAS COM MERCADORIAS/i.test(nome);
       var imp = chave === 'IMPOSTO_SOBRE_VENDA' || /^IMPOSTO SOBRE VENDA/i.test(nome);
       if (g.quantitativo) return;
+      if (/^DESPESAS EXTRAS/i.test(nome) || chave === 'DESPESAS_EXTRAS') return;   // fora do modelo (vencidos, investimentos)
       var despesa = Number(g.valor) < 0 && dreR2(g.valor) > 0;
       var zeradoDeDespesa = dreR2(g.valor) === 0 && /^(DESPESAS|IMPOSTO)/i.test(nome);
       if (!receb && !despesa && !zeradoDeDespesa) return;
@@ -764,7 +765,7 @@
     document.getElementById('dre-desfazer').classList.toggle('hidden', !mudou);
     document.getElementById('dre-nota').textContent = 'Fonte: Relatório PAI do Trier, ' + (dreAtual.regime === 'CAIXA' ? 'regime de caixa' : 'regime de competência')
       + '. Despesas com mercadorias (em itálico) não entram no TOTAL DESPESAS.'
-      + (mudou ? ' Valores em amarelo foram alterados à mão (a alteração vale só para este relatório na tela).' : '')
+      + (mudou ? ' Valores em amarelo foram corrigidos à mão (ficam salvos para esta filial/mês/regime).' : '')
       + (dreEditando ? ' Linhas zeradas aparecem só durante a edição.' : '');
   }
   // digitando: atualiza o modelo e os totais sem redesenhar (não perde o cursor)
@@ -781,18 +782,60 @@
     el.closest('tr').classList.toggle('ed', n !== orig);
   }
   function dreSaiu(el) { var n = dreNum(el.value); if (n !== null) el.value = dreBRL(n); }
-  function dreAlternarEdicao() { dreEditando = !dreEditando; dreRender(); if (dreEditando) { var p = document.querySelector('#dre-tab input'); if (p) p.focus(); } }
+  // correções salvas (aba DreAjustes): [{grupo, item ('' = o grupo), valor}] -> aplica no modelo; devolve quantas
+  function dreAplicarAjustes(lista, ajustes) {
+    var n = 0;
+    ajustes.forEach(function (a) {
+      var g = lista.filter(function (x) { return x.nome === a.grupo; })[0];
+      if (!g) return;
+      var v = dreR2(a.valor);
+      if (!a.item) { if (!g.itens.length) { g.valor = v; n++; } return; }
+      var it = g.itens.filter(function (x) { return x.nome === a.item; })[0];
+      if (it) { it.valor = v; n++; }
+    });
+    return n;
+  }
+  // o que está diferente do Trier, no formato que o servidor grava
+  function dreDiferencas() {
+    var out = [];
+    dreAtual.grupos.forEach(function (g) {
+      if (!g.itens.length && g.valor !== g.orig) out.push({ grupo: g.nome, item: '', valor: g.valor, trier: g.orig });
+      g.itens.forEach(function (i) { if (i.valor !== i.orig) out.push({ grupo: g.nome, item: i.nome, valor: i.valor, trier: i.orig }); });
+    });
+    return out;
+  }
+  function dreAssinatura() { return JSON.stringify(dreDiferencas()); }
+  function dreSalvar(depois) {
+    if (!dreAtual || dreAssinatura() === dreAtual.salvo) { if (depois) depois(); return; }
+    var itens = dreDiferencas();
+    msg('dre-msg', 'Salvando as correções…', false);
+    chamarFolha('dreSalvarAjustes', { filial: dreAtual.filial, mes: dreAtual.mes, ano: dreAtual.ano, regime: dreAtual.regime, itens: itens }).then(function (j) {
+      if (!j.success) return msg('dre-msg', 'Não salvou: ' + j.error, true);
+      dreAtual.salvo = JSON.stringify(itens);
+      msg('dre-msg', itens.length ? 'Correções salvas — voltam sozinhas quando gerar este mês/filial de novo.' : 'Correções apagadas — valores do Trier.', false);
+      if (depois) depois();
+    }).catch(function (e) { if (e && e.message !== 'bloqueada') msg('dre-msg', 'Não salvou: ' + e.message, true); });
+  }
+  function dreAlternarEdicao() {
+    dreEditando = !dreEditando;
+    dreRender();
+    if (dreEditando) { var p = document.querySelector('#dre-tab input'); if (p) p.focus(); }
+    else dreSalvar();
+  }
   function dreDesfazer() {
-    if (!dreAtual || !confirm('Voltar todos os valores para os do Trier?')) return;
+    if (!dreAtual || !confirm('Voltar todos os valores para os do Trier? As correções salvas deste mês/filial serão apagadas.')) return;
     dreAtual.grupos.forEach(function (g) { g.valor = g.orig; g.itens.forEach(function (i) { i.valor = i.orig; }); });
     dreRender();
+    dreSalvar();
   }
   function dreImprimir() { if (dreEditando) { dreEditando = false; dreRender(); } window.print(); }
   function dreGerar() {
     var mes = Number(document.getElementById('dre-mes').value), ano = Number(document.getElementById('dre-ano').value);
     if (!(ano >= 2000 && ano <= 2100)) return msg('dre-msg', 'Digite o ano com 4 números.', true);
-    if (dreAtual && dreAtual.grupos.some(function (g) { return g.valor !== g.orig || g.itens.some(function (i) { return i.valor !== i.orig; }); })
-      && !confirm('Gerar de novo apaga os valores que você alterou à mão. Continuar?')) return;
+    if (dreAtual && dreEditando && dreAssinatura() !== dreAtual.salvo) {      // editando sem concluir: salva antes
+      dreEditando = false; dreRender();
+      return dreSalvar(dreGerar);
+    }
     var selF = document.getElementById('dre-filial');
     var filial = selF.value, nomeFil = filial ? selF.options[selF.selectedIndex].textContent : 'TODAS AS FILIAIS';
     var regime = document.getElementById('dre-regime').value;
@@ -807,10 +850,13 @@
       dreAtual = {
         titulo: MESES_PT[mes - 1].toUpperCase() + (ano !== new Date().getFullYear() ? '/' + ano : '') + ' - '
           + nomeFil.replace(/^(\d+\s*-\s*)+/, '').replace(/\s*-\s*LIDER FARMA$/i, ''),
-        regime: regime, grupos: dreModelo(j.grupos),
+        filial: filial, mes: mes, ano: ano, regime: regime, grupos: dreModelo(j.grupos),
       };
+      var aplicadas = dreAplicarAjustes(dreAtual.grupos, j.ajustes || []);
+      dreAtual.salvo = dreAssinatura();
       dreEditando = false;
       dreRender();
+      if (aplicadas) msg('dre-msg', aplicadas + ' correção(ões) salva(s) foram aplicadas (em amarelo).', false);
       ['dre-tab', 'dre-acoes'].forEach(function (id) { document.getElementById(id).classList.remove('hidden'); });
     }).catch(function (e) { ocupado('dre-btn', false, 'Gerar relatório'); if (e && e.message !== 'bloqueada') msg('dre-msg', e.message, true); });
   }
@@ -2633,6 +2679,7 @@
       g('DESPESAS OPERACIONAIS COM PESSOAL (FUNCIONÁRIO)', 'X', [it('SALÁRIOS FIXOS + HORAS EXTRAS', -500), it('ENCARGOS - INSS', 0), it('ENCARGOS - FGTS', -40.25)]),
       g('DESPESAS OPERACIONAIS COM PESSOAL (PROPRIETÁRIO)', 'X', [it('SEDE CORPORATIVA', 0)]),
       g('DESPESAS FINANCEIRAS', 'X', [it('TARIFAS BANCÁRIAS', -10.1)]),
+      g('DESPESAS EXTRAS', 'X', [it('PRODUTOS VENCIDOS', -5)]),
       g('VALOR TOTAL VENDA FARMÁCIA POPULAR', 'X', [], 50),
     ];
   }
@@ -2650,7 +2697,11 @@
       case 'folhaBloquear': return r({});
       case 'folhaMeses': return r({ meses: ['2026-08'] });
       case 'dreFiliais': return r({ filiais: [{ cod: '1', nome: '01 - LOJA EXEMPLO' }, { cod: '4', nome: '04 - FORMULAS - LIDER FARMA' }] });
-      case 'dreGerar': return r({ grupos: dreMockGrupos() });
+      case 'dreGerar': return r({ grupos: dreMockGrupos(), ajustes: (window.__dreMockAj || {})[args[1].filial + '|' + args[1].mes + '|' + args[1].ano + '|' + args[1].regime] || [] });
+      case 'dreSalvarAjustes':
+        window.__dreMockAj = window.__dreMockAj || {};
+        window.__dreMockAj[args[1].filial + '|' + args[1].mes + '|' + args[1].ano + '|' + args[1].regime] = args[1].itens;
+        return r({ salvos: args[1].itens.length });
       case 'folhaDados': return r({ mes: '2026-08', recibos: FOLHA_MOCK, hoje: '2026-08-20',
         experiencias: [{ id: 'F902', nome: 'Bruno Teste Pereira', filial: 'Filial 05', inicio: '2026-07-10', d1: 45, fim1: '2026-08-23', d2: 45, fim: '2026-10-07' }] });
       case 'folhaImportarPrevia': {

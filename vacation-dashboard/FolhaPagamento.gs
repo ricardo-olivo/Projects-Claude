@@ -2167,12 +2167,63 @@ function dreGerar_(ft, p) {
       { regime: regime, mes: String(mes), ano: String(ano), desconsiderarIcmsSt: '', filial: filial });
     if (!Array.isArray(grupos)) return _err_('Resposta inesperada do Trier.');
     _folhaLog_(email, 'dre', (filial ? 'filial ' + filial : 'todas') + ' · ' + mes + '/' + ano + ' · ' + regime);
-    return JSON.stringify({ success: true, grupos: grupos, filial: filial, mes: mes, ano: ano, regime: regime });
+    const chave = _dreChave_(filial, mes, ano, regime);
+    const ajustes = _folhaRows_(FOLHA_TAB.DRE_AJ).filter(function (r) { return _dreLinhaChave_(r) === chave; })
+      .map(function (r) { return { grupo: String(r[3]), item: String(r[4] || ''), valor: _folhaNum_(r[5]) }; });
+    return JSON.stringify({ success: true, grupos: grupos, filial: filial, mes: mes, ano: ano, regime: regime, ajustes: ajustes });
+  } catch (e) { return _err_(e.message); }
+}
+
+// ---------- correções feitas à mão na DRE (aba DreAjustes da planilha da folha) ----------
+// Uma linha por valor alterado; vale para filial + mês + regime. Ao gerar de novo, a tela reaplica.
+FOLHA_TAB.DRE_AJ = 'DreAjustes';
+FOLHA_HEADERS.DreAjustes = ['Filial', 'Mês', 'Regime', 'Grupo', 'Item', 'Valor', 'Valor do Trier', 'Alterado por', 'Alterado em'];
+function _dreChave_(filial, mes, ano, regime) {
+  return (String(filial || '') || 'TODAS') + '|' + ano + '-' + ('0' + mes).slice(-2) + '|' + regime;
+}
+function _dreLinhaChave_(r) {
+  let m = r[1];
+  if (m instanceof Date) m = Utilities.formatDate(m, Session.getScriptTimeZone(), 'yyyy-MM');
+  return String(r[0]).trim() + '|' + String(m).trim() + '|' + String(r[2]).trim();
+}
+
+// p = { filial, mes, ano, regime, itens: [{grupo, item ('' = o próprio grupo), valor, trier}] } — substitui as
+// correções salvas dessa filial/mês/regime (lista vazia = apaga, volta aos valores do Trier)
+function dreSalvarAjustes_(ft, p) {
+  try {
+    const email = _folhaSessao_(ft);
+    p = p || {};
+    const mes = Number(p.mes), ano = Number(p.ano);
+    if (!(mes >= 1 && mes <= 12) || !(ano >= 2000 && ano <= 2100)) return _err_('Mês/ano inválido.');
+    const regime = p.regime === 'CAIXA' ? 'CAIXA' : 'COMPETENCIA';
+    const filial = /^\d+$/.test(String(p.filial || '')) ? String(p.filial) : '';
+    const chave = _dreChave_(filial, mes, ano, regime);
+    const itens = (Array.isArray(p.itens) ? p.itens : []).slice(0, 300).map(function (i) {
+      return { grupo: String(i.grupo || '').slice(0, 200), item: String(i.item || '').slice(0, 200),
+        valor: _folhaR2_(Math.abs(Number(i.valor) || 0)), trier: _folhaR2_(Math.abs(Number(i.trier) || 0)) };
+    }).filter(function (i) { return i.grupo; });
+    const lock = LockService.getScriptLock();
+    lock.waitLock(20000);
+    try {
+      const sh = _folhaAba_(FOLHA_TAB.DRE_AJ);
+      const rows = _folhaRows_(FOLHA_TAB.DRE_AJ);
+      for (let k = rows.length - 1; k >= 0; k--) if (_dreLinhaChave_(rows[k]) === chave) sh.deleteRow(k + 2);
+      if (itens.length) {
+        const ini = sh.getLastRow() + 1;
+        sh.getRange(ini, 2, itens.length, 1).setNumberFormat('@');          // mês como texto
+        sh.getRange(ini, 1, itens.length, FOLHA_HEADERS.DreAjustes.length).setValues(itens.map(function (i) {
+          return [filial || 'TODAS', ano + '-' + ('0' + mes).slice(-2), regime, i.grupo, i.item, i.valor, i.trier, email, new Date()];
+        }));
+      }
+    } finally { lock.releaseLock(); }
+    _folhaLog_(email, 'dre ajustes', chave + ' · ' + itens.length + ' valor(es)');
+    return JSON.stringify({ success: true, salvos: itens.length });
   } catch (e) { return _err_(e.message); }
 }
 
 FOLHA_API.dreFiliais = dreFiliais_;
 FOLHA_API.dreGerar = dreGerar_;
+FOLHA_API.dreSalvarAjustes = dreSalvarAjustes_;
 
 // Rodar no editor do Apps Script para conferir a ligação com o Trier (não mostra a senha).
 function dreTestarConexao() {
