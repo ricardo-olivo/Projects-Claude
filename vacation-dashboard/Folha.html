@@ -193,6 +193,7 @@
   </div>
   <div style="display:flex;gap:8px;flex-wrap:wrap">
     <button class="hbtn hidden" id="btn-bloquear" onclick="bloquearFolha()">🔒 Bloquear</button>
+    <button class="hbtn hidden" id="btn-ir-folha" onclick="irParaFolha()">💼 Ir para a folha</button>
     <button class="hbtn" onclick="voltarPainel()">← Voltar ao painel de férias</button>
   </div>
 </div>
@@ -258,7 +259,6 @@
       <div><label for="dre-regime">Regime</label><select id="dre-regime">
         <option value="COMPETENCIA">Regime de competência</option><option value="CAIXA">Regime de caixa</option></select></div>
       <button class="btn btn-primary" id="dre-btn" style="width:auto;margin-top:0" onclick="dreGerar()">Gerar relatório</button>
-      <button class="btn btn-sec" onclick="irParaFolha()">💼 Ir para a folha</button>
     </div>
     <div class="msg" id="dre-msg"></div>
     <div class="toolbar no-print hidden" id="dre-acoes" style="margin-bottom:10px">
@@ -595,7 +595,8 @@
     ['tela-carregando', 'tela-config1', 'tela-config2', 'tela-desbloq', 'tela-folha', 'tela-import', 'tela-regras', 'tela-13', 'tela-contab', 'tela-dre'].forEach(function (t) {
       document.getElementById(t).classList.toggle('hidden', t !== id);
     });
-    document.getElementById('btn-bloquear').classList.toggle('hidden', ['tela-folha', 'tela-import', 'tela-regras', 'tela-13', 'tela-contab', 'tela-dre'].indexOf(id) < 0);
+    document.getElementById('btn-ir-folha').classList.toggle('hidden', id !== 'tela-dre');
+    document.getElementById('btn-bloquear').classList.toggle('hidden',['tela-folha', 'tela-import', 'tela-regras', 'tela-13', 'tela-contab', 'tela-dre'].indexOf(id) < 0);
   }
   function msg(id, texto, erro) { var el = document.getElementById(id); el.textContent = texto || ''; el.className = 'msg' + (erro ? ' erro' : ''); }
   function ocupado(id, sim, texto) { var b = document.getElementById(id); b.disabled = sim; if (texto) b.textContent = texto; }
