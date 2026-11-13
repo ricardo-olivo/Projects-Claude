@@ -659,6 +659,23 @@ function _folhaDigital_(linhas) {
 // linhas = [{ tipo: 'P'|'D'|'I', rubrica?, descricao, valor? }] na ordem do recibo; antes = _folhaDigital_ das
 // linhas que estavam na tela. Reescreve as linhas (mes, id) da aba Lancamentos: reaproveita as mesmas
 // linhas da planilha, acrescenta no fim se sobrar e apaga as que faltarem.
+// "✏ Editar todos": vários recibos de uma vez. lista = [{id, linhas, antes}] (só os que mudaram).
+// Cada um passa pelas mesmas checagens do folhaSalvarRecibo_; devolve os que gravaram e os erros.
+function folhaSalvarRecibos_(ft, mes, lista) {
+  try {
+    _folhaSessao_(ft);
+    if (!Array.isArray(lista) || !lista.length) return _err_('Nada para gravar.');
+    if (lista.length > 250) return _err_('Muitos recibos de uma vez (máx. 250). Filtre por filial.');
+    const ok = [], erros = [];
+    lista.forEach(function (x) {
+      const r = JSON.parse(folhaSalvarRecibo_(ft, mes, x && x.id, x && x.linhas, x && x.antes));
+      if (r.success) ok.push(String(x.id)); else erros.push({ id: String(x && x.id), error: r.error });
+    });
+    return JSON.stringify({ success: true, ok: ok, erros: erros });
+  } catch (e) { return _err_(e.message); }
+}
+FOLHA_API.folhaSalvarRecibos = folhaSalvarRecibos_;
+
 function folhaSalvarRecibo_(ft, mes, id, linhas, antes) {
   try {
     const email = _folhaSessao_(ft);

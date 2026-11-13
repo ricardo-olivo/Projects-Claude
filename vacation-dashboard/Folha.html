@@ -37,6 +37,10 @@
     .chave { font-family: Consolas, monospace; font-size: 18px; background: var(--gray-100); padding: 12px; border-radius: 7px; text-align: center; word-break: break-all; user-select: all; }
     .cadeado { font-size: 34px; text-align: center; margin-bottom: 8px; }
     .hidden { display: none !important; }
+    .ed-barra { position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; background: #fffbeb; border: 1px solid #fcd34d; border-radius: 8px; padding: 8px 12px; margin-bottom: 12px; box-shadow: 0 2px 6px rgba(0,0,0,.08); }
+    .ed-barra #ed-barra-txt { font-size: 14px; font-weight: 600; margin-right: auto; }
+    .ed-barra .msg { margin-top: 0; min-height: 0; flex-basis: 100%; }
+    .ed-barra .msg:empty { display: none; }
     table.dre { border-collapse: collapse; background: white; font-size: 14px; min-width: 560px; max-width: 860px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
     table.dre td { border: 1px solid var(--gray-300); padding: 3px 8px; }
     table.dre td.v { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; min-width: 120px; }
@@ -279,6 +283,7 @@
       <div><label for="busca">Buscar funcionário</label><input type="text" id="busca" oninput="renderFolha()" placeholder="nome…"></div>
       <button class="btn btn-sec no-print" onclick="window.print()" title="Imprime os recibos que estão na tela">🖨 Imprimir recibos</button>
       <button class="btn btn-sec no-print" onclick="abrirImportacao()" title="Lê o relatório de comissão e o PDF dos manipulados e preenche a Premiação do mês">⬆ Importar comissões</button>
+      <button class="btn btn-sec no-print" onclick="editarTodos()" title="Abre para edição todos os recibos que estão na tela (filtre por filial para editar só uma)">✏ Editar todos</button>
       <button class="btn btn-sec no-print" onclick="abrirContab()" title="Lê os recibos (PDF) da contabilidade e preenche o INSS, o IR e o consignado do mês">⬇ INSS/IR da contabilidade</button>
       <button class="btn btn-sec no-print" onclick="abrirNovoMes()" title="Cria o mês seguinte copiando o último: valores fixos repetem, variáveis vêm em branco">📅 Abrir novo mês</button>
       <button class="btn btn-sec no-print" onclick="abrir13()" title="Gera os recibos do 13º salário (parcela única de dezembro) a partir dos salários de dezembro">🎄 Gerar 13º</button>
@@ -295,6 +300,13 @@
     </div>
     <div class="exp-aviso hidden" id="exp-aviso"></div>
     <table class="resumo" id="tab-resumo"></table>
+    <div class="ed-barra no-print hidden" id="ed-barra">
+      <span id="ed-barra-txt"></span>
+      <button class="btn btn-sec" onclick="cancelarTodos()">Cancelar todos</button>
+      <button class="btn ed-salvar" id="ed-salvar-todos" onclick="salvarTodos()">💾 Salvar todos</button>
+      <span class="msg" id="ed-barra-msg"></span>
+    </div>
+    <div class="msg no-print" id="ed-ok"></div>
     <div class="recibos" id="recibos"></div>
   </div>
 
@@ -918,7 +930,7 @@
     document.getElementById('recibos').textContent = 'Carregando…';
     chamarFolha('folhaDados', mes).then(function (j) {
       if (!j.success) { document.getElementById('recibos').textContent = j.error; return; }
-      folhaMesAtual = j.mes; folhaRecibos = j.recibos; editId = null; editLinhas = [];
+      folhaMesAtual = j.mes; folhaRecibos = j.recibos; edits = {};
       folhaExp = j.experiencias || []; folhaHoje = j.hoje || ''; renderExpAviso();
       var filiais = Array.from(new Set(folhaRecibos.map(function (r) { return r.filial; }))).sort();
       var sel = document.getElementById('sel-filial'), atual = sel.value;
@@ -966,6 +978,7 @@
     }
 
     document.getElementById('recibos').innerHTML = lista.map(reciboHtml).join('') || '<p>Nenhum recibo.</p>';
+    atualizarBarra();
   }
 
   function reciboHtml(r) {
@@ -981,7 +994,7 @@
         + ' (' + f.dias + (f.dias === 1 ? ' dia' : ' dias') + ')' + (f.pendente ? ' — aguardando aprovação' : '');
       return '<div class="ln fer" title="Do painel de férias"><span>🏖 ' + esc(txt) + '</span><span></span></div>';
     }).join('');
-    if (editId === r.id) return reciboEditHtml(r, ferHtml);
+    if (edits[r.id]) return reciboEditHtml(r, ferHtml);
     return '<div class="recibo" data-id="' + esc(r.id) + '">'
       + '<div class="rh"><div class="rn">' + esc(r.nome) + (r.ativo ? '' : '<span class="selo-inativo">inativo</span>')
         + '<button class="btn-ed no-print" title="Editar este recibo" onclick="editarRecibo(this)">✏ Editar</button></div>'
@@ -997,9 +1010,10 @@
       + '</div>';
   }
 
-  // ── EDITAR UM RECIBO (um por vez) ─────────────────────────
-  // editLinhas = cópia das linhas do recibo; só vai para a planilha no "Salvar"
-  var editId = null, editLinhas = [], editAntes = '';
+  // ── EDITAR RECIBOS (um, vários ou "✏ Editar todos" da tela) ─────────────
+  // edits[id] = { linhas: cópia das linhas, antes: digital das linhas carregadas }; só vai para a planilha no "Salvar"
+  var edits = {};
+  function temEdicao() { return Object.keys(edits).length > 0; }
   function digitalLinhas(ls) {   // igual ao _folhaDigital_ do servidor
     return JSON.stringify(ls.map(function (l) { return [l.tipo, l.rubrica == null ? '' : l.rubrica, l.descricao, l.valor == null ? null : l.valor]; }));
   }
@@ -1011,28 +1025,55 @@
     var n = Number(s);
     return isFinite(n) ? Math.round(n * 100) / 100 : NaN;
   }
-  function editarRecibo(btn) {
-    if (editId && !confirm('Há outro recibo em edição. Descartar as alterações dele?')) return;
-    var id = btn.closest('.recibo').getAttribute('data-id');
-    var r = folhaRecibos.find(function (x) { return String(x.id) === id; });
-    if (!r) return;
-    editId = r.id;
-    editLinhas = r.linhas.map(function (l) { return { tipo: l.tipo, rubrica: l.rubrica == null ? '' : l.rubrica, descricao: l.descricao, valor: l.valor == null ? null : l.valor }; });
-    editAntes = digitalLinhas(r.linhas);
+  function reciboPorId(id) { return folhaRecibos.find(function (x) { return String(x.id) === String(id); }); }
+  function idDo(el) { return el.closest('.recibo').getAttribute('data-id'); }
+  function cartaoDe(id) {
+    var achou = null;
+    document.querySelectorAll('#recibos .recibo.editando').forEach(function (el) { if (el.getAttribute('data-id') === String(id)) achou = el; });
+    return achou;
+  }
+  function abrirEdicao(r) {
+    edits[r.id] = {
+      linhas: r.linhas.map(function (l) { return { tipo: l.tipo, rubrica: l.rubrica == null ? '' : l.rubrica, descricao: l.descricao, valor: l.valor == null ? null : l.valor }; }),
+      antes: digitalLinhas(r.linhas),
+    };
+  }
+  function mudou(id) { var e = edits[id]; return !!e && digitalLinhas(e.linhas) !== e.antes; }
+  function editarRecibo(btn) { var r = reciboPorId(idDo(btn)); if (!r) return; abrirEdicao(r); renderFolha(); }
+  // todos os cartões que estão na tela (respeita filial e busca)
+  function editarTodos() {
+    var lista = Array.prototype.map.call(document.querySelectorAll('#recibos .recibo'), function (el) { return reciboPorId(el.getAttribute('data-id')); })
+      .filter(function (r) { return r && !edits[r.id]; });
+    if (!lista.length) return;
+    if (lista.length > 60 && !confirm('Abrir ' + lista.length + ' recibos para edição de uma vez?\n(Dica: escolha uma filial para ficar mais leve.)')) return;
+    document.getElementById('ed-ok').textContent = '';
+    msgBarra('');
+    lista.forEach(abrirEdicao);
     renderFolha();
   }
-  function cancelarEdicao() { editId = null; editLinhas = []; renderFolha(); }
-  function cartaoEmEdicao() { return document.querySelector('.recibo.editando'); }
-  function redesenharEdicao() {
-    var r = folhaRecibos.find(function (x) { return x.id === editId; });
-    var el = cartaoEmEdicao();
+  function cancelarEdicao(btn) { delete edits[idDo(btn)]; renderFolha(); }
+  function cancelarTodos() {
+    var n = Object.keys(edits).filter(mudou).length;
+    if (n && !confirm('Descartar as alterações de ' + n + ' recibo(s)?')) return;
+    edits = {}; msgBarra(''); renderFolha();
+  }
+  function atualizarBarra() {
+    var ids = Object.keys(edits), n = ids.length, m = ids.filter(mudou).length;
+    document.getElementById('ed-barra').classList.toggle('hidden', n < 2);
+    if (n < 2) return;
+    document.getElementById('ed-barra-txt').textContent = n + ' recibos em edição · ' + (m ? m + ' com alteração' : 'nenhuma alteração ainda');
+  }
+  function msgBarra(t, erro) { var el = document.getElementById('ed-barra-msg'); el.textContent = t || ''; el.className = 'msg' + (erro ? ' erro' : ''); }
+  function redesenharEdicao(id) {
+    var r = reciboPorId(id), el = cartaoDe(id);
     if (!r || !el) return renderFolha();
     var tmp = document.createElement('div');
     tmp.innerHTML = reciboHtml(r);
     el.replaceWith(tmp.firstChild);
+    atualizarBarra();
   }
   function edCampo(inp) {
-    var i = Number(inp.getAttribute('data-i')), l = editLinhas[i];
+    var id = idDo(inp), e = edits[id], l = e && e.linhas[Number(inp.getAttribute('data-i'))];
     if (!l) return;
     if (inp.classList.contains('ed-desc')) l.descricao = inp.value;
     else {
@@ -1040,40 +1081,47 @@
       inp.classList.toggle('erro', v !== null && (isNaN(v) || v < 0));
       l.valor = (v === null || isNaN(v)) ? null : v;
     }
-    edTotais();
+    edTotais(id);
+    atualizarBarra();
   }
-  function edTotais() {
-    var soma = function (t) { return editLinhas.reduce(function (s, l) { return s + (l.tipo === t && l.valor ? l.valor : 0); }, 0); };
-    var p = soma('P'), d = soma('D'), el = cartaoEmEdicao();
-    if (!el) return;
+  function edTotais(id) {
+    var e = edits[id], el = cartaoDe(id);
+    if (!e || !el) return;
+    var soma = function (t) { return e.linhas.reduce(function (s, l) { return s + (l.tipo === t && l.valor ? l.valor : 0); }, 0); };
+    var p = soma('P'), d = soma('D');
     el.querySelector('.ed-tot').textContent = brl(p);
     el.querySelector('.ed-liq').textContent = brl(Math.round((p - d) * 100) / 100);
   }
-  function edAdd(tipo) { editLinhas.push({ tipo: tipo, rubrica: '', descricao: '', valor: null }); redesenharEdicao();
-    var ins = cartaoEmEdicao().querySelectorAll('.ed-desc'); if (ins.length) ins[ins.length - 1].focus(); }
-  function edDel(i) { editLinhas.splice(i, 1); redesenharEdicao(); }
-  function edMover(i, dir) {
+  function edAdd(btn, tipo) {
+    var id = idDo(btn);
+    edits[id].linhas.push({ tipo: tipo, rubrica: '', descricao: '', valor: null });
+    redesenharEdicao(id);
+    var ins = cartaoDe(id).querySelectorAll('.ed-desc'); if (ins.length) ins[ins.length - 1].focus();
+  }
+  function edDel(btn, i) { var id = idDo(btn); edits[id].linhas.splice(i, 1); redesenharEdicao(id); }
+  function edMover(btn, i, dir) {
     // troca com a linha vizinha do mesmo tipo
-    var t = editLinhas[i].tipo, j = i + dir;
-    while (j >= 0 && j < editLinhas.length && editLinhas[j].tipo !== t) j += dir;
-    if (j < 0 || j >= editLinhas.length) return;
-    var x = editLinhas[i]; editLinhas[i] = editLinhas[j]; editLinhas[j] = x;
-    redesenharEdicao();
+    var id = idDo(btn), L = edits[id].linhas, t = L[i].tipo, j = i + dir;
+    while (j >= 0 && j < L.length && L[j].tipo !== t) j += dir;
+    if (j < 0 || j >= L.length) return;
+    var x = L[i]; L[i] = L[j]; L[j] = x;
+    redesenharEdicao(id);
   }
 
   function reciboEditHtml(r, ferHtml) {
+    var e = edits[r.id];
     var linha = function (l, i) {
       var cls = l.tipo === 'P' ? 'p' : l.tipo === 'D' ? 'd' : 'i';
       return '<div class="ln ' + cls + ' ed">'
         + '<input class="ed-desc" data-i="' + i + '" value="' + esc(l.descricao) + '" placeholder="Descrição" oninput="edCampo(this)" maxlength="120">'
         + (l.tipo === 'I' ? '' : '<input class="ed-val" data-i="' + i + '" value="' + esc(valorBR(l.valor)) + '" placeholder="0,00" inputmode="decimal" oninput="edCampo(this)">')
-        + '<span class="ed-acoes"><button title="Subir" onclick="edMover(' + i + ',-1)">↑</button><button title="Descer" onclick="edMover(' + i + ',1)">↓</button>'
-        + '<button title="Remover linha" class="ed-x" onclick="edDel(' + i + ')">✕</button></span></div>';
+        + '<span class="ed-acoes"><button title="Subir" onclick="edMover(this,' + i + ',-1)">↑</button><button title="Descer" onclick="edMover(this,' + i + ',1)">↓</button>'
+        + '<button title="Remover linha" class="ed-x" onclick="edDel(this,' + i + ')">✕</button></span></div>';
     };
     var grupo = function (t) {
-      return editLinhas.map(function (l, i) { return l.tipo === t ? linha(l, i) : ''; }).join('');
+      return e.linhas.map(function (l, i) { return l.tipo === t ? linha(l, i) : ''; }).join('');
     };
-    var add = function (t, txt) { return '<button class="ed-add" onclick="edAdd(\'' + t + '\')">+ ' + txt + '</button>'; };
+    var add = function (t, txt) { return '<button class="ed-add" onclick="edAdd(this,\'' + t + '\')">+ ' + txt + '</button>'; };
     var html = '<div class="recibo editando" data-id="' + esc(r.id) + '">'
       + '<div class="rh"><div class="rn">' + esc(r.nome) + '<span class="ed-selo">editando</span></div>'
       + '<div class="rs">' + esc(r.filial) + ' · ' + esc(nomeMes(folhaMesAtual)) + ' · valores em R$ (ex.: 1.234,56)</div></div>'
@@ -1083,30 +1131,75 @@
       + '<div class="bi">' + ferHtml + grupo('I') + add('I', 'observação') + '</div>'
       + '<div class="bf"><div class="ln liq"><span>Líquido a Receber</span><span class="v ed-liq"></span></div>'
       + '<div class="msg erro ed-msg"></div>'
-      + '<div class="ed-botoes"><button class="btn btn-sec" onclick="cancelarEdicao()">Cancelar</button>'
+      + '<div class="ed-botoes"><button class="btn btn-sec" onclick="cancelarEdicao(this)">Cancelar</button>'
       + '<button class="btn ed-salvar" onclick="salvarRecibo(this)">Salvar</button></div></div>'
       + '</div>';
-    setTimeout(edTotais, 0);
+    setTimeout(function () { edTotais(r.id); }, 0);
     return html;
   }
 
-  function salvarRecibo(btn) {
-    var el = cartaoEmEdicao(), msgEl = el.querySelector('.ed-msg');
-    var falha = function (t) { msgEl.textContent = t; btn.disabled = false; btn.textContent = 'Salvar'; };
-    if (el.querySelector('.ed-val.erro')) return falha('Corrija os valores marcados em vermelho.');
-    var linhas = editLinhas.map(function (l) { return { tipo: l.tipo, rubrica: l.rubrica, descricao: String(l.descricao || '').trim(), valor: l.tipo === 'I' ? null : l.valor }; });
-    if (linhas.some(function (l) { return !l.descricao; })) return falha('Preencha a descrição de todas as linhas (ou remova as vazias).');
-    if (!linhas.length) return falha('O recibo precisa de pelo menos uma linha.');
-    btn.disabled = true; btn.textContent = 'Salvando…'; msgEl.textContent = '';
-    chamarFolha('folhaSalvarRecibo', folhaMesAtual, editId, linhas, editAntes).then(function (j) {
-      if (!j.success) return falha(j.error);
-      var r = folhaRecibos.find(function (x) { return x.id === editId; });
+  // confere um recibo em edição -> { linhas } ou { erro }
+  function validarEdicao(id) {
+    var el = cartaoDe(id), e = edits[id];
+    if (el && el.querySelector('.ed-val.erro')) return { erro: 'Corrija os valores marcados em vermelho.' };
+    var linhas = e.linhas.map(function (l) { return { tipo: l.tipo, rubrica: l.rubrica, descricao: String(l.descricao || '').trim(), valor: l.tipo === 'I' ? null : l.valor }; });
+    if (linhas.some(function (l) { return !l.descricao; })) return { erro: 'Preencha a descrição de todas as linhas (ou remova as vazias).' };
+    if (!linhas.length) return { erro: 'O recibo precisa de pelo menos uma linha.' };
+    return { linhas: linhas };
+  }
+  // depois de gravado: atualiza o recibo na memória e fecha a edição dele
+  function aplicarGravado(id, linhas) {
+    var r = reciboPorId(id);
+    if (r) {
       r.linhas = linhas.map(function (l, i) { return { tipo: l.tipo, rubrica: l.rubrica || 'MANUAL', descricao: l.descricao, valor: l.valor, ordem: i + 1 }; });
       var soma = function (t) { return Math.round(r.linhas.reduce(function (s, l) { return s + (l.tipo === t && l.valor ? l.valor : 0); }, 0) * 100) / 100; };
       r.proventos = soma('P'); r.descontos = soma('D'); r.liquido = Math.round((r.proventos - r.descontos) * 100) / 100;
-      editId = null; editLinhas = [];
+    }
+    delete edits[id];
+  }
+  function salvarRecibo(btn) {
+    var id = idDo(btn), el = cartaoDe(id), msgEl = el.querySelector('.ed-msg');
+    var falha = function (t) { msgEl.textContent = t; btn.disabled = false; btn.textContent = 'Salvar'; };
+    var v = validarEdicao(id);
+    if (v.erro) return falha(v.erro);
+    btn.disabled = true; btn.textContent = 'Salvando…'; msgEl.textContent = '';
+    chamarFolha('folhaSalvarRecibo', folhaMesAtual, reciboPorId(id).id, v.linhas, edits[id].antes).then(function (j) {
+      if (!j.success) return falha(j.error);
+      aplicarGravado(id, v.linhas);
       renderFolha();
     }).catch(function (e) { if (e && e.message !== 'bloqueada') falha('Erro: ' + e.message); });
+  }
+  // "💾 Salvar todos": grava de uma vez só os recibos que mudaram; os sem mudança só fecham
+  function salvarTodos() {
+    var ids = Object.keys(edits), mudaram = ids.filter(mudou), lista = [], ruins = [];
+    msgBarra('');
+    mudaram.forEach(function (id) {
+      var v = validarEdicao(id), el = cartaoDe(id);
+      if (el) el.querySelector('.ed-msg').textContent = v.erro || '';
+      if (v.erro) ruins.push(id); else lista.push({ id: reciboPorId(id).id, linhas: v.linhas, antes: edits[id].antes });
+    });
+    if (ruins.length) {
+      msgBarra(ruins.length + ' recibo(s) com problema (mensagem em vermelho no cartão). Corrija antes de salvar.', true);
+      var el0 = cartaoDe(ruins[0]); if (el0) el0.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      return;
+    }
+    var fechar = function () { ids.forEach(function (id) { if (edits[id] && !mudou(id)) delete edits[id]; }); };
+    if (!lista.length) { fechar(); renderFolha(); document.getElementById('ed-ok').textContent = 'Nenhuma alteração para salvar.'; return; }
+    var b = document.getElementById('ed-salvar-todos');
+    b.disabled = true; b.textContent = 'Salvando ' + lista.length + '…';
+    chamarFolha('folhaSalvarRecibos', folhaMesAtual, lista).then(function (j) {
+      b.disabled = false; b.textContent = '💾 Salvar todos';
+      if (!j.success) return msgBarra(j.error, true);
+      var porId = {};
+      lista.forEach(function (x) { porId[String(x.id)] = x.linhas; });
+      (j.ok || []).forEach(function (id) { aplicarGravado(id, porId[id]); });
+      fechar();
+      renderFolha();
+      var erros = j.erros || [];
+      erros.forEach(function (x) { var el = cartaoDe(x.id); if (el) el.querySelector('.ed-msg').textContent = x.error; });
+      document.getElementById('ed-ok').textContent = (j.ok || []).length + ' recibo(s) salvo(s).' + (erros.length ? ' ' + erros.length + ' não salvaram — veja a mensagem no cartão.' : '');
+      if (erros.length) msgBarra(erros.length + ' recibo(s) não salvaram.', true);
+    }).catch(function (e) { b.disabled = false; b.textContent = '💾 Salvar todos'; if (e && e.message !== 'bloqueada') msgBarra('Erro: ' + e.message, true); });
   }
 
   // ── ABRIR NOVO MÊS ────────────────────────────────────────
@@ -1119,7 +1212,7 @@
     var meses = Array.from(document.getElementById('sel-mes').options).map(function (o) { return o.value; }).filter(function (m) { return !/-13$/.test(m); }).sort();
     if (!meses.length) return alert('Nenhum mês lançado ainda.');
     var ultimo = meses[meses.length - 1], novo = mesSeguinte(ultimo);
-    if (editId && !confirm('Há um recibo em edição. Descartar as alterações dele?')) return;
+    if (temEdicao() && !confirm('Há recibo(s) em edição. Descartar as alterações?')) return;
     if (!confirm('Criar a folha de ' + nomeMes(novo) + ' a partir de ' + nomeMes(ultimo) + '?\n\n'
       + '• Só funcionários ATIVOS.\n'
       + '• Valores fixos (salário, gratificação, INSS… — coluna "Recorrente" da aba Rubricas) são repetidos.\n'
@@ -1142,7 +1235,7 @@
   function nfVal(id) { return document.getElementById(id).value; }
   function nfModo() { var r = document.querySelector('input[name=nf-fe]:checked'); return r ? r.value : 'novo'; }
   function abrirNovoFunc() {
-    if (editId && !confirm('Há um recibo em edição. Descartar as alterações dele?')) return;
+    if (temEdicao() && !confirm('Há recibo(s) em edição. Descartar as alterações?')) return;
     ['nf-nome', 'nf-filial', 'nf-cargo', 'nf-inicio', 'nf-salario', 'nf-fe-mat', 'nf-fe-ctps'].forEach(function (id) { document.getElementById(id).value = ''; });
     document.getElementById('nf-fe-saldo').value = '0';
     document.getElementById('nf-reg').value = 'sim';
@@ -1523,7 +1616,7 @@
   // ---- tela ----
   var dlDados = null, dlUlt = null;
   function abrirDeslig() {
-    if (editId && !confirm('Há um recibo em edição. Descartar as alterações dele?')) return;
+    if (temEdicao() && !confirm('Há recibo(s) em edição. Descartar as alterações?')) return;
     dlDados = null; dlUlt = null;
     ['dl-saida', 'dl-remun', 'dl-medias', 'dl-outros-prov', 'dl-venc', 'dl-dobro', 'dl-avos-fer', 'dl-avos13', 'dl-adiant13', 'dl-fgts', 'dl-inss', 'dl-inss13', 'dl-ir', 'dl-outros-desc', 'dl-outros-desc-txt', 'dl-obs']
       .forEach(function (id) { document.getElementById(id).value = ''; });
@@ -1740,8 +1833,8 @@
   var RG_TIPOS = { fixo: 'Fixo', piso: 'Piso premiação', bonus: 'Bônus manipulação', decimo: 'Entra no 13º' };
 
   function abrirRegras() {
-    if (editId && !confirm('Há um recibo em edição. Descartar as alterações dele?')) return;
-    editId = null;
+    if (temEdicao() && !confirm('Há recibo(s) em edição. Descartar as alterações?')) return;
+    edits = {};
     mostrar('tela-regras');
     document.getElementById('rg-mes').textContent = folhaMesAtual ? nomeMes(folhaMesAtual) : '—';
     document.getElementById('rg-prev-res').classList.add('hidden');
@@ -2260,8 +2353,8 @@
   var ctPrevia = null, ctRecibos = [], ctArquivos = '';
   function abrirContab() {
     if (!folhaMesAtual) return alert('Escolha o mês primeiro.');
-    if (editId && !confirm('Há um recibo em edição. Descartar as alterações dele?')) return;
-    editId = null; editLinhas = [];
+    if (temEdicao() && !confirm('Há recibo(s) em edição. Descartar as alterações?')) return;
+    edits = {};
     document.getElementById('ct-mes').textContent = nomeMes(folhaMesAtual);
     document.getElementById('ct-res').classList.add('hidden');
     document.getElementById('ct-pdf').value = '';
@@ -2563,8 +2656,8 @@
   // d13 = prévia do servidor; d13Avos = { id: meses } trocados aqui; d13Fora = { id: true } desmarcados
   var d13 = null, d13Avos = {}, d13Fora = {};
   function abrir13() {
-    if (editId && !confirm('Há um recibo em edição. Descartar as alterações dele?')) return;
-    editId = null; editLinhas = [];
+    if (temEdicao() && !confirm('Há recibo(s) em edição. Descartar as alterações?')) return;
+    edits = {};
     var meses = Array.from(document.getElementById('sel-mes').options).map(function (o) { return o.value; }).filter(function (m) { return !/-13$/.test(m); }).sort();
     var ano = meses.length ? Number(meses[meses.length - 1].slice(0, 4)) : new Date().getFullYear();
     document.getElementById('d13-ano').value = ano;
@@ -2725,6 +2818,7 @@
         return r({ mes: args[1], linhas: linhas, semFuncionario: sem, empates: [], funcionarios: func });
       }
       case 'folhaSalvarRecibo': return r({});
+      case 'folhaSalvarRecibos': return r({ ok: args[2].map(function (x) { return String(x.id); }), erros: [] });
       case 'folhaAbrirMes': return r({ mes: args[1], origem: '2026-08', funcionarios: FOLHA_MOCK.length, novos: 0, linhas: 20 });
       case 'folhaDesligDados': {
         if (!args[1]) return r({ lista: FOLHA_MOCK.map(function (f) { return { id: f.id, nome: f.nome, filial: f.filial }; }) });
