@@ -718,15 +718,48 @@
   //  - grupo com itens = soma dos itens (recalcula ao editar); itens/grupos zerados só aparecem
   //    no modo de edição (para poder preencher); valores sem sinal.
   function dreR2(v) { return Math.round(Math.abs(Number(v) || 0) * 100) / 100; }
+  // Linhas depois do TOTAL DESPESAS (modelo da Matriz). O Trier é procurado pelo NOME (grupo ou item,
+  // em qualquer grupo — inclusive DESPESAS EXTRAS); o que casar sai do grupo de origem (não conta 2x).
+  // Não achou = 0 (dá para digitar em "Editar valores", e a correção fica salva).
+  var DRE_EXTRAS = [
+    { nome: 'RECEITAS NÃO OPERACIONAIS', bloco: 'bonif', re: /^RECEITAS? NAO OPERACIONA/ },
+    { nome: 'VERBAS DE MARKETING RECEBIDAS', bloco: 'bonif', re: /VERBAS? DE MARKETING/ },
+    { nome: 'INVESTIMENTO EM MÁQUINAS/EQUIPAMENTOS/MÓVEIS', bloco: 'inv', re: /^INVESTIMENTOS? EM MAQUINA/ },
+    { nome: 'RETIRADA DE LUCRO E PRO LABORE', bloco: 'inv', sinal: -1, re: /RETIRADA DE LUCRO|PRO.?LABORE/ },   // SUBTRAI (como na planilha do usuário)
+  ];
+  function dreSemAcento(t) { return String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().trim(); }
+  function dreExtraDe(nome) { var n = dreSemAcento(nome); return DRE_EXTRAS.filter(function (x) { return x.re.test(n); })[0] || null; }
+  // filial 1 = Matriz: o bloco aparece sempre; nas outras, só se o Trier trouxer algum valor
+  function dreMostraExtras(lista, filial, editando) {
+    return String(filial) === '1' || lista.some(function (g) { return g.tipo === 'extra' && (g.valor !== 0 || (editando && g.orig !== 0)); });
+  }
   function dreModelo(grupos) {
-    var lista = [];
-    (grupos || []).forEach(function (g) {
+    var lista = [], soma = {};
+    DRE_EXTRAS.forEach(function (x) { soma[x.nome] = 0; });
+    // 1º separa as linhas extras (itens primeiro; depois o grupo inteiro, com o que sobrou)
+    grupos = (grupos || []).map(function (g) {
+      if (g.quantitativo) return g;
+      var resto = (g.itens || []).filter(function (i) {
+        var x = dreExtraDe(i.nome || i.descricao);
+        if (x) { soma[x.nome] += dreR2(i.valor); return false; }
+        return true;
+      });
+      var xg = dreExtraDe(g.nome || g.descricao);
+      if (xg) { soma[xg.nome] += (g.itens || []).length ? resto.reduce(function (t, i) { return t + dreR2(i.valor); }, 0) : dreR2(g.valor); return null; }
+      if (resto.length === (g.itens || []).length) return g;
+      var c = {}; for (var k in g) c[k] = g[k];
+      c.itens = resto;
+      c.valor = resto.reduce(function (t, i) { return t + Number(i.valor || 0); }, 0);
+      return c;
+    }).filter(Boolean);
+    grupos.forEach(function (g) {
       var chave = String(g.febrafar || ''), nome = String(g.nome || g.descricao || '');
       var receb = chave === 'RECEBIMENTOS_REALIZADOS' || /^RECEBIMENTOS REALIZADOS/i.test(nome);
       var merc = chave === 'DESPESAS_COM_MERCADORIAS' || /^DESPESAS COM MERCADORIAS/i.test(nome);
       var imp = chave === 'IMPOSTO_SOBRE_VENDA' || /^IMPOSTO SOBRE VENDA/i.test(nome);
       if (g.quantitativo) return;
       if (/^DESPESAS EXTRAS/i.test(nome) || chave === 'DESPESAS_EXTRAS') return;   // fora do modelo (vencidos, investimentos)
+      if (/^(LUCRO|PREJUIZO|RESULTADO)/.test(dreSemAcento(nome)) || /LUCRO_LIQUIDO|PREJUIZO|RESULTADO/.test(chave)) return;   // lucro líquido: a planilha termina no TOTAL DESPESAS
       var despesa = Number(g.valor) < 0 && dreR2(g.valor) > 0;
       var zeradoDeDespesa = dreR2(g.valor) === 0 && /^(DESPESAS|IMPOSTO)/i.test(nome);
       if (!receb && !despesa && !zeradoDeDespesa) return;
@@ -737,7 +770,20 @@
       var v = dreR2(g.valor);
       lista.push({ nome: nome, tipo: receb ? 'receb' : merc ? 'merc' : 'g', valor: v, orig: v, itens: itens });
     });
+    DRE_EXTRAS.forEach(function (x) {
+      var v = Math.round(soma[x.nome] * 100) / 100;
+      lista.push({ nome: x.nome, tipo: 'extra', bloco: x.bloco, sinal: x.sinal || 1, valor: v, orig: v, itens: [] });
+    });
     return lista;
+  }
+  function dreSoma(lista, bloco) {
+    return lista.reduce(function (t, g) { return t + (g.tipo === 'extra' && g.bloco === bloco ? g.valor * (g.sinal || 1) : 0); }, 0);
+  }
+  // TOTAL DESPESAS (-) BONIFICAÇÕES e TOTAL DESPESAS/INVESTIMENTOS
+  function dreTotais(lista) {
+    var r = function (v) { return Math.round(v * 100) / 100; };
+    var desp = dreTotal(lista), bonif = r(desp - dreSoma(lista, 'bonif'));
+    return { desp: desp, bonif: bonif, inv: r(bonif + dreSoma(lista, 'inv')) };
   }
   // valor do grupo: soma dos itens (se tiver) ou o próprio valor
   function dreValorGrupo(g) {
@@ -751,6 +797,7 @@
   function dreLinhas(lista, editando) {
     var out = [], jaSep = false;
     lista.forEach(function (g, gi) {
+      if (g.tipo === 'extra') return;                  // vão depois do TOTAL DESPESAS (dreLinhasFim)
       var vg = dreValorGrupo(g);
       if (!editando && g.tipo !== 'receb' && vg === 0) return;
       out.push({ nome: g.nome, valor: vg, tipo: g.tipo === 'merc' ? 'it' : 'g', gi: gi, ii: -1,
@@ -762,6 +809,28 @@
       });
     });
     return out;
+  }
+  // do TOTAL DESPESAS para baixo: totais (tipo 'tot', com id) e as linhas extras (tipo 'i', editáveis)
+  function dreLinhasFim(lista, filial, editando) {
+    var t = dreTotais(lista);
+    var out = [{ nome: 'TOTAL DESPESAS:', valor: t.desp, tipo: 'tot', id: 'dre-total' }];
+    if (!dreMostraExtras(lista, filial, editando)) return out;
+    var bloco = function (b) {
+      lista.forEach(function (g, gi) {
+        if (g.tipo === 'extra' && g.bloco === b) out.push({ nome: g.nome, valor: g.valor, tipo: 'i', gi: gi, ii: -1, editavel: true, mudou: g.valor !== g.orig });
+      });
+    };
+    bloco('bonif');
+    out.push({ nome: 'TOTAL DESPESAS (-) BONIFICAÇÕES', valor: t.bonif, tipo: 'tot', id: 'dre-tot-bonif' });
+    bloco('inv');
+    out.push({ nome: 'TOTAL DESPESAS/INVESTIMENTOS:', valor: t.inv, tipo: 'tot', id: 'dre-tot-inv' });
+    return out;
+  }
+  function dreAtualizarTotais() {
+    var t = dreTotais(dreAtual.grupos);
+    [['dre-total', t.desp], ['dre-tot-bonif', t.bonif], ['dre-tot-inv', t.inv]].forEach(function (p) {
+      var el = document.getElementById(p[0]); if (el) el.textContent = dreBRL(p[1]);
+    });
   }
   // "1.234,56" / "1234,56" / "1234.56" / "R$ 10" -> número (sem sinal) ou null
   function dreNum(t) {
@@ -778,7 +847,8 @@
     var tab = document.getElementById('dre-tab');
     if (!dreAtual) { tab.innerHTML = ''; return; }
     var h = '<tr class="tit"><td colspan="2">' + dreEsc(dreAtual.titulo) + '</td></tr>';
-    dreLinhas(dreAtual.grupos, dreEditando).forEach(function (l) {
+    dreLinhas(dreAtual.grupos, dreEditando).concat(dreLinhasFim(dreAtual.grupos, dreAtual.filial, dreEditando)).forEach(function (l) {
+      if (l.tipo === 'tot') { h += '<tr class="tot"><td>' + dreEsc(l.nome) + '</td><td class="v" id="' + l.id + '">' + dreBRL(l.valor) + '</td></tr>'; return; }
       var cls = l.tipo + (l.sep ? ' sep' : '') + (l.mudou ? ' ed' : '');
       var cel;
       if (dreEditando && l.editavel) {
@@ -786,7 +856,6 @@
       } else cel = '<span' + (l.ii < 0 && !l.editavel ? ' id="dre-g-' + l.gi + '"' : '') + '>' + dreBRL(l.valor) + '</span>';
       h += '<tr class="' + cls + '"><td>' + dreEsc(l.nome) + '</td><td class="v">' + cel + '</td></tr>';
     });
-    h += '<tr class="tot"><td>TOTAL DESPESAS:</td><td class="v" id="dre-total">' + dreBRL(dreTotal(dreAtual.grupos)) + '</td></tr>';
     tab.innerHTML = h;
     tab.classList.toggle('editando', dreEditando);
     var mudou = dreAtual.grupos.some(function (g) { return g.valor !== g.orig || g.itens.some(function (i) { return i.valor !== i.orig; }); });
@@ -806,7 +875,7 @@
     if (ii >= 0) g.itens[ii].valor = n; else g.valor = n;
     var alvo = document.getElementById('dre-g-' + el.getAttribute('data-g'));
     if (alvo) alvo.textContent = dreBRL(dreValorGrupo(g));
-    document.getElementById('dre-total').textContent = dreBRL(dreTotal(dreAtual.grupos));
+    dreAtualizarTotais();
     var orig = ii >= 0 ? g.itens[ii].orig : g.orig;
     el.closest('tr').classList.toggle('ed', n !== orig);
   }
@@ -891,8 +960,8 @@
   }
   function dreCopiar() {
     if (!dreAtual) return;
-    var linhas = [[dreAtual.titulo, '']].concat(dreLinhas(dreAtual.grupos, false).map(function (l) { return [l.nome, dreBRL(l.valor)]; }),
-      [['TOTAL DESPESAS:', dreBRL(dreTotal(dreAtual.grupos))]]);
+    var linhas = [[dreAtual.titulo, '']].concat(dreLinhas(dreAtual.grupos, false).concat(dreLinhasFim(dreAtual.grupos, dreAtual.filial, false))
+      .map(function (l) { return [l.nome, dreBRL(l.valor)]; }));
     var txt = linhas.map(function (l) { return l.join('\t'); }).join('\r\n');
     var ok = function () { msg('dre-msg', 'Copiado! Cole no Excel com Ctrl+V.', false); };
     if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(ok, function () { dreCopiarVelho(txt); ok(); });
@@ -2787,10 +2856,12 @@
       g('IMPOSTO SOBRE VENDA', 'IMPOSTO_SOBRE_VENDA', [it('IMPOSTO FEDERAL PAGO NO PERÍODO - EM R$', -100), it('ICMS PAGO NO PERÍODO - EM R$', 0)]),
       g('DESPESAS COM MERCADORIAS', 'DESPESAS_COM_MERCADORIAS', [it('CUSTO DE MERCADORIA VENDIDA', -900)]),
       g('DESPESAS OPERACIONAIS COM PESSOAL (FUNCIONÁRIO)', 'X', [it('SALÁRIOS FIXOS + HORAS EXTRAS', -500), it('ENCARGOS - INSS', 0), it('ENCARGOS - FGTS', -40.25)]),
-      g('DESPESAS OPERACIONAIS COM PESSOAL (PROPRIETÁRIO)', 'X', [it('SEDE CORPORATIVA', 0)]),
+      g('DESPESAS OPERACIONAIS COM PESSOAL (PROPRIETÁRIO)', 'X', [it('SEDE CORPORATIVA', 0), it('RETIRADA DE LUCRO E PRÓ-LABORE', -100)]),
       g('DESPESAS FINANCEIRAS', 'X', [it('TARIFAS BANCÁRIAS', -10.1)]),
-      g('DESPESAS EXTRAS', 'X', [it('PRODUTOS VENCIDOS', -5)]),
+      g('DESPESAS EXTRAS', 'X', [it('PRODUTOS VENCIDOS', -5), it('INVESTIMENTO EM MÁQUINAS/EQUIPAMENTOS/MÓVEIS', -200)]),
+      g('RECEITAS NÃO OPERACIONAIS', 'X', [it('OUTRAS RECEITAS', 300), it('VERBAS DE MARKETING RECEBIDAS', 50)]),
       g('VALOR TOTAL VENDA FARMÁCIA POPULAR', 'X', [], 50),
+      g('LUCRO LÍQUIDO', 'LUCRO_LIQUIDO', [], -12.5),
     ];
   }
   function folhaMock(fn, args) {
