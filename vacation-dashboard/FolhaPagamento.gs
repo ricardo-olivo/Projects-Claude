@@ -90,7 +90,7 @@ function folhaConfigurar_(payload) {
     const atual = _folhaCred_(email);
     if (atual && atual.ok) return _err_('O acesso à folha já está configurado.');
     const senha = String(payload && payload.senha || '');
-    if (senha.length < 10) return _err_('A senha da folha precisa ter pelo menos 10 caracteres.');
+    if (senha.length < 8) return _err_('A senha da folha precisa ter pelo menos 8 caracteres.');
     const segredo = _base32Encode_(_bytesAleatorios_(20));
     _folhaSalvarCred_(email, { h: _hashSenha_(senha), s: segredo, ok: false, ult: 0 });
     const conta = encodeURIComponent(FOLHA_EMISSOR + ':' + email);

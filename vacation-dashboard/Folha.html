@@ -217,7 +217,7 @@
     <h2>Criar o acesso à folha</h2>
     <p>A folha tem uma proteção a mais: uma <b>senha só da folha</b> (diferente da senha do painel)
       e um <b>código do celular</b> pelo aplicativo Google Authenticator ou Microsoft Authenticator.</p>
-    <label for="cfg-senha">Senha da folha (mínimo 10 caracteres)</label>
+    <label for="cfg-senha">Senha da folha (mínimo 8 caracteres — pode ser só números)</label>
     <span class="senha-wrap"><input type="password" id="cfg-senha" autocomplete="new-password"><button type="button" class="ver-senha" onclick="verSenha(this)" aria-label="Mostrar senha" tabindex="-1">mostrar</button></span>
     <label for="cfg-senha2">Repita a senha</label>
     <span class="senha-wrap"><input type="password" id="cfg-senha2" autocomplete="new-password"><button type="button" class="ver-senha" onclick="verSenha(this)" aria-label="Mostrar senha" tabindex="-1">mostrar</button></span>
@@ -628,7 +628,7 @@
 
   function configurar() {
     var s1 = document.getElementById('cfg-senha').value, s2 = document.getElementById('cfg-senha2').value;
-    if (s1.length < 10) return msg('cfg-msg1', 'A senha precisa ter pelo menos 10 caracteres.', true);
+    if (s1.length < 8) return msg('cfg-msg1', 'A senha precisa ter pelo menos 8 caracteres.', true);
     if (s1 !== s2) return msg('cfg-msg1', 'As duas senhas não são iguais.', true);
     ocupado('cfg-btn1', true, 'Gerando…');
     chamar('folhaConfigurar', { senha: s1 }).then(function (j) {
@@ -2802,7 +2802,7 @@
         if (args[0].codigo !== '123456') return { success: false, error: 'Código incorreto (no preview use 123456).' };
         folhaMockEstado.configurado = true; return r({});
       case 'folhaDesbloquear':
-        if (args[0].codigo !== '123456' || args[0].senha.length < 10) return { success: false, error: 'Senha da folha ou código incorretos.' };
+        if (args[0].codigo !== '123456' || args[0].senha.length < 8) return { success: false, error: 'Senha da folha ou código incorretos.' };
         return r({ folhaToken: 'f'.repeat(64), minutos: 15 });
       case 'folhaBloquear': return r({});
       case 'folhaMeses': return r({ meses: ['2026-08'] });
