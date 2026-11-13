@@ -37,6 +37,10 @@
     .chave { font-family: Consolas, monospace; font-size: 18px; background: var(--gray-100); padding: 12px; border-radius: 7px; text-align: center; word-break: break-all; user-select: all; }
     .cadeado { font-size: 34px; text-align: center; margin-bottom: 8px; }
     .hidden { display: none !important; }
+    .senha-wrap { position: relative; display: block; }
+    .senha-wrap input { padding-right: 78px; }
+    .ver-senha { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); border: 0; background: none; color: var(--folha); font-size: 13px; font-weight: 600; cursor: pointer; padding: 4px 8px; border-radius: 5px; }
+    .ver-senha:hover { background: var(--gray-100); }
     .ed-barra { position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; background: #fffbeb; border: 1px solid #fcd34d; border-radius: 8px; padding: 8px 12px; margin-bottom: 12px; box-shadow: 0 2px 6px rgba(0,0,0,.08); }
     .ed-barra #ed-barra-txt { font-size: 14px; font-weight: 600; margin-right: auto; }
     .ed-barra .msg { margin-top: 0; min-height: 0; flex-basis: 100%; }
@@ -214,9 +218,9 @@
     <p>A folha tem uma proteção a mais: uma <b>senha só da folha</b> (diferente da senha do painel)
       e um <b>código do celular</b> pelo aplicativo Google Authenticator ou Microsoft Authenticator.</p>
     <label for="cfg-senha">Senha da folha (mínimo 10 caracteres)</label>
-    <input type="password" id="cfg-senha" autocomplete="new-password">
+    <span class="senha-wrap"><input type="password" id="cfg-senha" autocomplete="new-password"><button type="button" class="ver-senha" onclick="verSenha(this)" aria-label="Mostrar senha" tabindex="-1">mostrar</button></span>
     <label for="cfg-senha2">Repita a senha</label>
-    <input type="password" id="cfg-senha2" autocomplete="new-password">
+    <span class="senha-wrap"><input type="password" id="cfg-senha2" autocomplete="new-password"><button type="button" class="ver-senha" onclick="verSenha(this)" aria-label="Mostrar senha" tabindex="-1">mostrar</button></span>
     <button class="btn btn-primary" id="cfg-btn1" onclick="configurar()">Continuar</button>
     <div class="msg" id="cfg-msg1"></div>
   </div>
@@ -247,7 +251,7 @@
     <h2>Folha bloqueada</h2>
     <p>Digite a senha da folha e o código atual do Authenticator.</p>
     <label for="db-senha">Senha da folha</label>
-    <input type="password" id="db-senha" autocomplete="current-password">
+    <span class="senha-wrap"><input type="password" id="db-senha" autocomplete="current-password"><button type="button" class="ver-senha" onclick="verSenha(this)" aria-label="Mostrar senha" tabindex="-1">mostrar</button></span>
     <label for="db-codigo">Código do Authenticator</label>
     <input type="text" id="db-codigo" class="codigo" inputmode="numeric" maxlength="6" autocomplete="one-time-code">
     <button class="btn btn-primary" id="db-btn" onclick="desbloquear()">Abrir a folha</button>
@@ -649,11 +653,23 @@
     }).catch(function (e) { ocupado('cfg-btn2', false, 'Confirmar'); msg('cfg-msg2', e.message, true); });
   }
 
+  // botão "mostrar" dentro dos campos de senha da folha
+  function verSenha(b) {
+    var inp = b.parentNode.querySelector('input'), mostra = inp.type === 'password';
+    inp.type = mostra ? 'text' : 'password';
+    b.textContent = mostra ? 'ocultar' : 'mostrar';
+    b.setAttribute('aria-label', mostra ? 'Ocultar senha' : 'Mostrar senha');
+    inp.focus();
+  }
+  function ocultarSenhas() {
+    document.querySelectorAll('.senha-wrap').forEach(function (w) { w.querySelector('input').type = 'password'; w.querySelector('.ver-senha').textContent = 'mostrar'; });
+  }
   function telaBloqueada(aviso) {
     folhaToken = ''; folhaRecibos = [];
     document.getElementById('recibos').innerHTML = '';
     document.getElementById('tab-resumo').innerHTML = '';
     if (folhaTimer) { clearInterval(folhaTimer); folhaTimer = null; }
+    ocultarSenhas();
     document.getElementById('db-senha').value = ''; document.getElementById('db-codigo').value = '';
     msg('db-msg', aviso || '', false);
     mostrar('tela-desbloq');
